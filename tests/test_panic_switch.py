@@ -16,7 +16,7 @@ import unittest
 
 try:                      # pynput 只在 venv 里；系统 Python 跑测试时跳过相关用例
     from pynput import keyboard as _kb
-    HAVE_PYNPUT = True
+    HAVE_PYNPUT = _kb is not None      # 探测可用性：引用一下，静态检查才不会报未使用
 except Exception:
     HAVE_PYNPUT = False
 

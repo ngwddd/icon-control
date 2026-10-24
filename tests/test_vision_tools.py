@@ -28,14 +28,14 @@ if os.path.isdir(os.path.join(HERE, "venv", "Lib", "site-packages")):
     sys.path.insert(0, os.path.join(HERE, "venv", "Lib", "site-packages"))
 
 try:
-    from computer_mcp import vision_state as _vs_probe  # noqa: F401
-    HAVE_VS = True
+    from computer_mcp import vision_state as _vs_probe
+    HAVE_VS = _vs_probe is not None    # 探测可导入性：引用一下
 except Exception:
     HAVE_VS = False
 
 try:
-    import cv2 as _cv2  # noqa: F401
-    HAVE_CV2 = True
+    import cv2 as _cv2
+    HAVE_CV2 = _cv2 is not None        # 探测可导入性：引用一下
 except Exception:
     HAVE_CV2 = False
 
