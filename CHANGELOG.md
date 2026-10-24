@@ -2,6 +2,41 @@
 
 所有改动记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [0.2.0] - 2026-10-25
+
+把 v0.1 的"能力面"补成"可治理面"：**授权下沉到执行点**、**验证变成分级留证**。
+
+### Added — 权限硬闸门（Host 侧）
+- `computer_mcp/permission.py`：输入类工具的**统一闸门**
+  - 未授权时在 `call_tool` 路由之前直接返回结构化拒绝，**不产生任何鼠标/键盘动作**
+  - **fail closed**：读不到授权状态时按未授权处理
+  - 45 s 缓存（命中约 0 ms，不给每次点击加 IO）
+  - `DSH_MOUSE_GATE=off` 仅供自动化测试关闭；`DSH_MOUSE_STATE` 可指向别的状态文件
+  - 状态来源：GUI 上那个「鼠标·已授权 / 未授权」胶囊（OCR 读取），只读不写
+- 覆盖 19 个输入类工具（`click` / `type` / `key_press` / `batch` / `macro_run` / `ui_click` /
+  `click_template` / `hover_probe` …）；只读工具（截图、OCR、模板匹配、状态查询）不受影响
+
+### Added — 分级验证 `verify_flow`
+- 新工具 `verify_flow`：**按级验证、遇错即停、每级留证据**
+- 五种断言：`text`（区域 OCR + 容错）/ `template`（模板命中）/ `baseline`（基线偏离）/
+  `stable`（连采稳定）/ `file`（存在 + 内容包含）
+- 报告含每级耗时、每条断言的具体证据（OCR 片段 / 置信度 / diff / 文件大小）
+- `stop_on_fail=False` 时跑完全部，`failed_stage` 记**第一处**失败，`failed_stages` 记全部
+- 可写 JSON 报告留档（`report_path`）
+- 只做验证、不做动作 —— "动作做了没生效"与"根本没做"能在报告里分开
+
+### Changed
+- 工具总数 **57 → 58**
+- 测试 **64 → 75** 项（新增 11 项守闸门与分级验证）
+- `verify_flow` 的失败语义修正：多级失败时 `failed_stage` 不再被最后一级覆盖
+
+### Fixed
+- 清掉 6 处未使用的 import（两个演示脚本 / 三个测试文件）
+- 探测性 import 显式标注用途，避免静态检查误报
+
+### Docs
+- 文档与示例统一脱敏：应用名以「软件性质（***）」表示，不含个人信息
+
 ## [0.1.0] - 2026-10-25
 
 首个公开版本。能力面打通：**能看、能点、能验、能停、能授权**。

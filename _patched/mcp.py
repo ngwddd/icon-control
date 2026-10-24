@@ -19,13 +19,13 @@ from computer_mcp.actions import (
 )
 from computer_mcp.core.response import format_response
 from computer_mcp.core.state import ComputerState
-# 对话壳（***） patch: cheap capture / change-detection helpers (see core/screenshot.py)
+# DSH patch: cheap capture / change-detection helpers (see core/screenshot.py)
 from computer_mcp.core import screenshot as capture_core
-# 对话壳（***） patch: batch gestures + UI-Automation based clicking (see ui_ext.py)
+# DSH patch: batch gestures + UI-Automation based clicking (see ui_ext.py)
 from computer_mcp import ui_ext
-# 对话壳（***） patch: named macros with window-relative coordinates (see macro_ext.py)
+# DSH patch: named macros with window-relative coordinates (see macro_ext.py)
 from computer_mcp import macro_ext
-# 对话壳（***） patch: Windows built-in OCR, for UI-Automation-blind apps (see ocr_ext.py)
+# DSH patch: Windows built-in OCR, for UI-Automation-blind apps (see ocr_ext.py)
 from computer_mcp import ocr_ext
 from computer_mcp import anchor_mem
 
@@ -564,7 +564,7 @@ async def list_tools() -> list[Tool]:
                 "required": ["hwnd", "desktop_id"]
             }
         ),
-        # ---- 对话壳（***） patch: cheap screen awareness without paying for a picture ----
+        # ---- DSH patch: cheap screen awareness without paying for a picture ----
         Tool(
             name="screen_state",
             description="Cheap screen check WITHOUT returning an image (~40 ms). Reports whether the screen changed since the last capture, by how much (mean abs diff %), and a short hash. Use this to poll instead of screenshot.",
@@ -603,7 +603,25 @@ async def list_tools() -> list[Tool]:
                 }
             }
         ),
-        # ---- 对话壳（***） patch: vision state (template self-learning / baseline diff / stable sampling) ----
+        # ---- DSH patch v0.2: staged verification ----
+        Tool(
+            name="verify_flow",
+            description="Run staged verification and return per-stage evidence. Each stage may wait, then run assertions: kind=text|template|baseline|stable|file. Stages stop at the first failure (stop_on_fail) and the report can be written to a JSON file. Verification only - it performs no input actions.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stages": {
+                        "type": "array",
+                        "description": "Ordered stages: {name, wait_ms?, assert:[{kind, ...}]}",
+                        "items": {"type": "object", "additionalProperties": True}
+                    },
+                    "stop_on_fail": {"type": "boolean", "default": True},
+                    "report_path": {"type": "string", "description": "Optional JSON report path"}
+                },
+                "required": ["stages"]
+            }
+        ),
+        # ---- DSH patch: vision state (template self-learning / baseline diff / stable sampling) ----
         Tool(
             name="capture_template",
             description="Save a screen region as a reusable template (grayscale PNG) under the tool's vision store. Use this for self-drawn UIs where UI Automation is blind: capture the button/icon once, then match_template finds it later. Give a tight region around the visual itself.",
@@ -752,7 +770,7 @@ async def list_tools() -> list[Tool]:
                 }
             }
         ),
-        # ---- 对话壳（***） patch: batch gestures + UI Automation (fewer round trips, no pixel guessing) ----
+        # ---- DSH patch: batch gestures + UI Automation (fewer round trips, no pixel guessing) ----
         Tool(
             name="batch",
             description="Run a whole gesture sequence in ONE call. Each step: {action:'move'|'click'|'double_click'|'right_click'|'type'|'key'|'sleep'|'wait_change'|'screen_state'|'ui_click', ...}. Use this instead of many separate calls (each separate call costs a model round trip).",
@@ -843,7 +861,7 @@ async def list_tools() -> list[Tool]:
                 "required": ["name", "text"]
             }
         ),
-        # ---- 对话壳（***） patch: named macros (one call replays a whole recorded gesture) ----
+        # ---- DSH patch: named macros (one call replays a whole recorded gesture) ----
         Tool(
             name="macro_list",
             description="List saved macros (name, description, target window, step count).",
@@ -878,7 +896,7 @@ async def list_tools() -> list[Tool]:
                 "required": ["name"]
             }
         ),
-        # ---- 对话壳（***） patch: 记忆库（学习过的元素坐标 + 视觉指纹）----
+        # ---- DSH patch: 记忆库（学习过的元素坐标 + 视觉指纹）----
         Tool(
             name="anchor_mem",
             description="Learned anchor memory for UI elements: list / learn / verify / forget / stats. Stores normalised position + a 64-bit visual fingerprint + usage counters, so a click can be verified instead of guessed.",
@@ -896,7 +914,7 @@ async def list_tools() -> list[Tool]:
                 "required": ["action"]
             }
         ),
-        # ---- 对话壳（***） patch: Windows built-in OCR (UI-Automation-blind apps) ----
+        # ---- DSH patch: Windows built-in OCR (UI-Automation-blind apps) ----
         Tool(
             name="ocr_read",
             description="Read text off the screen with the Windows OCR engine and return the recognised lines with boxes. Text only - much cheaper than sending an image when all you need is what the UI says. Pass a region to scan just one window.",
@@ -964,6 +982,21 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
         # Route to appropriate action function
         result: dict[str, Any] | None = None
         screenshot_data: dict[str, Any] | None = None
+        # ---- DSH patch v0.2: mouse permission HARD GATE ----
+        # 输入类工具在执行前统一过闸门；未授权时直接返回结构化拒绝，不产生任何鼠标/键盘动作。
+        try:
+            from computer_mcp import permission as _perm_gate
+            _gate_denial = _perm_gate.check_tool(name, arguments)
+            if _gate_denial is not None:
+                return format_response(_gate_denial, computer_state,
+                                       screenshot_data={"error": "blocked by permission gate"})
+        except Exception as _gate_exc:      # 闸门自身出错时 fail closed
+            if name in getattr(__import__("computer_mcp.permission", fromlist=["x"]), "INPUT_TOOLS", ()):
+                return format_response(
+                    {"success": False, "blocked": True,
+                     "error": f"权限闸门异常，按未授权处理：{_gate_exc}", "tool": name},
+                    computer_state, screenshot_data={"error": "blocked by permission gate"})
+
         
         # Mouse actions
         if name == "click":
@@ -1118,7 +1151,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
                 desktop_id=arguments["desktop_id"]
             )
 
-        # ---- 对话壳（***） patch: cheap screen awareness (never attaches a screenshot) ----
+        # ---- DSH patch: cheap screen awareness (never attaches a screenshot) ----
         elif name == "screen_state":
             region = None
             if all(k in arguments for k in ("x", "y", "w", "h")):
@@ -1141,7 +1174,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
                 result = {"success": True, "action": "capture_config", "config": capture_core.get_capture_config()}
             screenshot_data = {"error": "intentionally skipped"}
 
-        # ---- 对话壳（***） patch: vision state (template self-learning / baseline diff / stable sampling) ----
+        # ---- DSH patch v0.2: staged verification ----
+        elif name == "verify_flow":
+            from computer_mcp import verify_flow as _vf
+            result = _vf.run(
+                stages=arguments.get("stages") or [],
+                stop_on_fail=bool(arguments.get("stop_on_fail", True)),
+                report_path=arguments.get("report_path"),
+            )
+            result["success"] = bool(result.get("ok"))
+            screenshot_data = {"error": "intentionally skipped"}
+        # ---- DSH patch: vision state (template self-learning / baseline diff / stable sampling) ----
         elif name == "capture_template":
             from computer_mcp import vision_state as _vs
             result = _vs.capture_template(
@@ -1241,7 +1284,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
             result = out
             screenshot_data = {"error": "intentionally skipped"}
 
-        # ---- 对话壳（***） patch: batch gestures + UI Automation (no screenshots attached) ----
+        # ---- DSH patch: batch gestures + UI Automation (no screenshots attached) ----
         elif name == "batch":
             result = ui_ext.run_batch(
                 steps=arguments.get("steps") or [],
@@ -1297,7 +1340,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
             )
             screenshot_data = {"error": "intentionally skipped"}
 
-        # ---- 对话壳（***） patch: named macros ----
+        # ---- DSH patch: named macros ----
         elif name == "macro_list":
             result = macro_ext.macro_list()
             screenshot_data = {"error": "intentionally skipped"}
@@ -1315,7 +1358,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
             )
             screenshot_data = {"error": "intentionally skipped"}
 
-        # ---- 对话壳（***） patch: 记忆库 ----
+        # ---- DSH patch: 记忆库 ----
         elif name == "anchor_mem":
             act = str(arguments.get("action", "list"))
             app_id = str(arguments.get("app", ""))
@@ -1339,7 +1382,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
                 result = {"error": f"unknown action {act!r}"}
             screenshot_data = {"error": "intentionally skipped"}
 
-        # ---- 对话壳（***） patch: OCR ----
+        # ---- DSH patch: OCR ----
         elif name in ("ocr_read", "find_text", "click_text"):
             region = None
             if all(k in arguments for k in ("x", "y", "w", "h")):

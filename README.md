@@ -4,9 +4,9 @@
 > 不是又一个截图 + 坐标点击的 demo —— 它有性能基准、有验证纪律、有急停开关、有界面上的授权闸门，
 > 并且每一条规则都是被真实任务打出来的。
 
-- **版本**：v0.1.0（首个版本）
+- **版本**：v0.2.0
 - **平台**：Windows 11（2560×1440 @150%）
-- **底座**：[computer-mcp](https://github.com/)（MIT，31 个工具）+ 本项目补丁层扩到 **57 个工具**
+- **底座**：[computer-mcp](https://github.com/)（MIT，31 个工具）+ 本项目补丁层扩到 **58 个工具**
 - **对话壳**：对话壳（***）（对话壳（***））Web GUI
 - **许可证**：MIT
 
@@ -30,8 +30,8 @@
 |---|---|---|
 | 单次截图耗时 | 128 ms | **61 ms** |
 | 单次截图体积 | 962 KB | **121 KB** |
-| 工具数量 | 31 | **57** |
-| 不变量测试 | 0 | **64 项**（系统 Python / venv Python 双跑全绿） |
+| 工具数量 | 31 | **58** |
+| 不变量测试 | 0 | **75 项**（系统 Python / venv Python 双跑全绿） |
 | 20 步动作的模型往返 | 20 次 | **1 次**（`batch`，协议层 2 ms） |
 
 ---
@@ -67,7 +67,7 @@
 
 ---
 
-## 功能清单（57 个工具，按组）
+## 功能清单（58 个工具，按组）
 
 | 组 | 工具 | 说明 |
 |---|---|---|
@@ -76,9 +76,18 @@
 | UI 自动化 | `ui_tree` `ui_find` `ui_click` `ui_invoke` `ui_set_text` | 原生控件的确定性操作 |
 | 宏 | `macro_list` `macro_save` `macro_run` | 相对坐标、`expect` 校验、自动 restore、越界拒点、`retry`/`repeat`/`ensure_chat` |
 | OCR | `ocr_read` `find_text` `click_text` | Windows 内置 OCR，支持 `upscale` + `boost` 认小字/灰字 |
+| **验证** | `verify_flow` | 分级验证：text / template / baseline / stable / file 五种断言，遇错即停、每级留证据 |
 | **视觉状态** | `capture_template` `match_template` `wait_template` `click_template` `set_baseline` `diff_baseline` `wait_baseline_change` `sample_stable` `hover_probe` `vision_list` | **本项目新增**：模板自学、基线差异、稳定采样、悬停探针、运行统计 |
 | 应用生命周期 | （`appkit` 模块） | `launch`（走 Explorer shell）/ `wait_window` / `exit_app` / `activate`（AttachThreadInput 强攻前台） |
 | 原有 | 30 个鼠标/键盘/窗口/虚拟桌面工具 | computer-mcp 原生 |
+
+### v0.2 的两条新增安全/治理线
+
+```
+① 权限硬闸门（Host 侧）：19 个输入类工具在 call_tool 路由之前统一过闸门
+   未授权 → 结构化拒绝，不产生任何鼠标/键盘动作；读不到状态 → fail closed
+② 分级验证 verify_flow：验证从"散落在脚本里"变成"分级 + 留证 + 遇错即停"
+```
 
 **外加一个 GUI 插件**：`@local/dsh-mouse-permission` —— 输入框工具栏里那个灰色/绿色胶囊，
 是**唯一**的鼠标接管授权入口（agent 只读，不许自己点亮）。
@@ -200,7 +209,7 @@ OCR 的 `upscale` + `boost`（即时通讯软件（***）"发送"按钮基线 fo
 # 0) 前置：Python 3.11+，并把 computer-mcp 装进 venv
 #    本项目以"补丁层"方式工作，不 fork 上游
 
-# 1) 打补丁（把 computer_mcp 扩到 57 个工具）
+# 1) 打补丁（把 computer_mcp 扩到 58 个工具）
 venv\Scripts\python.exe _patched\reapply.py
 
 # 2) 环境体检（6 组检查，5~10 秒）
@@ -249,7 +258,7 @@ icon-control/
 │   ├─ 发展历程.md            # 时间线长文（含每一次翻车）
 │   └─ 踩坑清单.md            # 24 条"会导致静默失败"的具体坑
 ├─ tools/                   # 工具层入口脚本
-│   ├─ desk.py              # CLI 入口（57 个工具）
+│   ├─ desk.py              # CLI 入口（58 个工具）
 │   ├─ mouse_permission.py  # 鼠标接管权限闸门（只读）
 │   ├─ panic_watch.py       # 急停看守进程
 │   ├─ doctor.py            # 环境体检
