@@ -1,0 +1,21 @@
+{
+  "name": "@local/dsh-mouse-permission",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mouse takeover permission switch shown next to the composer permission control.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "icon.svg"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+    }
+  }
+}

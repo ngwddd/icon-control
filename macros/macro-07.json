@@ -1,0 +1,17 @@
+{
+  "name": "macro-07",
+  "description": "新动作自检：剪贴板读写 / 粘贴 / 标题断言 / 文字断言 / retry",
+  "window": { "process": "系统文本编辑器" },
+  "restore": true,
+  "steps": [
+    { "action": "clipboard_set", "text": "对话壳（***）-FEATURE-TEST-2026", "gap_ms": 0 },
+    { "action": "clipboard_get", "contains": "对话壳（***）-FEATURE" },
+    { "action": "click", "rel": [420, 320] },
+    { "action": "sleep", "ms": 200 },
+    { "action": "paste", "gap_ms": 0 },
+    { "action": "wait_change", "timeout_ms": 1500, "poll_ms": 80 },
+    { "action": "assert_title", "contains": "txt" },
+    { "action": "assert_text", "query": "对话壳（***）", "region_rel": [0, 0, 1300, 300],
+      "min_lcs_share": 0.3, "retry": 2, "retry_gap_ms": 300 }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "macro-08",
+  "description": "生命周期测试：launch -> wait_window -> exit_app（不需要预先开窗口）",
+  "allow_missing_window": true,
+  "window": { "title_contains": "哔哩" },
+  "steps": [
+    { "action": "launch", "target": "视频客户端（***）", "settle_ms": 500 },
+    { "action": "wait_window", "title_contains": "哔哩", "timeout_ms": 25000, "poll_ms": 400 },
+    { "action": "assert_title", "contains": "哔哩" },
+    { "action": "exit_app", "process": "视频客户端（***）.exe", "timeout_ms": 6000, "force": true }
+  ]
+}

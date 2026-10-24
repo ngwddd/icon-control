@@ -1,0 +1,51 @@
+{
+  "app": "视频客户端（***） PC 客户端 (Electron)",
+  "window": {
+    "process": "视频客户端（***）.exe",
+    "title_contains": "视频客户端（***）"
+  },
+  "launch": {
+    "correct": "explorer.exe \"C:\\Users\\Public\\Desktop\\视频客户端（***）.lnk\"",
+    "wrong": "直接子进程调用 C:\\Program Files\\***\\视频客户端（***）.exe",
+    "why": "直接 CreateProcess/Popen 启动时进程立刻退出（退出码 0，无窗口无报错）；必须经 Explorer shell（等同用户双击）才会正常起 5 个进程并出窗口"
+  },
+  "uia": "不可用（Electron 自绘，按坐标 + OCR）",
+  "layout": {
+    "window_default": "1779x1176 at (117,6)",
+    "search_box": [
+      1087,
+      48
+    ],
+    "result_tabs_y": 156,
+    "tabs_x": {
+      "视频": 285,
+      "番剧": 460,
+      "影视": 614,
+      "直播": 768,
+      "专栏": 923,
+      "用户": 1098
+    },
+    "note": "坐标相对 B 站窗口左上角；窗口尺寸变了要按比例或重新 OCR 定位"
+  },
+  "flows": {
+    "search_users": [
+      "点搜索框 (1087,48)",
+      "输入关键词 + 回车",
+      "等 6~7 秒",
+      "点『用户』标签 (1098,156)",
+      "截图 OCR 读昵称/粉丝数/视频数"
+    ],
+    "exit": [
+      "向主窗口 PostMessage WM_CLOSE",
+      "窗口关掉但进程仍在（5 个）→ 多半留在托盘",
+      "必要时 terminate 全部 视频客户端（***）.exe 进程",
+      "把原窗口 _ensure_usable 拉回前台"
+    ]
+  },
+  "pitfalls": [
+    "⚠️ 启动方式：必须 Explorer shell 启动，直接 Popen 会静默秒退（这条卡了 6 次尝试）",
+    "关闭窗口 ≠ 退出：WM_CLOSE 后仍有 5 个进程（托盘驻留），要显式结束进程才算退出",
+    "搜索结果是「标签页」结构：视频/番剧/影视/直播/专栏/用户，用户榜在第 6 个标签",
+    "结果默认两列网格排版，第 5 个用户在第三行左侧"
+  ]
+}

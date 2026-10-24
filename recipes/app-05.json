@@ -1,0 +1,30 @@
+{
+  "app": "游戏平台（***） (CEF)",
+  "window": {
+    "process": "app-05",
+    "class_contains": "SDL_app|浏览器（***）_WidgetWin"
+  },
+  "uia": "只回 DocumentControl",
+  "flows": {
+    "open_workshop": [
+      "Start-Process 'app-05://openurl/<完整URL>'（客户端地址栏不可输入）",
+      "等待页面渲染（约 5s）"
+    ],
+    "sort_workshop": [
+      "点结果区右上角排序下拉",
+      "选『订阅者总计』"
+    ],
+    "filter_levels": [
+      "左侧 类别 → 点 Level（条目数会从 21,618 降到 14,599）"
+    ],
+    "subscribe": [
+      "悬停卡片出现绿色 + → 点它",
+      "验证：悬停提示变成『取消订阅即可从您的游戏中移除』"
+    ]
+  },
+  "pitfalls": [
+    "item 详情页**没有**订阅按钮（客户端 CEF 渲染缺失）→ 回列表页悬停订阅",
+    "URL 里的 browsefilter/browsesort 参数无效 → 必须点页面里的下拉",
+    "下载验证看 创意工坊日志（***） + content/337320/<fileid>/"
+  ]
+}

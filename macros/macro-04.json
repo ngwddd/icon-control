@@ -1,0 +1,17 @@
+{
+  "name": "app-01_open_chat",
+  "description": "打开即时通讯软件（***）并点开指定聊天（不发消息）；标题已对则不做任何点击",
+  "window": { "process": "***" },
+  "restore": true,
+  "defaults": { "chat": "文件传", "chat_title": "即时通讯软件的自建会话（***）" },
+  "steps": [
+    { "action": "ensure_chat",
+      "title_query": "${chat_title}", "list_query": "${chat}",
+      "title_region_rel": [390, 60, 480, 80],
+      "list_region_rel": [110, 60, 320, 900],
+      "min_lcs_share": 0.5,
+      "attempts": 3,
+      "settle_ms": 420,
+      "gap_ms": 0 }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "app": "音乐客户端（***） PC 客户端（Electron/CEF）",
+  "window": {
+    "exe_contains": "***"
+  },
+  "launch": {
+    "correct": "appkit.launch(\"音乐客户端（***）\")  # 走 Explorer shell",
+    "note": "标题为空字符串，按标题找不到；要用 exe_contains='***'"
+  },
+  "activation": {
+    "method": "AttachThreadInput（appkit.activate）",
+    "note": "被大窗口覆盖时 SetForegroundWindow 会被拒，只有 AttachThreadInput 能拉上来"
+  },
+  "flows": {
+    "download_first_liked": [
+      "activate(window)",
+      "点侧栏「喜欢」 rel(189,363)",
+      "悬停第一行 rel(700,520)（不悬停不出现下载图标）",
+      "点 ⤓ rel(926,521)",
+      "选音质：标准品质 rel(1083,661) / HQ / SQ / 臻品全景声 / 臻品母带",
+      "核实磁盘：%USERPROFILE%\\Music\\<artist> - <title>_L.ogg"
+    ]
+  },
+  "paths": {
+    "downloads": "%USERPROFILE%\\Music",
+    "vip_downloads": "%USERPROFILE%\\Music\\VipSongsDownload",
+    "filename_pattern": "<艺术家> - <歌名>_L.ogg   （_L 表示标准品质）"
+  },
+  "pitfalls": [
+    "窗口标题是空串，find_windows 必须用 exe_contains 而不是 title_contains",
+    "被 Harness 之类的大窗覆盖时，普通 SetForegroundWindow 无效 → 用 appkit.activate（AttachThreadInput）",
+    "点 ⤓ 会先弹「音质选择」菜单，不是直接下载",
+    "SQ 无损 / 臻品母带 / 臻品全景声：**应版权方要求需开通超级会员**（¥15/月首月），普通 VIP（豪华绿钻）不含",
+    "标准品质能下，落到 %USERPROFILE%\\Music，扩展名 .ogg",
+    "有的歌会提示「此歌曲下载后仅限本机播放」（DRM）",
+    "关闭窗口后进程仍驻留（托盘），要 exit_app 才真退出",
+    "窗口位置会变：所有坐标必须按当前 GetWindowRect 动态换算，不要写死绝对坐标",
+    "⚠️ 点列表行的下载图标之前，必须 OCR 确认该行歌名（本次未核对，错下了 另一首歌 - FANTASTIC BABY）",
+    "点击后复核：菜单是否出现、位置是否紧贴目标行（纵向差 <200px）；点完再复核菜单已关闭",
+    "VIP7（豪华绿钻）**可以**下 SQ 无损（实测 第一首歌.flac 20.36 MB 成功）；臻品母带/全景声需超级会员",
+    "标准品质落 %USERPROFILE%\\Music\\<艺术家> - <歌名>_L.ogg；SQ 无损落同名 .flac（无 _L）",
+    "无损文件较大（20MB+），点完要等 15~20 秒才会出现在磁盘上"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "macro-06",
+  "window": {
+    "process": "系统文本编辑器"
+  },
+  "steps": [
+    {
+      "action": "click",
+      "rel": [
+        99999,
+        99999
+      ]
+    }
+  ]
+}

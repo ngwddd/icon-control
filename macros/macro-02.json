@@ -1,0 +1,122 @@
+{
+  "name": "app-01_send_long",
+  "description": "即时通讯软件（***）发长文本：清空输入框 -> 剪贴板粘贴 -> 断言末尾可见 -> 回车 -> 断言聊天区出现",
+  "window": {
+    "process": "***"
+  },
+  "restore": true,
+  "defaults": {
+    "chat": "文件传",
+    "chat_title": "即时通讯软件的自建会话（***）",
+    "probe": "唧唧复唧唧",
+    "tail": "安能辨我"
+  },
+  "steps": [
+    {
+      "action": "ensure_chat",
+      "title_query": "${chat_title}",
+      "list_query": "${chat}",
+      "title_region_rel": [
+        390,
+        60,
+        480,
+        80
+      ],
+      "list_region_rel": [
+        110,
+        60,
+        320,
+        900
+      ],
+      "min_lcs_share": 0.5,
+      "attempts": 3,
+      "settle_ms": 420,
+      "gap_ms": 0
+    },
+    {
+      "action": "click",
+      "rel": [
+        -302,
+        -178
+      ],
+      "anchor": "br",
+      "gap_ms": 0
+    },
+    {
+      "action": "sleep",
+      "ms": 240,
+      "gap_ms": 0
+    },
+    {
+      "action": "hotkey",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "gap_ms": 0
+    },
+    {
+      "action": "key",
+      "key": "delete",
+      "gap_ms": 0
+    },
+    {
+      "action": "clipboard_set",
+      "text": "${text}",
+      "gap_ms": 0
+    },
+    {
+      "action": "clipboard_get",
+      "contains": "${probe}",
+      "retry": 2,
+      "retry_gap_ms": 200,
+      "gap_ms": 0
+    },
+    {
+      "action": "paste",
+      "settle_ms": 1000,
+      "gap_ms": 0
+    },
+    {
+      "action": "assert_text",
+      "query": "${tail}",
+      "region_rel": [
+        30,
+        10,
+        600,
+        380
+      ],
+      "region_anchor": "br",
+      "min_lcs_share": 0.45,
+      "retry": 3,
+      "retry_gap_ms": 350,
+      "gap_ms": 0
+    },
+    {
+      "action": "key",
+      "key": "enter",
+      "gap_ms": 0
+    },
+    {
+      "action": "wait_change",
+      "timeout_ms": 1500,
+      "poll_ms": 60,
+      "gap_ms": 0
+    },
+    {
+      "action": "assert_text",
+      "query": "${tail}",
+      "region_rel": [
+        30,
+        120,
+        620,
+        720
+      ],
+      "region_anchor": "br",
+      "min_lcs_share": 0.45,
+      "retry": 4,
+      "retry_gap_ms": 400,
+      "gap_ms": 0
+    }
+  ]
+}

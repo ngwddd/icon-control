@@ -1,0 +1,29 @@
+{
+  "app": "某即时通讯客户端（***） (新版 即时通讯软件（***）, Electron)",
+  "window": {
+    "process": "即时通讯软件（***）",
+    "class_contains": "浏览器（***）_WidgetWin_1"
+  },
+  "uia": "不可用（Electron 自绘）",
+  "flows": {
+    "open_chat": [
+      "确认已登录（登录窗 960x636，有二维码）",
+      "双击联系人（单击只选中）",
+      "等待新窗口且标题 == 对方昵称"
+    ],
+    "send_long_text": [
+      "clipboard_set(全文)",
+      "click(聊天窗输入区 rel y≈+1010)",
+      "paste",
+      "assert_text(末行片段)",
+      "key enter",
+      "verify_text(首行片段)"
+    ]
+  },
+  "pitfalls": [
+    "启动后主窗口常 vis=0（隐藏）→ 再跑一次 即时通讯软件（***）.exe 触发单实例唤出",
+    "用 ShowWindow 强行显示未登录窗口会得到**空白页**（Electron 没渲染）",
+    "聊天窗是独立窗口，标题就是对方昵称",
+    "输入区在聊天窗 rel y ≈ 940~1150（窗高 1218 时）"
+  ]
+}

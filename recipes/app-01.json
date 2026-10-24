@@ -1,0 +1,65 @@
+{
+  "app": "即时通讯软件（***） (即时通讯软件（***） 4.x)",
+  "window": {
+    "process": "***",
+    "class_contains": "***"
+  },
+  "uia": "不可用（只回 2 个节点，MMUIRenderSubWindowHW 自绘）",
+  "anchors": {
+    "input": {
+      "app": "app-01",
+      "key": "input",
+      "fallback_rel": [
+        -302,
+        -178
+      ],
+      "anchor": "br",
+      "note": "输入框，用右下角锚点，窗口缩放不失效"
+    },
+    "send": {
+      "app": "app-01",
+      "key": "send",
+      "fallback_rel": [
+        -83,
+        -61
+      ],
+      "anchor": "br",
+      "note": "发送按钮；灰态/亮态是两个原型，别只学一个",
+      "ocr_fallback": {
+        "query": "发送",
+        "upscale": 3,
+        "boost": true
+      }
+    }
+  },
+  "flows": {
+    "send_text": [
+      "ensure_chat(title_query=<对方名>)",
+      "type_verified(app=app-01,key=input)",
+      "key enter",
+      "wait_change",
+      "verify_text(region br)"
+    ],
+    "send_long_text": [
+      "ensure_chat",
+      "clipboard_set(<全文>)",
+      "click(input)",
+      "paste",
+      "assert_text(<首行片段>)",
+      "key enter",
+      "verify_text(<末行片段>)"
+    ]
+  },
+  "pitfalls": [
+    "发送按钮点不出去（OCR 认不到置灰文字）→ 一律用回车发送",
+    "窄窗口（宽约 900）左栏列表会消失 → 退回搜索框",
+    "在「通讯录」页时搜索框搜的是联系人，输聊天名 + 回车没反应 → 先看标题再点",
+    "点聊天行是切换语义 → 点完必须复核标题，不对就重试",
+    "启动后常停在【进入即时通讯软件（***）】按钮窗（442x581），必须点一下才进主界面 —— 不要以为它已就绪（OpenCV 看屏幕先）",
+    "长文本粘贴后输入框显示的是**末尾**：断言必须用末尾片段（如『安能辨我』），用开头永远 found=0",
+    "输入框高度有限，断言区域要给够（h≈380，右下角锚定），否则末行被裁掉误判失败",
+    "重发前先 hotkey ctrl+a + delete 清空，否则内容会叠加",
+    "「发送」按钮是已知盲点：基线 OCR found=0；用 upscale=3 + boost=True 可识别（实测命中 807,1052）",
+    "OCR 区域要带 hwnd 抓窗口位图，否则窗口被挡住时读到的是别的窗口内容（实测整块空白）"
+  ]
+}

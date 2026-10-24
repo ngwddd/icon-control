@@ -1,0 +1,23 @@
+{
+  "name": "app-01_send",
+  "description": "即时通讯软件（***）发送（区域右下角锚定，抗窗口缩放）：ensure_chat -> type_verified -> 回车 -> wait_change -> 校验",
+  "window": { "process": "***" },
+  "restore": true,
+  "defaults": { "chat": "文件传", "chat_title": "即时通讯软件的自建会话（***）" },
+  "steps": [
+    { "action": "ensure_chat",
+      "title_query": "${chat_title}", "list_query": "${chat}",
+      "title_region_rel": [390, 60, 480, 80], "list_region_rel": [110, 60, 320, 900],
+      "min_lcs_share": 0.5, "attempts": 3, "settle_ms": 420, "gap_ms": 0 },
+    { "action": "type_verified",
+      "app": "app-01", "key": "input", "fallback_rel": [-302, -178],
+      "text": "${text}",
+      "region_rel": [40, 30, 540, 300], "region_anchor": "br",
+      "attempts": 3, "focus_wait_ms": 280, "settle_ms": 200,
+      "min_lcs_share": 0.6, "gap_ms": 0 },
+    { "action": "key", "key": "enter", "gap_ms": 0 },
+    { "action": "wait_change", "timeout_ms": 900, "poll_ms": 60, "gap_ms": 0 },
+    { "action": "verify_text", "query": "${text}",
+      "region_rel": [40, 120, 520, 620], "region_anchor": "br", "min_lcs_share": 0.6, "gap_ms": 0 }
+  ]
+}

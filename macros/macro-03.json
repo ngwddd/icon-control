@@ -1,0 +1,21 @@
+{
+  "name": "app-01_send_anchor",
+  "description": "全记忆库发送：ensure_chat -> anchor_click(input) -> 输入 -> anchor_click(send) -> 校验",
+  "window": { "process": "***" },
+  "restore": true,
+  "defaults": { "chat": "文件传", "chat_title": "即时通讯软件的自建会话（***）" },
+  "steps": [
+    { "action": "ensure_chat",
+      "title_query": "${chat_title}", "list_query": "${chat}",
+      "title_region_rel": [390, 60, 480, 80],
+      "list_region_rel": [110, 60, 320, 900],
+      "min_lcs_share": 0.5, "attempts": 3, "settle_ms": 420, "gap_ms": 0 },
+    { "action": "anchor_click", "app": "app-01", "key": "input", "gap_ms": 0 },
+    { "action": "sleep", "ms": 200 },
+    { "action": "type", "text": "${text}", "gap_ms": 0 },
+    { "action": "sleep", "ms": 200 },
+    { "action": "anchor_click", "app": "app-01", "key": "send", "gap_ms": 0,
+      "expect": { "changed": true, "timeout_ms": 1500 } },
+    { "action": "verify_text", "query": "${text}", "region_rel": [500, 100, 380, 900], "min_lcs_share": 0.6, "gap_ms": 0 }
+  ]
+}

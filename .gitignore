@@ -1,0 +1,18 @@
+# venv / 依赖
+venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# 运行期产物
+_draw/
+vision/templates/
+vision/baselines/
+*.log
+*.bak-*
+*.bak-20*
+
+# 环境/密钥
+.env
+*.key
+*.token
