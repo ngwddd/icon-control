@@ -297,6 +297,7 @@ class Step:
     on_fail: str = "stop"          # stop | continue | retry
     wait_before_action_ms: int = 0
     focus: dict | None = None
+    skip_if: dict | None = None
     note: str = ""
 
     def budget(self) -> int:
@@ -329,6 +330,7 @@ class Track:
                 on_fail=str(s.get("on_fail") or "stop"),
                 wait_before_action_ms=int(s.get("wait_before_action_ms") or 0),
                 focus=(s.get("focus") or None),
+                skip_if=(s.get("skip_if") or None),
                 note=str(s.get("note") or ""),
             ))
         return Track(
@@ -500,6 +502,20 @@ def _resolve_point(rect: tuple[int, int, int, int], rel_frac: list[float]) -> tu
     return int(x + rel_frac[0] * w), int(y + rel_frac[1] * h)
 
 
+def text_landed(sent: str, got: str, min_lcs: float = 0.5) -> bool:
+    """刚粘贴的文字是否真的落在输入框里（OCR 容错）。
+
+    为什么单独抽出来：这是"发送链路"三判据里的第二环，
+    stable/changed 都可能在"什么都没发生"时误判成功（实测栽过）。
+    """
+    a, b = norm_text(sent), norm_text(got)
+    if not a:
+        return False
+    if a in b:
+        return True
+    return lcs_share(a, b) >= min_lcs
+
+
 def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> dict:
     """执行一个动作。返回 {"ok": bool, "detail": str}。"""
     from pynput.keyboard import Controller as KB, Key
@@ -559,6 +575,106 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 kb.press("v")
                 kb.release("v")
             return {"ok": True, "detail": f"paste {len(text)} chars"}
+
+        if kind == "send":
+            import win32clipboard
+
+            import mss
+            import numpy as np
+            from PIL import Image
+
+            text = str(action.get("text", ""))
+            urel = action.get("input_rel") or [0.5, 0.90]
+            inreg = action.get("input_region") or [0.25, 0.72, 0.72, 0.22]
+            creg = action.get("conv_region") or [0.22, 0.06, 0.78, 0.64]
+            up = float(action.get("upscale", 2.0))
+            lcs_need = float(action.get("min_lcs", 0.5))
+
+            def _box(rel):
+                x, y, w, h = rect
+                return (int(x + rel[0] * w), int(y + rel[1] * h),
+                        max(8, int(rel[2] * w)), max(8, int(rel[3] * h)))
+
+            def _grab(rel):
+                bx, by, bw, bh = _box(rel)
+                with mss.mss() as sct:
+                    s2 = sct.grab({"left": bx, "top": by, "width": bw, "height": bh})
+                return np.asarray(Image.frombytes("RGB", s2.size, s2.bgra, "raw", "BGRX"),
+                                  dtype=np.int16)
+
+            def _ocr(rel):
+                from computer_mcp import ocr_ext
+
+                bx, by, bw, bh = _box(rel)
+                kw = {"region": {"x": bx, "y": by, "w": bw, "h": bh}, "max_lines": 30}
+                if up > 1:
+                    kw["upscale"] = up
+                try:
+                    res = ocr_ext.ocr_read(**kw)
+                except TypeError:
+                    kw.pop("upscale", None)
+                    res = ocr_ext.ocr_read(**kw)
+                return "".join((l.get("text") or "") for l in (res.get("lines") or []))
+
+            # ① 点输入框
+            MS().position = _resolve_point(rect, urel)
+            time.sleep(0.2)
+            MS().click(Button.left)
+            time.sleep(float(action.get("after_click_ms", 500)) / 1000.0)
+            focused = _grab(inreg)
+
+            # ② 粘贴（最多重试 paste_retries 次，每次都验文字）
+            for _ in range(3):
+                try:
+                    win32clipboard.OpenClipboard()
+                    win32clipboard.EmptyClipboard()
+                    win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text)
+                    win32clipboard.CloseClipboard()
+                    break
+                except Exception:
+                    time.sleep(0.15)
+            ok_text, got = False, ""
+            for _ in range(int(action.get("paste_retries", 2))):
+                kb2 = KB()
+                with kb2.pressed(Key.ctrl):
+                    kb2.press("v")
+                    kb2.release("v")
+                time.sleep(float(action.get("after_paste_ms", 700)) / 1000.0)
+                got = _ocr(inreg)
+                ok_text = text_landed(text, got, lcs_need)
+                if ok_text:
+                    break
+
+            # ③ 回车 + ④ **在会话区 OCR 到刚发的文字**才算发出去
+            #    （只比像素差会假成功：实测报 done 但截图上根本没这条消息）
+            conv_before = _grab(creg)
+            kb3 = KB()
+            kb3.press(Key.enter)
+            kb3.release(Key.enter)
+            time.sleep(float(action.get("after_send_ms", 900)) / 1000.0)
+            conv_after = _grab(creg)
+            delta = float(np.abs(conv_after - conv_before).mean())
+            # 双条件：① 该区域像素确实变了 ② OCR 里确实出现这段文字（强匹配 0.7）
+            # 只靠像素差会假成功（实测报 done 但截图上没有这条消息）
+            ok_text_seen = False
+            seen = ""
+            need_px = float(action.get("bubble_min", 1.0))
+            for _ in range(int(action.get("send_checks", 3))):
+                seen = _ocr(creg)
+                if text_landed(text, seen, float(action.get("conv_min_lcs", 0.7))):
+                    ok_text_seen = True
+                    break
+                time.sleep(0.6)
+            ok_bubble = bool(delta >= need_px and ok_text_seen)
+            # 输入框里不该还留着这段文字（留着 = 没发出去）
+            still_there = text_landed(text, _ocr(inreg), lcs_need)
+
+            return {
+                "ok": bool(ok_text and ok_bubble and not still_there),
+                "detail": (f"send 输入框={'✓' if ok_text else '✗'} "
+                           f"会话区={'✓' if ok_bubble else '✗'} "
+                           f"残留={'是' if still_there else '否'} Δ{delta:.2f} {len(text)}字"),
+            }
 
         if kind == "scroll":
             import ctypes
@@ -842,6 +958,16 @@ class Runner:
                 acted = False
                 pred_since = 0.0
                 uncertain_streak = 0
+
+                # 幂等：目标已经是想要的状态就跳过（微信点已打开的会话行会把它**关掉**）
+                if step.skip_if:
+                    try:
+                        if check_expect(step.skip_if, self.wheel, self.rect, self.hwnd) is True:
+                            self.events.add("STEP", f"跳过（已是目标状态）：{step.name}", step.name)
+                            self.result["steps_done"] = idx + 1
+                            continue
+                    except Exception:
+                        pass
 
                 # 步骤级换窗口：微信点会话会开独立窗口，后续步骤必须改盯新窗口
                 if step.focus:
