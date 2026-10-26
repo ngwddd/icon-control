@@ -603,6 +603,125 @@ async def list_tools() -> list[Tool]:
                 }
             }
         ),
+        # ---- v0.4: live perception / closed loop ----
+        Tool(
+            name="capture_daemon",
+            description="Start/stop/status of the persistent screen-capture daemon (ring buffer, default scale 0.25, 12 fps active / 3 fps idle). After start, sense/watch/probe read memory instead of grabbing the screen.",
+            inputSchema={"type": "object", "properties": {
+                "action": {"type": "string", "enum": ["start", "status", "stop"]},
+                "scale": {"type": "number"},
+                "active_fps": {"type": "number"},
+                "idle_fps": {"type": "number"},
+                "monitor": {"type": "integer"}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="sense",
+            description="Return what changed since a frame index plus requested primitives (prompt/bar/openness/color/digits). Reads the daemon buffer; typically under 10 ms and transfers no image.",
+            inputSchema={"type": "object", "properties": {
+                "since_frame": {"type": "integer"},
+                "primitives": {"type": "array", "items": {"type": "object"}},
+                "regions": {"type": "array", "items": {"type": "object"}}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="watch",
+            description="Block until a condition holds (event-driven wait, replaces sleep+re-screenshot polling). Kinds: prompt/bar/openness/color/digits/diff.",
+            inputSchema={"type": "object", "properties": {
+                "cond": {"type": "object"},
+                "condition": {"type": "object"},
+                "timeout_ms": {"type": "integer"}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="probe",
+            description="One pixel primitive on the cached frame (1-3 ms): prompt (bright text present), bar (colored bar fill), openness (view open), color (blob), digits (number).",
+            inputSchema={"type": "object", "properties": {
+                "kind": {"type": "string", "enum": ["prompt", "bar", "openness", "color", "digits"]},
+                "box": {"type": "array", "items": {"type": "integer"}},
+                "color": {"type": "string"},
+                "thr": {"type": "integer"}, "tol": {"type": "integer"}},
+                "required": ["kind"], "additionalProperties": False},
+        ),
+        Tool(
+            name="snapshot",
+            description="Grab one image on demand and return its file path (no base64). Use only when pixels must be inspected.",
+            inputSchema={"type": "object", "properties": {
+                "region": {"type": "array", "items": {"type": "integer"}},
+                "scale": {"type": "number"}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="run_script",
+            description="Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.",
+            inputSchema={"type": "object", "properties": {
+                "ops": {"type": "array", "items": {"type": "object"}},
+                "steps": {"type": "array", "items": {"type": "object"}},
+                "max_seconds": {"type": "number"}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="act_until",
+            description="Repeat one action until a condition holds (walk until a prompt appears). Shorthand for one until-loop.",
+            inputSchema={"type": "object", "properties": {
+                "action": {"type": "object"},
+                "cond": {"type": "object"},
+                "max_ms": {"type": "integer"}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="frame_mark",
+            description="Mark a frame index by name, used with frame_diff to verify an action took effect.",
+            inputSchema={"type": "object", "properties": {"name": {"type": "string"}},
+                         "additionalProperties": False},
+        ),
+        Tool(
+            name="frame_diff",
+            description="Compare two buffered frames by index in an optional region: mean abs diff and changed flag.",
+            inputSchema={"type": "object", "properties": {
+                "from_frame": {"type": "integer"}, "to_frame": {"type": "integer"},
+                "region": {"type": "array", "items": {"type": "integer"}}},
+                "required": ["from_frame"], "additionalProperties": False},
+        ),
+        Tool(
+            name="trace",
+            description="Return the trace of the last run_script, or the run history.",
+            inputSchema={"type": "object", "properties": {"history": {"type": "boolean"}},
+                         "additionalProperties": False},
+        ),
+        Tool(
+            name="glyph",
+            description="Manage learned digit glyphs for pixel fonts. action=list|learn|clear; learn needs label and box.",
+            inputSchema={"type": "object", "properties": {
+                "action": {"type": "string", "enum": ["list", "learn", "clear"]},
+                "label": {"type": "string"},
+                "box": {"type": "array", "items": {"type": "integer"}},
+                "thr": {"type": "integer"}},
+                "required": ["action"], "additionalProperties": False},
+        ),
+        Tool(
+            name="read_digits",
+            description="Read a digit string from a region of the cached frame with 5x7 template matching (1-3 ms). Works on pixel fonts that defeat OCR.",
+            inputSchema={"type": "object", "properties": {
+                "box": {"type": "array", "items": {"type": "integer"}},
+                "thr": {"type": "integer"}, "min_conf": {"type": "number"}},
+                "required": ["box"], "additionalProperties": False},
+        ),
+        Tool(
+            name="hud",
+            description="Auto-locate HUD text rows by color (cyan/yellow/...) and return their screen boxes. Survives window resize/move; optional per-color rows list. Feed the boxes to read_digits or probe.",
+            inputSchema={"type": "object", "properties": {
+                "box": {"type": "array", "items": {"type": "integer"}, "description": "search area in screen coords, default whole screen"},
+                "colors": {"type": "array", "items": {"type": "object"}, "description": "[{name, color, tol}]"}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="record",
+            description="Dump the daemon ring buffer (frames + manifest + last trace) to disk for evidence or replay.",
+            inputSchema={"type": "object", "properties": {
+                "action": {"type": "string", "enum": ["start", "stop"]}},
+                "required": ["action"], "additionalProperties": False},
+        ),
         # ---- DSH patch v0.2: staged verification ----
         Tool(
             name="verify_flow",
@@ -947,7 +1066,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="click_text",
-            description="Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (ChatClient, Electron, custom-rendered UIs).",
+            description="Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (WeChat, Electron, custom-rendered UIs).",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -1174,6 +1293,77 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
                 result = {"success": True, "action": "capture_config", "config": capture_core.get_capture_config()}
             screenshot_data = {"error": "intentionally skipped"}
 
+        # ---- v0.4: live perception / closed loop ----
+        elif name == "capture_daemon":
+            from computer_mcp import live as _live
+            result = _live.tool_capture(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "sense":
+            from computer_mcp import live as _live
+            result = _live.tool_sense(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "watch":
+            from computer_mcp import live as _live
+            result = _live.tool_watch(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "probe":
+            from computer_mcp import live as _live
+            result = _live.tool_probe(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "snapshot":
+            from computer_mcp import live as _live
+            result = _live.tool_snapshot(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "run_script":
+            from computer_mcp import live as _live
+            result = _live.tool_run_script(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "act_until":
+            from computer_mcp import live as _live
+            result = _live.tool_act_until(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "frame_mark":
+            from computer_mcp import live as _live
+            result = _live.tool_frame_mark(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "frame_diff":
+            from computer_mcp import live as _live
+            result = _live.tool_frame_diff(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "trace":
+            from computer_mcp import live as _live
+            result = _live.tool_trace(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "glyph":
+            from computer_mcp import live as _live
+            result = _live.tool_glyph(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "read_digits":
+            from computer_mcp import live as _live
+            result = _live.tool_read_digits(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "hud":
+            from computer_mcp import live as _live
+            result = _live.tool_hud(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "record":
+            from computer_mcp import live as _live
+            result = _live.tool_record(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
         # ---- DSH patch v0.2: staged verification ----
         elif name == "verify_flow":
             from computer_mcp import verify_flow as _vf

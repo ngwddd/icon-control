@@ -1,0 +1,362 @@
+"""live.py — v0.4 新工具的实现层（采集/感知/闭环/数字/录制）
+
+这一层只做三件事：把屏幕坐标换成帧坐标、把参数校验好、把结果压成模型能读的 JSON。
+真正的活在各模块里：
+    capture_daemon.py  常驻采集 + 环形缓冲 + 事件等待
+    perceive.py        像素原语（1~3 ms）
+    digits.py          数字模板匹配
+    micro.py           微脚本解释器（端上闭环）
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+
+from computer_mcp import perceive
+from computer_mcp.capture_daemon import CaptureDaemon
+
+_DRAW = os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp", "_draw")
+_RECORD_ROOT = os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp", "recordings")
+
+# 最近一次 run_script 的 trace（给 trace 工具用）
+_LAST_RUN: dict = {}
+_RUN_HISTORY: list[dict] = []
+
+
+def _daemon() -> CaptureDaemon:
+    return CaptureDaemon.shared()
+
+
+def _controllers():
+    from pynput.keyboard import Controller as KB
+    from pynput.mouse import Controller as MS
+    return KB(), MS()
+
+
+def _frame_box(region):
+    """屏幕坐标 → 帧坐标（按采集缩放与监视器原点换算）。"""
+    d = _daemon()
+    from computer_mcp.micro import to_frame_box
+    return to_frame_box(region, d.scale, getattr(d, "origin", (0, 0)))
+
+
+def _ensure_frame():
+    """没有守护或没有帧时，启动守护并等第一帧。"""
+    d = _daemon()
+    f = d.latest()
+    if f is None or not d.status().get("running"):
+        d.start()
+        time.sleep(0.25)
+        f = d.latest()
+    return f
+
+
+# ══════════════════════════ P0：采集 / 感知 ══════════════════════════
+def tool_capture(args: dict) -> dict:
+    d = _daemon()
+    action = (args or {}).get("action", "status")
+    if action == "start":
+        if args.get("scale") is not None:
+            d.scale = max(0.1, min(1.0, float(args["scale"])))
+        if args.get("active_fps"):
+            d.active_fps = max(1.0, min(60.0, float(args["active_fps"])))
+        if args.get("idle_fps"):
+            d.idle_fps = max(0.5, min(d.active_fps, float(args["idle_fps"])))
+        if args.get("monitor"):
+            d.monitor = int(args["monitor"])
+        res = d.start()
+        return {"success": True, **res}
+    if action == "stop":
+        return {"success": True, **d.stop()}
+    return {"success": True, **d.status()}
+
+
+def tool_sense(args: dict) -> dict:
+    """一次拿到「上一帧之后变了什么」+ 指定指标。"""
+    a = args or {}
+    f = _ensure_frame()
+    d = _daemon()
+    if f is None:
+        return {"success": False, "error": "拿不到帧（采集失败）"}
+
+    since = a.get("since_frame")
+    deltas = []
+    if since is not None:
+        for fr in d.frames_between(int(since))[-30:]:
+            deltas.append({"frame": fr.idx, "diff": round(fr.diff, 2),
+                           "bbox": fr.bbox, "window": fr.active_window[:40]})
+
+    prims = {}
+    for spec in a.get("primitives") or []:
+        name = spec.get("name") or spec.get("kind") or "p"
+        kind = spec.get("kind") or "prompt"
+        box = _frame_box(spec.get("box"))
+        kw = {k: v for k, v in spec.items() if k not in ("name", "kind", "box")}
+        try:
+            prims[name] = perceive.probe(kind, f.img, box, **kw)
+        except Exception as exc:
+            prims[name] = {"error": f"{type(exc).__name__}: {exc}"}
+
+    regions = {}
+    for spec in a.get("regions") or []:
+        name = spec.get("name") or "r"
+        box = _frame_box(spec.get("box"))
+        regions[name] = perceive.diff_region(
+            d.get(int(since)).img if since and d.get(int(since)) else None, f.img, box)
+
+    return {"success": True,
+            "frame": f.summary(),
+            "daemon": {"running": d.status()["running"], "fps": d.status()["measured_fps"],
+                       "scale": d.scale, "frames": d.status()["frames"]},
+            "deltas": deltas,
+            "primitives": prims,
+            "regions": regions,
+            "since": since}
+
+
+def tool_watch(args: dict) -> dict:
+    """阻塞到条件成立或超时（替代 sleep + 再截图那种轮询）。"""
+    a = args or {}
+    cond = a.get("cond") or a.get("condition") or {}
+    timeout = int(a.get("timeout_ms", 3000))
+    d = _ensure_frame() and _daemon()
+    from computer_mcp.micro import eval_cond
+
+    t0 = time.time()
+    def _pred(fr):
+        try:
+            return eval_cond(cond, fr.img, fr.img, d.scale, getattr(d, "origin", (0, 0)))
+        except Exception:
+            return False
+
+    hit, fr = d.wait(_pred, timeout)
+    return {"success": True, "hit": bool(hit), "elapsed_ms": int((time.time() - t0) * 1000),
+            "frame": fr.summary() if fr else None, "cond": cond}
+
+
+def tool_probe(args: dict) -> dict:
+    """单个像素原语（最快的一条路，1~3 ms）。"""
+    a = args or {}
+    kind = a.get("kind") or "prompt"
+    f = _ensure_frame()
+    if f is None:
+        return {"success": False, "error": "拿不到帧"}
+    box = _frame_box(a.get("box"))
+    kw = {k: v for k, v in a.items() if k not in ("kind", "box")}
+    try:
+        res = perceive.probe(kind, f.img, box, **kw)
+    except Exception as exc:
+        return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"success": True, "kind": kind, "frame": f.idx, "result": res}
+
+
+def tool_snapshot(args: dict) -> dict:
+    """按需抓一张（可裁区域、可缩放），存盘并返回路径 —— 不往对话里塞 base64。"""
+    a = args or {}
+    import mss
+    from PIL import Image
+    os.makedirs(_DRAW, exist_ok=True)
+    region = a.get("region")
+    scale = float(a.get("scale", 1.0))
+    with mss.mss() as sct:
+        mon = sct.monitors[1]
+        box = {"left": mon["left"], "top": mon["top"], "width": mon["width"], "height": mon["height"]}
+        if region:
+            x, y, w, h = perceive.norm_box(region)
+            box = {"left": x, "top": y, "width": w, "height": h}
+        shot = sct.grab(box)
+    im = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+    if scale != 1.0:
+        im = im.resize((max(1, int(im.width * scale)), max(1, int(im.height * scale))), Image.LANCZOS)
+    path = os.path.join(_DRAW, f"snap_{int(time.time()*1000)}.png")
+    im.save(path)
+    return {"success": True, "path": path, "size": list(im.size),
+            "bytes": os.path.getsize(path), "region": region}
+
+
+# ══════════════════════════ P1：闭环执行 ══════════════════════════
+def tool_run_script(args: dict) -> dict:
+    """端上跑一段微脚本（40 步循环 → 1 次调用）。"""
+    global _LAST_RUN
+    a = args or {}
+    ops = a.get("ops") or a.get("steps") or []
+    if not isinstance(ops, list) or not ops:
+        return {"success": False, "error": "ops 必须是非空数组"}
+    d = _ensure_frame() and _daemon()
+    kb, ms = _controllers()
+    from computer_mcp.micro import Runner
+
+    runner = Runner(d, kb, ms, d.scale, getattr(d, "origin", (0, 0)),
+                    max_seconds=float(a.get("max_seconds", 60)))
+    runner.run(ops)
+    res = runner.result()
+    res["success"] = True
+    _LAST_RUN = res
+    _RUN_HISTORY.append({k: res[k] for k in ("steps", "seconds", "stopped", "stop_reason")})
+    return res
+
+
+def tool_act_until(args: dict) -> dict:
+    """重复一个动作直到条件成立（"一直走到出现提示为止"）。"""
+    a = args or {}
+    cond = a.get("cond") or {}
+    action = a.get("action") or {"op": "key", "key": "w", "hold_ms": 400}
+    ops = [{"op": "until", "cond": cond, "timeout_ms": int(a.get("max_ms", 8000)),
+            "do": [action]}]
+    return tool_run_script({"ops": ops, "max_seconds": float(a.get("max_ms", 8000)) / 1000 + 5})
+
+
+def tool_frame_mark(args: dict) -> dict:
+    f = _ensure_frame()
+    d = _daemon()
+    if f is None:
+        return {"success": False, "error": "拿不到帧"}
+    d._marks = getattr(d, "_marks", {})
+    name = (args or {}).get("name") or f"m{f.idx}"
+    d._marks[name] = f.idx
+    return {"success": True, "mark": name, "frame": f.idx}
+
+
+def tool_frame_diff(args: dict) -> dict:
+    """按帧号比两张帧（判断"这一步有没有生效"）。"""
+    a = args or {}
+    d = _daemon()
+    fa = d.get(int(a.get("from_frame", 0)))
+    fb = d.get(int(a.get("to_frame", 0))) or d.latest()
+    if fa is None or fb is None:
+        return {"success": False, "error": "帧号不在缓冲里（缓冲默认 120 帧）"}
+    box = _frame_box(a.get("region"))
+    res = perceive.diff_region(fa.img, fb.img, box)
+    return {"success": True, "from": fa.idx, "to": fb.idx, **res}
+
+
+def tool_trace(args: dict) -> dict:
+    a = args or {}
+    if a.get("history"):
+        return {"success": True, "history": _RUN_HISTORY[-20:]}
+    return {"success": True, "last": _LAST_RUN}
+
+
+# ══════════════════════════ P2：数字 / 录制 ══════════════════════════
+def tool_glyph(args: dict) -> dict:
+    from computer_mcp import digits
+    a = args or {}
+    action = a.get("action", "list")
+    if action in ("list", "status"):
+        return {"success": True, **digits.learned()}
+    if action == "clear":
+        return {"success": True, **digits.clear_learned()}
+    if action == "learn":
+        f = _ensure_frame()
+        if f is None:
+            return {"success": False, "error": "拿不到帧"}
+        box = _frame_box(a.get("box"))
+        res = digits.learn(str(a.get("label", "?")), f.img, box,
+                           thr=int(a.get("thr", 140)))
+        return {"success": bool(res.get("ok")), **res}
+    return {"success": False, "error": f"未知 action：{action}"}
+
+
+def tool_read_digits(args: dict) -> dict:
+    """读数字。默认**按屏幕坐标全分辨率抓取**（缩放帧上的字形太小，5x7 会抹平）。"""
+    from computer_mcp import digits
+    a = args or {}
+    box = a.get("box")
+    if not box:
+        return {"success": False, "error": "缺少 box"}
+    full = bool(a.get("full_res", True))
+    if full:
+        img = _grab_region(box)
+        if img is None:
+            return {"success": False, "error": "全分辨率抓取失败"}
+        res = digits.read_digits(img, None, thr=int(a.get("thr", 140)),
+                                 min_conf=float(a.get("min_conf", 0.55)))
+        return {"success": True, "mode": "full_res", **res}
+    f = _ensure_frame()
+    if f is None:
+        return {"success": False, "error": "拿不到帧"}
+    res = digits.read_digits(f.img, _frame_box(box), thr=int(a.get("thr", 140)),
+                             min_conf=float(a.get("min_conf", 0.55)))
+    return {"success": True, "mode": "daemon", "frame": f.idx, **res}
+
+
+def _grab_region(region) -> "np.ndarray | None":
+    """按屏幕坐标抓一块**全分辨率**图（读数字/读小字时用，daemon 的缩放帧不够）。"""
+    import mss
+    import numpy as np
+    from PIL import Image
+    x, y, w, h = perceive.norm_box(region)
+    try:
+        with mss.mss() as sct:
+            shot = sct.grab({"left": int(x), "top": int(y), "width": int(w), "height": int(h)})
+        return np.asarray(Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX"),
+                          dtype=np.uint8)
+    except Exception:
+        return None
+
+
+def tool_hud(args: dict) -> dict:
+    """自动定位 HUD：按颜色扫出文字行（窗口大小/位置变了也不怕），并可选读数字。
+
+    返回每行的 box（屏幕坐标，可直接喂给 read_digits / probe）。
+    """
+    a = args or {}
+    f = _ensure_frame()
+    if f is None:
+        return {"success": False, "error": "拿不到帧"}
+    d = _daemon()
+    search = a.get("box")
+    frame_box = _frame_box(search) if search else (0, 0, f.img.shape[1], f.img.shape[0])
+    out = {}
+    for spec in (a.get("colors") or [{"name": "cyan", "color": "cyan"},
+                                     {"name": "yellow", "color": "yellow"}]):
+        rows = perceive.locate_rows(f.img, frame_box, color=spec.get("color", "cyan"),
+                                    tol=int(spec.get("tol", 70)))
+        # 帧坐标 → 屏幕坐标
+        step = max(1, int(round(1.0 / max(0.05, d.scale))))
+        ox, oy = getattr(d, "origin", (0, 0))
+        rows_screen = []
+        for r in rows:
+            x, y, w, h = r["box"]
+            rows_screen.append({"box": [ox + x * step, oy + y * step, w * step, h * step],
+                                "y0": oy + r["y0"] * step, "y1": oy + r["y1"] * step})
+        out[spec.get("name", spec.get("color"))] = rows_screen
+    return {"success": True, "frame": f.idx, "scale": d.scale, "rows": out}
+
+
+def tool_record(args: dict) -> dict:
+    """把最近缓冲里的帧 + 事件落盘（回放/证据）。"""
+    a = args or {}
+    action = a.get("action", "stop")
+    d = _daemon()
+    if action == "start":
+        d._recording = True
+        return {"success": True, "recording": True, "note": "开始录制（帧写入缓冲，stop 时落盘）"}
+    if action == "stop":
+        d._recording = False
+        frames = list(d._frames)
+        if not frames:
+            return {"success": False, "error": "缓冲里没有帧"}
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        out = os.path.join(_RECORD_ROOT, stamp)
+        os.makedirs(out, exist_ok=True)
+        from PIL import Image
+        manifest = {"started": frames[0].ts, "frames": [], "trace": _LAST_RUN.get("trace", [])}
+        for fr in frames[-120:]:
+            # JPEG 而不是 PNG：同样的帧，体积小一个数量级（实测 17 帧 PNG 9.4 MB → JPEG 约 0.3 MB）
+            name = f"f{fr.idx:05d}.jpg"
+            try:
+                Image.fromarray(fr.img).save(os.path.join(out, name), quality=80)
+                manifest["frames"].append({"idx": fr.idx, "file": name,
+                                           "diff": round(fr.diff, 2),
+                                           "window": fr.active_window[:40]})
+            except Exception:
+                continue
+        with open(os.path.join(out, "manifest.json"), "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, ensure_ascii=False, indent=1)
+        return {"success": True, "dir": out, "frames": len(manifest["frames"]),
+                "bytes": sum(os.path.getsize(os.path.join(out, f))
+                             for f in os.listdir(out))}
+    return {"success": False, "error": "action 只支持 start/stop"}

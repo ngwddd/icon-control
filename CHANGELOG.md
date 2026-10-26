@@ -1,3 +1,42 @@
+## [0.4.0] - 2026-10-27
+
+架构升级：**把"看屏幕"从每动作一张图，改成常驻采集 + 端上感知 + 端上闭环**。
+
+### Added — 采集守护
+- `capture_daemon.py`：常驻线程按 12~20 fps（静止时降到 3~5 fps）抓屏，
+  缩放到 0.5 放进 120 帧环形缓冲；每帧算平均差异、脏区矩形、哈希、前台窗口标题
+- 隐私护栏：命中"密码/登录/凭据/1password"等标题的帧**不保存像素**
+- `wait(predicate)`：事件等待，替代"sleep + 再截图"
+
+### Added — 感知原语（0.1~3 ms）
+- `perceive.py`：`prompt`（亮字占比）、`bar`（彩色条填充率）、`openness`（视野开阔度）、
+  `color_blob`、`diff_region`、**`locate_rows`（按颜色自动定位 HUD 行）**
+- 实测：`probe(prompt)` 0.155 ms、`probe(openness)` 0.301 ms、
+  `sense()` **0.010 ms**（读内存）
+
+### Added — 数字识别（P2）
+- `digits.py`：切字 → 归一化 5×7 → 模板匹配；内置 0-9 标准点阵 + **运行时学习**（`glyph` 工具）
+- 实测读像素字体 1.3~2.6 ms；Windows OCR 在同一 HUD 上读出 "L E E L 1" 且要 120~180 ms
+
+### Added — 端上闭环（P1）
+- `micro.py`：微脚本解释器（key/press/turn/move/click/sleep/loop/if/until/log），
+  条件在本地求值，带步数与时长预算、嵌套深度上限
+- 实测：41 步闭环 **0.41 s**（走模型往返约 123 s）
+
+### Added — 工具与证据
+- 14 个新工具（58 → 72）：`capture_daemon` / `sense` / `watch` / `probe` / `hud` /
+  `snapshot` / `run_script` / `act_until` / `frame_mark` / `frame_diff` / `trace` /
+  `glyph` / `read_digits` / `record`
+- `record` 把环形缓冲落盘（JPEG q80，实测 PNG 9.4 MB → JPEG 0.3 MB 量级）
+
+### Fixed
+- 数字读取默认走**全分辨率区域抓取**（缩放帧上的字形太小，5×7 会抹平）
+- `hud` 自动定位：窗口从 806×640 变成 537×427 后，硬编码坐标当场失效
+
+### Tests
+- 新增 `tests/test_v04_live.py`：22 项（原语 / 数字 / 解释器 / 守护 / 工具契约）
+- 合计 **86 → 108** 项，venv 与系统 Python 双绿
+
 ## [0.3.2] - 2026-10-26
 
 修复脱敏脚本造成的**语法错误** —— 发布之后由验证助手 v1.10.5 扫出来的真问题。
