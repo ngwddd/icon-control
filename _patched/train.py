@@ -296,6 +296,7 @@ class Step:
     timeout_ms: int = 15000
     on_fail: str = "stop"          # stop | continue | retry
     wait_before_action_ms: int = 0
+    focus: dict | None = None
     note: str = ""
 
     def budget(self) -> int:
@@ -327,6 +328,7 @@ class Track:
                 timeout_ms=int(s.get("timeout_ms") or 15000),
                 on_fail=str(s.get("on_fail") or "stop"),
                 wait_before_action_ms=int(s.get("wait_before_action_ms") or 0),
+                focus=(s.get("focus") or None),
                 note=str(s.get("note") or ""),
             ))
         return Track(
@@ -463,6 +465,36 @@ class FrameWheel(threading.Thread):
 
 # ─────────────────────────── 动作执行（复用已验证的做法） ───────────────────────────
 
+def _find_window(title: str, same_pid: int | None = None):
+    """按标题子串找可见窗口，返回 (hwnd, rect)。"""
+    if not title:
+        return None
+    import win32gui
+    import win32process
+
+    found = []
+
+    def cb(h, _):
+        try:
+            if not win32gui.IsWindowVisible(h):
+                return
+            if title not in win32gui.GetWindowText(h):
+                return
+            r = win32gui.GetWindowRect(h)
+            if r[2] - r[0] < 200 or r[3] - r[1] < 150:
+                return
+            if same_pid:
+                _, pid = win32process.GetWindowThreadProcessId(h)
+                if pid != same_pid:
+                    return
+            found.append((h, r))
+        except Exception:
+            pass
+
+    win32gui.EnumWindows(cb, None)
+    return found[0] if found else None
+
+
 def _resolve_point(rect: tuple[int, int, int, int], rel_frac: list[float]) -> tuple[int, int]:
     x, y, w, h = rect
     return int(x + rel_frac[0] * w), int(y + rel_frac[1] * h)
@@ -476,14 +508,30 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
     kind = (action or {}).get("kind", "")
     try:
         if kind == "click":
-            pt = _resolve_point(rect, action.get("rel_frac") or [0.5, 0.5])
+            # 软选择器优先：按文字/模板找，找不到才退回比例坐标（三级降级）
+            pt, method, note = None, "rel", ""
+            find = action.get("find")
+            if find:
+                try:
+                    from computer_mcp import selector
+
+                    r = selector.resolve(rect, find)
+                    if r.get("ok"):
+                        pt = tuple(r["at"])
+                        method = str(r.get("method") or "")
+                        note = str(r.get("detail") or "")
+                except Exception as e:
+                    note = f"selector 异常：{type(e).__name__}"
+            if pt is None:
+                pt = _resolve_point(rect, action.get("rel_frac") or [0.5, 0.5])
+                method = "rel"
             ms = MS()
             ms.position = pt
             time.sleep(float(action.get("settle_ms", 120)) / 1000.0)
             btn = {"left": Button.left, "right": Button.right}.get(
                 str(action.get("button", "left")), Button.left)
             ms.click(btn, int(action.get("clicks", 1)))
-            return {"ok": True, "detail": f"click {pt}"}
+            return {"ok": True, "detail": f"click {pt} [{method}]{(' ' + note) if note else ''}"}
 
         if kind == "key":
             kb = KB()
@@ -594,7 +642,17 @@ def check_expect(expect: dict | None, wheel: FrameWheel,
             x, y, w, h = rect
             region = {"x": int(x + rel[0] * w), "y": int(y + rel[1] * h),
                       "w": max(8, int(rel[2] * w)), "h": max(8, int(rel[3] * h))}
-            res = ocr_ext.ocr_read(region=region, max_lines=20)
+            # 小字（输入框里的文字、11px 列表）1x 读不到 → 判据也要能 upscale（实测）
+            kw = {"region": region, "max_lines": 20}
+            up = float(expect.get("upscale", 1.0) or 1.0)
+            if up > 1.0:
+                kw["upscale"] = up
+            if expect.get("boost"):
+                kw["boost"] = True
+            try:
+                res = ocr_ext.ocr_read(**kw)
+            except TypeError:                    # 老版本不支持 upscale/boost
+                res = ocr_ext.ocr_read(region=region, max_lines=20)
             txt = "".join((ln.get("text") or "") for ln in (res.get("lines") or [])).replace(" ", "")
             query = str(expect.get("query", ""))
             if not query:
@@ -646,6 +704,19 @@ class Runner:
     # ---- 生命周期 ----
     def start(self) -> None:
         self.wheel.start()
+
+    def retarget(self, hwnd: int, rect: tuple[int, int, int, int], name: str = "") -> None:
+        """跑到一半换目标窗口（微信点会话会开独立窗口，必须换）。"""
+        try:
+            self.wheel.stop()
+            self.wheel.join(timeout=1.2)
+        except Exception:
+            pass
+        self.hwnd = hwnd
+        self.rect = rect
+        self.wheel = FrameWheel(rect, hwnd)
+        self.wheel.start()
+        self.events.add("STEP", f"切换目标窗口 hwnd={hwnd} {name}".strip())
 
     def stop(self) -> None:
         self._stop_evt.set()
@@ -771,6 +842,31 @@ class Runner:
                 acted = False
                 pred_since = 0.0
                 uncertain_streak = 0
+
+                # 步骤级换窗口：微信点会话会开独立窗口，后续步骤必须改盯新窗口
+                if step.focus:
+                    try:
+                        import win32process
+
+                        _pid = win32process.GetWindowThreadProcessId(self.hwnd)[1]
+                    except Exception:
+                        _pid = None
+                    hit = _find_window(str(step.focus.get("title") or ""), same_pid=_pid)
+                    if not hit:
+                        # 聊天可能开在主窗口里（老版本/已打开过），也可能开独立窗口。
+                        # 默认 optional：找不到就沿用当前目标，不算失败。
+                        if step.focus.get("optional", True):
+                            self.events.add("STEP",
+                                            f"没找到「{step.focus.get('title')}」，沿用当前窗口",
+                                            step.name)
+                        else:
+                            self.events.add("STEP", f"切换目标失败：{step.focus}", step.name)
+                            return self._finish("error", step.name, f"找不到窗口 {step.focus}")
+                    if hit:                      # 没找到且 optional → 什么都不做
+                        fh, fr = hit
+                        self.retarget(fh, (fr[0], fr[1], fr[2] - fr[0], fr[3] - fr[1]),
+                                      str(step.focus.get("title")))
+                        time.sleep(0.4)
 
                 while time.time() < deadline and not self._stop_evt.is_set():
                     if step.wait_before_action_ms and not acted:
