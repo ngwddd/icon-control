@@ -1,4 +1,4 @@
-r"""Re-apply the 对话壳（***） desktop-MCP patch after reinstalling/upgrading computer-mcp.
+r"""Re-apply the Shell desktop-MCP patch after reinstalling/upgrading computer-mcp.
 
 Copies the patched files from this folder into site-packages and then verifies
 that the server exposes the expected tools.
@@ -62,7 +62,7 @@ def main() -> int:
     print((check.stdout or "").strip())
     if check.returncode != 0:
         print((check.stderr or "")[-500:])
-    print("done; restart 对话壳（***） to load it")
+    print("done; restart Shell to load it")
     return 0
 
 

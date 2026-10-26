@@ -7,7 +7,7 @@
 
 用法：
     venv\\Scripts\\python.exe diag_input.py            # 三层都测
-    venv\\Scripts\\python.exe diag_input.py --target 即时通讯软件（***）
+    venv\\Scripts\\python.exe diag_input.py --target ChatClient
 
 判定逻辑：
     移动 OK + 点击/按键 无效  -> SendInput 被系统级拦截
@@ -105,9 +105,9 @@ def _mouse_click_ok(target_title: str | None) -> dict:
     cls = WNDCLASS()
     cls.lpfnWndProc = proc
     cls.hInstance = hinst
-    cls.lpszClassName = "对话壳（***）_INPUT_PROBE"
+    cls.lpszClassName = "DSH_INPUT_PROBE"
     user32.RegisterClassW(ctypes.byref(cls))
-    hwnd = user32.CreateWindowExW(0, "对话壳（***）_INPUT_PROBE", "对话壳（***） input probe",
+    hwnd = user32.CreateWindowExW(0, "DSH_INPUT_PROBE", "Shell input probe",
                                   win32con.WS_OVERLAPPEDWINDOW | win32con.WS_VISIBLE,
                                   600, 300, 300, 200, None, None, hinst, None)
     if not hwnd:
@@ -142,7 +142,7 @@ def _mouse_click_ok(target_title: str | None) -> dict:
 
 
 def _keyboard_ok() -> dict:
-    """L3: 用「系统文本编辑器打字 + Ctrl+A/Ctrl+C + 剪贴板回读」判定，这是唯一可靠的判据。
+    """L3: 用「TextEditor打字 + Ctrl+A/Ctrl+C + 剪贴板回读」判定，这是唯一可靠的判据。
 
     为什么不用自建探针窗口：
       探针窗口常常抢不到前台（被其它窗口盖住），点击/按键落到别人身上，
@@ -167,10 +167,10 @@ def _keyboard_ok() -> dict:
         except Exception:
             return ""
 
-    mark = "对话壳（***）_INPUT_PROBE_OK"
+    mark = "DSH_INPUT_PROBE_OK"
     _set_clip("SENTINEL")
 
-    # 用一个已存在的空文件打开系统文本编辑器，避免「找不到文件」模态框吞按键
+    # 用一个已存在的空文件打开TextEditor，避免「找不到文件」模态框吞按键
     f = os.path.join(os.environ.get("TEMP", "."), "dsh_input_probe.txt")
     try:
         with open(f, "w", encoding="utf-8"):
@@ -185,11 +185,11 @@ def _keyboard_ok() -> dict:
         if not win32gui.IsWindowVisible(h):
             return
         t = win32gui.GetWindowText(h)
-        if "dsh_input_probe" in t.lower() or "系统文本编辑器" in t or "系统文本编辑器" in t:
+        if "dsh_input_probe" in t.lower() or "TextEditor" in t or "TextEditor" in t:
             cands.append(h)
     win32gui.EnumWindows(_cb, None)
     if not cands:
-        return {"layer": "L3 键盘输入(SendInput)", "ok": None, "detail": "没找到系统文本编辑器窗口"}
+        return {"layer": "L3 键盘输入(SendInput)", "ok": None, "detail": "没找到TextEditor窗口"}
     hwnd = cands[0]
 
     fg_ok = False
@@ -229,9 +229,9 @@ def _keyboard_ok() -> dict:
     detail = f"前台={'是' if fg_ok else '否'}，回读={got[:32]!r}"
     if not fg_ok:
         return {"layer": "L3 键盘输入(SendInput)", "ok": None,
-                "detail": f"系统文本编辑器没拿到前台，判定不可信（{detail}）"}
+                "detail": f"TextEditor没拿到前台，判定不可信（{detail}）"}
     return {"layer": "L3 键盘输入(SendInput)", "ok": ok,
-            "detail": "系统文本编辑器里打进去的字被成功回读" if ok else detail}
+            "detail": "TextEditor里打进去的字被成功回读" if ok else detail}
 
 
 def main() -> int:

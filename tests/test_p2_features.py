@@ -5,7 +5,7 @@
     · anchor_mem：区域与列表项记忆（learn_region / locate_region / learn_item / locate_item）
     · ocr_ext：upscale / boost 参数（小字增强）
     · macro_ext：region_mem 引用、learn_region/learn_item、launch/wait_window/exit_app
-    · recipes/***.json：把「必须走 shell 启动」这条坑固化下来
+    · recipes/app-03.json：把「必须走 shell 启动」这条坑固化下来
 """
 
 from __future__ import annotations
@@ -95,10 +95,10 @@ class TestMacroP2(unittest.TestCase):
                       "允许宏先 launch/wait_window 再拿窗口")
 
 
-class Test视频客户端（***）Recipe(unittest.TestCase):
+class TestVideoClientRecipe(unittest.TestCase):
     def test_launch_pitfall_recorded(self) -> None:
-        p = os.path.join(HERE, "recipes", "***.json")
-        self.assertTrue(os.path.isfile(p), "缺 recipes/***.json")
+        p = os.path.join(HERE, "recipes", "app-03.json")
+        self.assertTrue(os.path.isfile(p), "缺 recipes/app-03.json")
         with open(p, encoding="utf-8") as fh:
             data = json.load(fh)
         launch = data.get("launch") or {}

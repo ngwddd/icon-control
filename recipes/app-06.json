@@ -1,5 +1,5 @@
 {
-  "app": "安全软件（***）安全软件 6.0",
+  "app": "SecurityApp安全软件 6.0",
   "window": {
     "process": "HipsMain",
     "class_contains": "HipsMain"
@@ -28,7 +28,7 @@
         856
       ]
     },
-    "note": "相对安全软件（***）主窗口（1374x924）的坐标；齿轮在最左下"
+    "note": "相对SecurityApp主窗口（1374x924）的坐标；齿轮在最左下"
   },
   "flows": {
     "add_trust": [
@@ -41,7 +41,7 @@
     ],
     "check_protection": [
       "齿轮 → 系统防护 → 系统加固 / 应用加固",
-      "实测：安全软件（***） 6.0.12.3 默认开着**不影响** SendInput，不用关"
+      "实测：SecurityApp 6.0.12.3 默认开着**不影响** SendInput，不用关"
     ]
   },
   "pitfalls": [

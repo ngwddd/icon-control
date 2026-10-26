@@ -1,8 +1,8 @@
 {
-  "app": "游戏平台（***） (CEF)",
+  "app": "GamePlatform (CEF)",
   "window": {
     "process": "app-05",
-    "class_contains": "SDL_app|浏览器（***）_WidgetWin"
+    "class_contains": "SDL_app|Browser_WidgetWin"
   },
   "uia": "只回 DocumentControl",
   "flows": {

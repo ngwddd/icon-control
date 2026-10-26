@@ -1,8 +1,8 @@
 {
-  "name": "系统文本编辑器_type_demo",
-  "description": "click the 系统文本编辑器 editor and type ${text}",
+  "name": "TextEditor_type_demo",
+  "description": "click the TextEditor editor and type ${text}",
   "window": {
-    "process": "系统文本编辑器"
+    "process": "TextEditor"
   },
   "steps": [
     {

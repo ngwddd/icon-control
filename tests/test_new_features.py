@@ -43,7 +43,7 @@ class TestRecipes(unittest.TestCase):
     def test_recipes_present_and_valid(self) -> None:
         base = os.path.join(HERE, "recipes")
         self.assertTrue(os.path.isdir(base), "recipes/ 目录不存在")
-        names = ["app-01", "app-02", "app-05", "app-06", "系统文本编辑器"]
+        names = ["app-01", "app-02", "app-05", "app-06", "TextEditor"]
         for name in names:
             path = os.path.join(base, f"{name}.json")
             self.assertTrue(os.path.isfile(path), f"缺少配方 {name}.json")
@@ -66,7 +66,7 @@ class TestDoctor(unittest.TestCase):
         for fn in ("check_identity", "check_display", "check_input",
                    "check_drivers", "check_patch", "check_memory"):
             self.assertIn(f"def {fn}(", src, f"doctor.py 缺 {fn}")
-        # 判据必须是「系统文本编辑器 + 剪贴板回读」，不许用探针窗口计数
+        # 判据必须是「TextEditor + 剪贴板回读」，不许用探针窗口计数
         self.assertIn("doctor_probe", src)
         self.assertNotIn("WM_LBUTTONDOWN", src, "doctor 不该再用探针窗口命中计数")
 
@@ -101,7 +101,7 @@ class TestE2EExists(unittest.TestCase):
         self.assertTrue(os.path.isfile(path), "缺 e2e 冒烟测试文件")
         with open(path, encoding="utf-8") as fh:
             src = fh.read()
-        self.assertIn("对话壳（***）_E2E", src, "e2e 必须由 对话壳（***）_E2E=1 控制，默认跳过")
+        self.assertIn("DSH_E2E", src, "e2e 必须由 DSH_E2E=1 控制，默认跳过")
         self.assertIn("skipUnless", src)
 
 

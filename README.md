@@ -7,7 +7,7 @@
 - **版本**：v0.2.0
 - **平台**：Windows 11（2560×1440 @150%）
 - **底座**：[computer-mcp](https://github.com/)（MIT，31 个工具）+ 本项目补丁层扩到 **58 个工具**
-- **对话壳**：对话壳（***）（对话壳（***））Web GUI
+- **对话壳**：Shell（Shell）Web GUI
 - **许可证**：MIT
 
 ---
@@ -153,26 +153,26 @@ Electron / CEF / 游戏同理。**UIA 不是万能钥匙。**
 
 | 任务 | 结果 | 教训 |
 |---|---|---|
-| 即时通讯软件（***）发一首长诗（405 字 / 14 行）给指定联系人 | 成功 | 长文本用剪贴板 + Ctrl+V；回车发送比点"发送"按钮可靠 |
-| 视频客户端（***）启动 | 卡了 6 次 | **Electron 应用必须走 `explorer.exe` shell 启动**，直接 Popen 会静默秒退（退出码 0、无窗口） |
-| 音乐客户端（***）下载无损 | 先成功、后失败、再成功 | **点列表行前必须 OCR 核对行内容** —— 我没核对，把第一首歌下成了另一首（列表顺序变了），白下 28.5 MB |
-| 沙盒 FPS 游戏（***）（沙盒 FPS 游戏（***））装模组 | 成功（3 个） | **评价数 ≠ 能用**：632 评价的 PAIO+ 描述里写着 "THIS MUTATOR DOES NOTHING!!!"；`.rgc` 是配置不是内容 |
+| ChatClient发一首长诗（405 字 / 14 行）给指定联系人 | 成功 | 长文本用剪贴板 + Ctrl+V；回车发送比点"发送"按钮可靠 |
+| VideoClient启动 | 卡了 6 次 | **Electron 应用必须走 `explorer.exe` shell 启动**，直接 Popen 会静默秒退（退出码 0、无窗口） |
+| MusicClient下载无损 | 先成功、后失败、再成功 | **点列表行前必须 OCR 核对行内容** —— 我没核对，把第一首歌下成了另一首（列表顺序变了），白下 28.5 MB |
+| SandboxFps（SandboxFps）装模组 | 成功（3 个） | **评价数 ≠ 能用**：632 评价的 PAIO+ 描述里写着 "THIS MUTATOR DOES NOTHING!!!"；`.rgc` 是配置不是内容 |
 
 ### 阶段 5 · P2：应用生命周期三件套 + 区域记忆
 
 `appkit.launch / wait_window / exit_app`（关窗 ≠ 退出，托盘进程要显式结束）、
 `anchor_mem.learn_region / learn_item`（区域与列表项记忆，自动外推行高）、
-OCR 的 `upscale` + `boost`（即时通讯软件（***）"发送"按钮基线 found=0 → upscale=3 后 found=1）。
+OCR 的 `upscale` + `boost`（ChatClient"发送"按钮基线 found=0 → upscale=3 后 found=1）。
 
 ### 阶段 6 · 急停：用户要"连按两下 ESC 你就松手"
 
 `panic.PanicSwitch`（全局键盘监听，1.5 s 内两次 ESC 触发，**粘住不复位**）+
 `panic_watch.py`（进程外看守，触发就杀掉所有自动化进程）。
-在打 恐怖生存游戏（***） 的那一局里**真机触发过一次**，脚本当场硬停。
+在打 HorrorGame 的那一局里**真机触发过一次**，脚本当场硬停。
 
 ### 阶段 7 · 视觉状态判据（本项目最通用的一组能力）
 
-打 恐怖生存游戏（***） 暴露的通用需求：看不见控件时怎么可靠判断"东西在不在、变没变"。
+打 HorrorGame 暴露的通用需求：看不见控件时怎么可靠判断"东西在不在、变没变"。
 四个判据固化进工具集：
 
 - **模板自学**：`capture_template` → `match_template`（灰度，返回屏幕绝对坐标）
@@ -186,7 +186,7 @@ OCR 的 `upscale` + `boost`（即时通讯软件（***）"发送"按钮基线 fo
 3. 状态**每轮从画面读**，变量只当缓存（靠"我记得灯开着"必然失步）；
 4. 动画期间**不要判状态**。
 
-### 阶段 8 · 恐怖生存游戏（***）（恐怖生存游戏（***））该游戏的自定义难度模式：一次通关、两次翻车
+### 阶段 8 · HorrorGame（HorrorGame）该游戏的自定义难度模式：一次通关、两次翻车
 
 - **发现 1**：监控不是"点"出来的，是**鼠标移到底部 box 悬停**触发（点击只开不关）；
 - **发现 2**：视角能**左右平移**（贴边），左右门/灯按钮只在对应侧可见；
@@ -237,16 +237,16 @@ venv\Scripts\python.exe doctor.py
 venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
 
 # 4) 真操作冒烟（会动鼠标，需要 GUI 上授权变绿）
-set 对话壳（***）_E2E=1 && venv\Scripts\python.exe -m unittest tests.test_e2e_smoke -v
+set Shell_E2E=1 && venv\Scripts\python.exe -m unittest tests.test_e2e_smoke -v
 
 # 5) 鼠标接管前先查权限闸门
 venv\Scripts\python.exe mouse_permission.py     # 0=已授权 2=未授权
 ```
 
-一条命令装 GUI 插件（需要 对话壳（***））：
+一条命令装 GUI 插件（需要 Shell）：
 
 ```powershell
-# 在 对话壳（***） 里对 agent 说：安装 bundle C:\path\to\plugin\  （走 plugin_manager install_bundle）
+# 在 Shell 里对 agent 说：安装 bundle C:\path\to\plugin\  （走 plugin_manager install_bundle）
 ```
 
 ---
@@ -293,7 +293,7 @@ icon-control/
 │   ├─ ui_ext.py            # batch + UIA
 │   └─ panic.py             # 急停
 ├─ tests/                   # 64 项不变量测试
-├─ macros/                  # 已验证的宏（即时通讯软件（***）发送等）
+├─ macros/                  # 已验证的宏（ChatClient发送等）
 ├─ recipes/                 # 每个已验证应用一份"配方"（含坑）
 └─ plugin/                  # GUI 授权开关（@local/dsh-mouse-permission）
 ```
@@ -310,7 +310,7 @@ icon-control/
 ## 致谢
 
 - [computer-mcp](https://github.com/)：提供了干净的 31 工具底座。
-- StrategyWiki / 游戏平台（***） 社区 / 一个开源机器人实现（仓库名略）：恐怖生存游戏（***） 机制与"模板匹配打法"的思路来源
+- StrategyWiki / GamePlatform 社区 / 一个开源机器人实现（仓库名略）：HorrorGame 机制与"模板匹配打法"的思路来源
   （只学思路，资产一律自标定 —— 这条是被打出来的）。
 - 用户：这一整天里提出的每一条批评，最后都变成了仓库里的一条规则。
 

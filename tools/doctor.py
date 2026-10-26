@@ -37,10 +37,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # 已知会拦截模拟输入的驱动/服务（按命中即提示处置）
 SUSPECT_DRIVERS = {
     "CCInputProtector": "笔记本 Control Center 的输入保护驱动（会拦 SendInput）",
-    "hrdevmon": "安全软件（***）设备监控驱动",
-    "sysdiag": "安全软件（***）核心驱动",
-    "hrwfpdrv": "安全软件（***）防火墙（网络类，不是输入）",
-    "***": "安全软件（***） NDIS 网络过滤（停它会断网）",
+    "hrdevmon": "SecurityApp设备监控驱动",
+    "sysdiag": "SecurityApp核心驱动",
+    "hrwfpdrv": "SecurityApp防火墙（网络类，不是输入）",
+    "***": "SecurityApp NDIS 网络过滤（停它会断网）",
     "HKKbdFltr": "OEM 键盘类过滤驱动",
     "HKMouFltr": "OEM 鼠标类过滤驱动",
     "nfwfp": "NetFilter SDK WFP（网络类）",
@@ -125,7 +125,7 @@ def check_display() -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
-# 3. 输入链路（唯一可信判据：系统文本编辑器打字 + 剪贴板回读）
+# 3. 输入链路（唯一可信判据：TextEditor打字 + 剪贴板回读）
 # --------------------------------------------------------------------------- #
 def check_input() -> list[dict]:
     out: list[dict] = []
@@ -166,8 +166,8 @@ def check_input() -> list[dict]:
     except Exception as exc:  # noqa: BLE001
         out.append(_r("光标移动(SetCursorPos)", "fatal", f"{exc}"))
 
-    # L2 键盘注入（系统文本编辑器 + 剪贴板回读）
-    mark = f"对话壳（***）_DOCTOR_{int(time.time()) % 100000}"
+    # L2 键盘注入（TextEditor + 剪贴板回读）
+    mark = f"DSH_DOCTOR_{int(time.time()) % 100000}"
     set_clip("SENTINEL")
     probe_name = f"doctor_probe_{os.getpid()}_{int(time.time()) % 1000}.txt"
     target = os.path.join(os.environ.get("TEMP", "."), probe_name)
@@ -207,10 +207,10 @@ def check_input() -> list[dict]:
             fg_ok = win32gui.GetForegroundWindow() == hwnd
 
         if not hwnd:
-            out.append(_r("键盘注入", "unknown", "没能打开系统文本编辑器靶子"))
+            out.append(_r("键盘注入", "unknown", "没能打开TextEditor靶子"))
         elif not fg_ok:
             out.append(_r("键盘注入", "unknown",
-                          "系统文本编辑器没拿到前台，本次判定不可信",
+                          "TextEditor没拿到前台，本次判定不可信",
                           "改用人工确认：手动点进任意输入框，用 desk.py 发一次 type"))
         else:
             kb.type(mark)

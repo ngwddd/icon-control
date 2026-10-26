@@ -1,8 +1,8 @@
 {
-  "app": "某即时通讯客户端（***） (新版 即时通讯软件（***）, Electron)",
+  "app": "某ChatApp (新版 ChatClient, Electron)",
   "window": {
-    "process": "即时通讯软件（***）",
-    "class_contains": "浏览器（***）_WidgetWin_1"
+    "process": "ChatClient",
+    "class_contains": "Browser_WidgetWin_1"
   },
   "uia": "不可用（Electron 自绘）",
   "flows": {
@@ -21,7 +21,7 @@
     ]
   },
   "pitfalls": [
-    "启动后主窗口常 vis=0（隐藏）→ 再跑一次 即时通讯软件（***）.exe 触发单实例唤出",
+    "启动后主窗口常 vis=0（隐藏）→ 再跑一次 ChatClient.exe 触发单实例唤出",
     "用 ShowWindow 强行显示未登录窗口会得到**空白页**（Electron 没渲染）",
     "聊天窗是独立窗口，标题就是对方昵称",
     "输入区在聊天窗 rel y ≈ 940~1150（窗高 1218 时）"

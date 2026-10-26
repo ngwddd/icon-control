@@ -1,4 +1,4 @@
-"""Screenshot capture functionality (patched for 对话壳（***）: smaller, faster, diff-aware).
+"""Screenshot capture functionality (patched for Shell: smaller, faster, diff-aware).
 
 Upstream behaviour: full-resolution PNG, ~128 ms and ~960 KB per call, and no way
 to tell whether anything actually changed.

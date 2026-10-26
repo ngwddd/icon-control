@@ -1,6 +1,6 @@
 """vision_state.py — 通用视觉状态判据（给自绘 UI / 游戏 / Electron 这类 UIA 瞎眼的目标用）
 
-来源：2026-10-25 打恐怖生存游戏（***）那一轮踩出来的通用需求。**不含任何游戏专属逻辑**，
+来源：2026-10-25 打HorrorGame那一轮踩出来的通用需求。**不含任何游戏专属逻辑**，
 只做四件任何"看不清控件"的界面都需要的事：
 
   ① **模板自学**：`capture_template(name, region)` 把屏幕上一块图案存成模板，
@@ -43,7 +43,7 @@ except Exception:                      # pragma: no cover
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 默认存到**工具根目录**下的 vision/（不要放进 venv，重装依赖会连模板一起丢）
-STORE = os.environ.get("对话壳（***）_VISION_STORE") or os.path.join(
+STORE = os.environ.get("DSH_VISION_STORE") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE)))), "vision")
 TPL_DIR = os.path.join(STORE, "templates")
 BAS_DIR = os.path.join(STORE, "baselines")

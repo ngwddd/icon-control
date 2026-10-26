@@ -1,6 +1,6 @@
 {
   "name": "app-01_open_chat",
-  "description": "打开即时通讯软件（***）并点开指定聊天（不发消息）；标题已对则不做任何点击",
+  "description": "打开ChatClient并点开指定聊天（不发消息）；标题已对则不做任何点击",
   "window": { "process": "***" },
   "restore": true,
   "defaults": { "chat": "文件传", "chat_title": "即时通讯软件的自建会话（***）" },

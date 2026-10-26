@@ -8,8 +8,8 @@ the window does not break it.
 Macro file format (JSON, stored in MACRO_DIR):
 {
   "name": "app-01_send",
-  "description": "send a text to the 即时通讯软件（***） file-transfer helper",
-  "window": {"title_contains": "即时通讯软件（***）"},        # or {"process": "***.exe"}
+  "description": "send a text to the ChatClient file-transfer helper",
+  "window": {"title_contains": "ChatClient"},        # or {"process": "***.exe"}
   "steps": [
     {"action": "click", "rel": [220, 380]},
     {"action": "sleep", "ms": 250},
@@ -381,7 +381,7 @@ def window_metrics(hwnd: int) -> dict[str, Any]:
     """Report both coordinate systems so a click can be self-checked.
 
     OCR (PrintWindow) works in window-rect space; code that mixes in the client
-    area is off by the border/title bar (measured +11px on 即时通讯软件（***）). That offset is
+    area is off by the border/title bar (measured +11px on ChatClient). That offset is
     exactly what makes a *known* position click the wrong element.
     """
     import ctypes
@@ -759,7 +759,7 @@ def run_macro(
                         got = False
                         tries: list[dict[str, Any]] = []
                         for attempt in range(attempts):
-                            # the row toggles in 即时通讯软件（***）: retry until the title shows up
+                            # the row toggles in ChatClient: retry until the title shows up
                             dx = (-40, 40, 0)[attempt % 3]
                             mouse.position = (t["cx"] + dx, t["cy"])
                             time.sleep(0.10)

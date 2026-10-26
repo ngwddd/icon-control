@@ -1,19 +1,19 @@
 """appkit.py — 应用的「启动 / 等窗口 / 干净退出」三件套。
 
-为什需要它（2026-10-25 视频客户端（***）那次）：直接 `Popen(exe)` 启动视频客户端（***）会
+为什需要它（2026-10-25 VideoClient那次）：直接 `Popen(exe)` 启动VideoClient会
 **退出码 0 秒退、无窗口无报错**，必须经 Explorer shell（等同用户双击）才行；
 而 `WM_CLOSE` 只关窗，进程还留在托盘里。这两件事每次都要重查一遍，所以固化下来。
 
 用法：
     from computer_mcp import appkit            # 或把本文件放到包内
-    appkit.launch("视频客户端（***）")                   # 按名字找快捷方式，走 Explorer shell
+    appkit.launch("VideoClient")                   # 按名字找快捷方式，走 Explorer shell
     appkit.wait_window(title_contains="哔哩", timeout_ms=20000)
-    appkit.exit_app(process="视频客户端（***）.exe")
+    appkit.exit_app(process="VideoClient.exe")
 
 CLI（方便直接从 desk.py 之外调用）：
-    python appkit.py launch "视频客户端（***）"
+    python appkit.py launch "VideoClient"
     python appkit.py wait --title 哔哩 --timeout 20000
-    python appkit.py exit --process 视频客户端（***）.exe
+    python appkit.py exit --process VideoClient.exe
 """
 
 from __future__ import annotations
@@ -47,9 +47,9 @@ START_MENU = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Sta
 def find_shortcut(name: str) -> str | None:
     """按名字找 .lnk，先精确、再前缀、最后包含 —— 不要反过来包含。
 
-    反例（本文件曾踩过）：查 "音乐客户端（***）" 时，规则写成
-    `base in name or name in base` 会让 *****.lnk**（base="即时通讯软件（***）"）抢先命中，
-    于是启动的是 即时通讯软件（***） 而不是 音乐客户端（***），然后干等 25 秒窗口不出现。
+    反例（本文件曾踩过）：查 "MusicClient" 时，规则写成
+    `base in name or name in base` 会让 *****.lnk**（base="ChatClient"）抢先命中，
+    于是启动的是 ChatClient 而不是 MusicClient，然后干等 25 秒窗口不出现。
     """
     query = (name or "").strip().lower()
     if not query:
@@ -93,10 +93,10 @@ def shortcut_target(lnk: str) -> tuple[str, str]:
 def launch(target: str, extra_args: str | None = None, settle_ms: int = 0) -> dict:
     """启动一个应用。
 
-    target 可以是：应用名（"视频客户端（***）"）、.lnk 路径、或 .exe 路径。
+    target 可以是：应用名（"VideoClient"）、.lnk 路径、或 .exe 路径。
 
     **一律经 explorer.exe 启动**（等同用户双击）：直接 CreateProcess 时，
-    部分 Electron 应用（如视频客户端（***））会静默秒退，退出码 0 且没有任何提示。
+    部分 Electron 应用（如VideoClient）会静默秒退，退出码 0 且没有任何提示。
     """
     path = target
     how = "path"
@@ -175,7 +175,7 @@ def find_windows(process: str | None = None,
                  visible_only: bool = True) -> list[dict]:
     """按条件找顶层窗口。process 支持模糊（大小写不敏感），exe_contains 匹配完整路径。
 
-    中文进程名（如 `视频客户端（***）.exe`）用 process 参数；不确定名字时用 exe_contains 更稳。
+    中文进程名（如 `VideoClient.exe`）用 process 参数；不确定名字时用 exe_contains 更稳。
     """
     infos = _pid_info()
     found: list[dict] = []
@@ -241,7 +241,7 @@ def activate(hwnd: int, tries: int = 3) -> dict:
 
     Windows 经常拒绝 SetForegroundWindow（返回错误或静默失败），
     实测顺序：AttachThreadInput → minimize+restore → SetForegroundWindow。
-    音乐客户端（***）这类标题为空、被大窗覆盖的应用，只有 AttachThreadInput 能拉上来。
+    MusicClient这类标题为空、被大窗覆盖的应用，只有 AttachThreadInput 能拉上来。
     """
     u32 = ctypes.windll.user32
     k32 = ctypes.windll.kernel32

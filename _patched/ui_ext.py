@@ -1,4 +1,4 @@
-"""Batch execution and UI-Automation helpers for the 对话壳（***） desktop MCP patch.
+"""Batch execution and UI-Automation helpers for the Shell desktop MCP patch.
 
 Two problems this solves:
   1. Every model-side tool call costs a full round trip (seconds). run_batch()

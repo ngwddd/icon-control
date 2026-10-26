@@ -1,7 +1,7 @@
 """OCR helpers built on the Windows built-in recogniser (no Tesseract needed).
 
 This is the fallback for applications whose UI Windows UI-Automation cannot see
-(for example 即时通讯软件（***） 4.x, which draws its whole window into one render surface):
+(for example ChatClient 4.x, which draws its whole window into one render surface):
 read the pixels, recognise the text, and click the text instead of guessing
 pixel coordinates.
 
@@ -206,7 +206,7 @@ async def _recognize(img: Image.Image):
 def _enhance(img, upscale: float = 1.0, boost: bool = False):
     """给小子/低对比度文字做前置增强，返回 (新图, 实际缩放比)。
 
-    Windows OCR 对 12px 以下或浅灰文字经常读不出来（实测即时通讯软件（***）「发送」按钮 found=0）。
+    Windows OCR 对 12px 以下或浅灰文字经常读不出来（实测ChatClient「发送」按钮 found=0）。
     先放大再识别能显著提高命中率；耗时按面积增长，所以只在指定区域做。
     """
     from PIL import Image as _Img

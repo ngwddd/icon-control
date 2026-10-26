@@ -1,3 +1,16 @@
+## [0.3.2] - 2026-10-26
+
+修复脱敏脚本造成的**语法错误** —— 发布之后由验证助手 v1.10.5 扫出来的真问题。
+
+### Fixed
+- **环境变量名被替换成中文**：`DSH_E2E` 曾变成 `对话壳（***）_E2E`，成了非法标识符 → 还原 ASCII
+- **类名被替换成中文**：`TestBilibiliRecipe` 一类同样被替换 → 统一改为 ASCII 命名
+- **失效引用**：`recipes/***.json` 指向不存在的文件 → 改指真实的 `app-03.json`
+- 影响 33 个文件；修复后全仓 `ast.parse` 通过，验证助手判定 PASS
+
+### Changed
+- 版本 0.3.2
+
 # Changelog
 
 所有改动记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
@@ -124,9 +137,9 @@
 ### Added — 工程保障
 - 64 项不变量测试，系统 Python 与 venv Python 双跑全绿
 - `doctor.py` 六组体检（身份 / 显示 / 输入 / 驱动 / 补丁 / 记忆库）
-- `diag_input.py`：用"系统文本编辑器打字 + 剪贴板回读"当唯一可信判据
+- `diag_input.py`：用"TextEditor打字 + 剪贴板回读"当唯一可信判据
 - `clean.py`：白名单清理临时文件，不碰宏、补丁、用户目录
-- `recipes/`：每个已验证应用一份配方（即时通讯软件（***） / 某即时通讯客户端（***） / 游戏平台（***） / 安全软件（***） / 系统文本编辑器 / 视频客户端（***） / 音乐客户端（***））
+- `recipes/`：每个已验证应用一份配方（ChatClient / 某ChatApp / GamePlatform / SecurityApp / TextEditor / VideoClient / MusicClient）
 - `_patched/reapply.py`：重装依赖后一键重放所有补丁
 
 ### Fixed

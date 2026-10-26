@@ -947,7 +947,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="click_text",
-            description="Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (即时通讯软件（***）, Electron, custom-rendered UIs).",
+            description="Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (ChatClient, Electron, custom-rendered UIs).",
             inputSchema={
                 "type": "object",
                 "properties": {

@@ -1,6 +1,6 @@
 {
   "name": "app-01_send",
-  "description": "即时通讯软件（***）发送（区域右下角锚定，抗窗口缩放）：ensure_chat -> type_verified -> 回车 -> wait_change -> 校验",
+  "description": "ChatClient发送（区域右下角锚定，抗窗口缩放）：ensure_chat -> type_verified -> 回车 -> wait_change -> 校验",
   "window": { "process": "***" },
   "restore": true,
   "defaults": { "chat": "文件传", "chat_title": "即时通讯软件的自建会话（***）" },

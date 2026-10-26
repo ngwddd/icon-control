@@ -1,7 +1,7 @@
 {
   "name": "macro-06",
   "window": {
-    "process": "系统文本编辑器"
+    "process": "TextEditor"
   },
   "steps": [
     {

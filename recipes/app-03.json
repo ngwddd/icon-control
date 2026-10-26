@@ -1,12 +1,12 @@
 {
-  "app": "视频客户端（***） PC 客户端 (Electron)",
+  "app": "VideoClient PC 客户端 (Electron)",
   "window": {
-    "process": "视频客户端（***）.exe",
-    "title_contains": "视频客户端（***）"
+    "process": "VideoClient.exe",
+    "title_contains": "VideoClient"
   },
   "launch": {
-    "correct": "explorer.exe \"C:\\Users\\Public\\Desktop\\视频客户端（***）.lnk\"",
-    "wrong": "直接子进程调用 C:\\Program Files\\***\\视频客户端（***）.exe",
+    "correct": "explorer.exe \"C:\\Users\\Public\\Desktop\\VideoClient.lnk\"",
+    "wrong": "直接子进程调用 C:\\Program Files\\***\\VideoClient.exe",
     "why": "直接 CreateProcess/Popen 启动时进程立刻退出（退出码 0，无窗口无报错）；必须经 Explorer shell（等同用户双击）才会正常起 5 个进程并出窗口"
   },
   "uia": "不可用（Electron 自绘，按坐标 + OCR）",
@@ -38,7 +38,7 @@
     "exit": [
       "向主窗口 PostMessage WM_CLOSE",
       "窗口关掉但进程仍在（5 个）→ 多半留在托盘",
-      "必要时 terminate 全部 视频客户端（***）.exe 进程",
+      "必要时 terminate 全部 VideoClient.exe 进程",
       "把原窗口 _ensure_usable 拉回前台"
     ]
   },

@@ -1,10 +1,10 @@
 {
-  "app": "音乐客户端（***） PC 客户端（Electron/CEF）",
+  "app": "MusicClient PC 客户端（Electron/CEF）",
   "window": {
     "exe_contains": "***"
   },
   "launch": {
-    "correct": "appkit.launch(\"音乐客户端（***）\")  # 走 Explorer shell",
+    "correct": "appkit.launch(\"MusicClient\")  # 走 Explorer shell",
     "note": "标题为空字符串，按标题找不到；要用 exe_contains='***'"
   },
   "activation": {

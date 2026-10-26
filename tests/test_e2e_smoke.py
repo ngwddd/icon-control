@@ -6,13 +6,13 @@
 
 默认不跑（会开窗口、动键盘，跑一遍约 8 秒）。要跑：
 
-    set 对话壳（***）_E2E=1
+    set DSH_E2E=1
     venv\\Scripts\\python.exe -m unittest tests.test_e2e_smoke -v
 
 三个用例：
     test_1_clipboard_roundtrip   剪贴板读写（不碰 GUI）
     test_2_window_enumeration    窗口枚举 + 截图（验证采集层可用）
-    test_3_系统文本编辑器_typing        系统文本编辑器打字 + 剪贴板回读（验证输入注入链路）
+    test_3_TextEditor_typing        TextEditor打字 + 剪贴板回读（验证输入注入链路）
 
 判据一律用「应用自己的状态」，不用探针窗口命中计数 —— 见 AGENTS.md 铁律二。
 """
@@ -25,22 +25,22 @@ import subprocess
 import time
 import unittest
 
-对话壳（***）_E2E = os.environ.get("对话壳（***）_E2E", "") == "1"
+DSH_E2E = os.environ.get("DSH_E2E", "") == "1"
 
-if 对话壳（***）_E2E:
+if DSH_E2E:
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
         pass
 
 
-@unittest.skipUnless(对话壳（***）_E2E, "设置 对话壳（***）_E2E=1 才跑 e2e（会开窗口、动键盘）")
+@unittest.skipUnless(DSH_E2E, "设置 DSH_E2E=1 才跑 e2e（会开窗口、动键盘）")
 class TestE2E(unittest.TestCase):
     def test_1_clipboard_roundtrip(self) -> None:
         """剪贴板能写能读 —— 这是后面一切「状态判据」的基础。"""
         import win32clipboard
 
-        payload = f"对话壳（***）_E2E_CLIP_{int(time.time())}"
+        payload = f"DSH_E2E_CLIP_{int(time.time())}"
         win32clipboard.OpenClipboard()
         win32clipboard.EmptyClipboard()
         win32clipboard.SetClipboardText(payload)
@@ -77,8 +77,8 @@ class TestE2E(unittest.TestCase):
         state = shot.screen_state()
         self.assertIn("changed", state)
 
-    def test_3_系统文本编辑器_typing(self) -> None:
-        """系统文本编辑器里真的打一行字，再用剪贴板回读验证。
+    def test_3_TextEditor_typing(self) -> None:
+        """TextEditor里真的打一行字，再用剪贴板回读验证。
 
         这是输入注入链路的端到端验证；失败时打印可诊断信息，
         并明确区分「真被拦」和「判据不可信」。
@@ -102,7 +102,7 @@ class TestE2E(unittest.TestCase):
             except Exception:  # noqa: BLE001
                 return ""
 
-        mark = f"对话壳（***）_E2E_TYPE_{int(time.time()) % 100000}"
+        mark = f"DSH_E2E_TYPE_{int(time.time()) % 100000}"
         _set_clip("SENTINEL")
         probe = os.path.join(os.environ.get("TEMP", "."), f"e2e_probe_{os.getpid()}.txt")
         with open(probe, "w", encoding="utf-8"):
@@ -119,7 +119,7 @@ class TestE2E(unittest.TestCase):
                 found.append(hwnd)
         win32gui.EnumWindows(_cb, None)
         if not found:
-            self.skipTest("没能打开系统文本编辑器靶子（环境异常）")
+            self.skipTest("没能打开TextEditor靶子（环境异常）")
         hwnd = found[0]
 
         try:
@@ -137,7 +137,7 @@ class TestE2E(unittest.TestCase):
                 win32gui.PostMessage(hwnd, 0x0010, 0, 0)
             except Exception:  # noqa: BLE001
                 pass
-            self.skipTest("系统文本编辑器没拿到前台，本次判定不可信（不是输入故障）")
+            self.skipTest("TextEditor没拿到前台，本次判定不可信（不是输入故障）")
 
         kb = KeyboardController()
         try:
