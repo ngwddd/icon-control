@@ -716,6 +716,25 @@ async def list_tools() -> list[Tool]:
                 "additionalProperties": False},
         ),
         Tool(
+            name="layout_mem",
+            description="Layout calibration memory (generic): save normalized regions once per app, then resolve to pixels at any window size. action=save needs hwnd+regions{name:[x,y,w,h] rel 0..1}; action=resolve returns pixel boxes; list/delete manage profiles.",
+            inputSchema={"type": "object", "properties": {
+                "action": {"type": "string", "enum": ["save", "list", "resolve", "delete"]},
+                "hwnd": {"type": "integer"},
+                "name": {"type": "string"},
+                "regions": {"type": "object"},
+                "meta": {"type": "object"}},
+                "required": ["action"], "additionalProperties": False},
+        ),
+        Tool(
+            name="screen_layout",
+            description="Generic layout detection for ANY window (no app-specific constants): content box (letterbox-aware), HUD text rows, lattice panels (minimaps/radars/boards) via periodicity, and progress bars with fill ratio. Returns pixel boxes plus normalized rel coords.",
+            inputSchema={"type": "object", "properties": {
+                "hwnd": {"type": "integer"},
+                "region": {"type": "array", "items": {"type": "integer"}}},
+                "additionalProperties": False},
+        ),
+        Tool(
             name="world_state",
             description="M1: compress the screen into structured state — minimap grid (auto-calibrated pitch), player cell, objective markers, prompt flag, battery. Returns a short text page you can read instead of an image. Needs map_region=[x,y,w,h] in screen coords.",
             inputSchema={"type": "object", "properties": {
@@ -1398,6 +1417,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
         elif name == "hud":
             from computer_mcp import live as _live
             result = _live.tool_hud(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "layout_mem":
+            from computer_mcp import live as _live
+            result = _live.tool_layout_mem(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "screen_layout":
+            from computer_mcp import live as _live
+            result = _live.tool_screen_layout(arguments or {})
             result.setdefault("success", True)
             screenshot_data = {"error": "intentionally skipped"}
         elif name == "world_state":

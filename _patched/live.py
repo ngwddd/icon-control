@@ -428,8 +428,36 @@ def _servo(args: dict):
 
 
 def tool_world_state(args: dict) -> dict:
-    """M1：把画面压成结构化状态（小地图网格 + 玩家/目标 + 提示 + 电量）。"""
-    ws = _world_state(args)
+    """M1：把画面压成结构化状态（小地图网格 + 玩家/目标 + 提示 + 电量）。
+
+    auto 模式（默认）：没给 map_region 时**自动识别**小地图区域，
+    不再需要按游戏手填坐标。
+    """
+    a = dict(args or {})
+    # ① 先用"标定档案"：这是通用路径（看一眼 → 记住 → 复用）
+    if a.get("hwnd") and not a.get("map_region"):
+        from computer_mcp import layout_mem
+        import win32gui as _wg
+        try:
+            _h = int(a["hwnd"])
+            _cx, _cy, _cw, _ch = _client_canvas(_h)
+            _prof = layout_mem.find_profile(_wg.GetWindowText(_h), (_cw, _ch))
+            if _prof:
+                _boxes = layout_mem.resolve(_prof, (_cx, _cy, _cw, _ch))
+                a.setdefault("map_region", _boxes.get("map"))
+                a.setdefault("prompt_box", _boxes.get("prompt"))
+                a.setdefault("battery_box", _boxes.get("bar"))
+                a["_profile"] = _prof.get("stem")
+        except Exception:
+            pass
+    # auto 默认**关闭**：通用布局探测器（screen_model）目前在真实画面上还不准
+    # （实测：内容区、文字行、网格、进度条四项全错）。要试就显式 auto=true。
+    # 现在可靠的路子仍是"一次性标定 + 记忆"（见 AGENTS.md）。
+    if a.get("auto") and not a.get("map_region") and a.get("hwnd"):
+        reg = _auto_map_region(a)
+        if reg:
+            a["map_region"] = reg
+    ws = _world_state(a)
     snap = ws.snapshot()
     return {"success": not snap.error, "state": snap.as_dict(),
             "text": snap.text(), "error": snap.error}
@@ -455,6 +483,11 @@ def tool_servo(args: dict) -> dict:
     if op == "turn":
         s.turn_px(int(a.get("px", 0)))
         return {"success": True}
+    if op == "explore":
+        r = s.explore(a["view_box"], a["prompt_box"],
+                      seconds=float(a.get("seconds", 20)),
+                      verbose=True)
+        return {"success": True, **r}
     return {"success": False, "error": f"未知 op：{op}"}
 
 
@@ -469,3 +502,104 @@ def tool_navigate(args: dict) -> dict:
     sup = navigator.Supervisor(_world_state(a), s)
     r = sup.run(plan, max_seconds=float(a.get("max_seconds", 90)))
     return {"success": bool(r.get("ok")), **r}
+
+
+# ══════════════════════════ 通用布局识别（v0.7）══════════════════════════
+def tool_screen_layout(args: dict) -> dict:
+    """通用布局：内容区 / HUD 文字行 / 网格面板 / 进度条。
+
+    不需要任何应用常量 —— 全靠像素结构（周期性、长宽比、饱和度、行投影）。
+    坐标同时给像素和归一化值（rel，相对内容区 0~1），窗口缩放不影响。
+    """
+    a = args or {}
+    from computer_mcp import screen_model
+
+    region = a.get("region")
+    if region:
+        img = _grab_region(region)
+    else:
+        hwnd = int(a.get("hwnd") or 0)
+        if not hwnd:
+            return {"success": False, "error": "需要 hwnd 或 region"}
+        r = __import__("win32gui").GetWindowRect(hwnd)
+        img = _grab_region([r[0], r[1], r[2] - r[0], r[3] - r[1]])
+    if img is None:
+        return {"success": False, "error": "抓取失败"}
+    st = screen_model.state(img)
+    st["success"] = True
+    return st
+
+
+def _auto_map_region(args: dict) -> list[int] | None:
+    """用通用布局识别自动找小地图区域（优先 lattice，其次找最像的文本块）。"""
+    from computer_mcp import screen_model
+    import win32gui
+
+    hwnd = int((args or {}).get("hwnd") or 0)
+    if not hwnd:
+        return None
+    r = win32gui.GetWindowRect(hwnd)
+    img = _grab_region([r[0], r[1], r[2] - r[0], r[3] - r[1]])
+    if img is None:
+        return None
+    st = screen_model.state(img)
+    lattices = st.get("lattices") or []
+    if not lattices:
+        return None
+    best = max(lattices, key=lambda d: d["score"])
+    ox, oy = r[0], r[1]
+    x, y, w, h = best["box"]
+    return [ox + x, oy + y, w, h]
+
+
+# ══════════════════════════ 布局标定与记忆（v0.8）══════════════════════════
+def _client_canvas(hwnd: int):
+    """客户区作为"内容画布"：返回 (屏幕原点 x, y, 宽, 高)。"""
+    import win32gui
+    x, y = win32gui.ClientToScreen(hwnd, (0, 0))
+    l, t, r, b = win32gui.GetClientRect(hwnd)
+    return (x, y, r - l, b - t)
+
+
+def tool_layout_mem(args: dict) -> dict:
+    """布局档案：save / list / resolve / delete。
+
+    坐标一律**归一化**（相对客户区 0~1）。窗口缩放后 resolve 会自动换算，
+    所以同一个档案在任何窗口尺寸下都能用。
+    """
+    from computer_mcp import layout_mem
+    import win32gui
+
+    a = args or {}
+    action = (a.get("action") or "list").lower()
+
+    if action == "list":
+        return {"success": True, **layout_mem.list_profiles()}
+
+    if action == "delete":
+        r = layout_mem.delete_profile(a.get("name") or "")
+        return {"success": bool(r.get("ok")), **r}
+
+    hwnd = int(a.get("hwnd") or 0)
+    if not hwnd:
+        return {"success": False, "error": "需要 hwnd"}
+
+    title = win32gui.GetWindowText(hwnd)
+    cx, cy, cw, ch = _client_canvas(hwnd)
+
+    if action == "save":
+        regions = a.get("regions") or {}
+        r = layout_mem.save_profile(title, (cw, ch), regions, meta=a.get("meta"),
+                                    name=a.get("name"))
+        return {"success": bool(r.get("ok")), "title": title,
+                "canvas": [cw, ch], **r}
+
+    if action == "resolve":
+        prof = layout_mem.find_profile(title, (cw, ch))
+        if not prof:
+            return {"success": False, "error": f"没有匹配的档案：{title!r}",
+                    "canvas": [cw, ch]}
+        boxes = layout_mem.resolve(prof, (cx, cy, cw, ch))
+        return {"success": True, "title": title, "key": prof.get("stem"),
+                "canvas": [cw, ch], "boxes": boxes}
+    return {"success": False, "error": f"未知 action：{action}"}
