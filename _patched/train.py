@@ -627,13 +627,21 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 pane_ok = text_landed(title_txt, _ocr(title_reg),
                                       float(action.get("title_min_lcs", 0.55)))
                 if not pane_ok:
-                    # 没开 → 点一次会话行把它打开（点已开的会**关掉**，所以要判）
-                    MS().position = _resolve_point(rect, row_rel)
-                    time.sleep(0.2)
-                    MS().click(Button.left)
-                    time.sleep(float(action.get("open_wait_ms", 1200)) / 1000.0)
-                    pane_ok = text_landed(title_txt, _ocr(title_reg),
-                                          float(action.get("title_min_lcs", 0.55)))
+                    # 没开 → 试着打开。点已打开的会话行会把它**关掉**，所以：
+                    # 先单击一次、判；不行再双击一次（微信对"再点一次"的行为不稳定）
+                    tmin = float(action.get("title_min_lcs", 0.55))
+                    for attempt in range(int(action.get("open_attempts", 2))):
+                        MS().position = _resolve_point(rect, row_rel)
+                        time.sleep(0.2)
+                        MS().click(Button.left, 1 if attempt == 0 else 2)
+                        time.sleep(float(action.get("open_wait_ms", 1500)) / 1000.0)
+                        for _ in range(3):
+                            pane_ok = text_landed(title_txt, _ocr(title_reg), tmin)
+                            if pane_ok:
+                                break
+                            time.sleep(0.5)
+                        if pane_ok:
+                            break
             if not pane_ok:
                 return {"ok": False,
                         "detail": f"send 失败：聊天面板没打开（标题读不到「{title_txt}」）"}

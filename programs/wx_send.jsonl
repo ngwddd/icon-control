@@ -1,0 +1,9 @@
+# 微信：看朋友圈（下滑两次）→ 回聊天 → 给文件传输助手发一条消息
+# 运行：program.run(load_program(...), load_facts(...), hwnd=...)
+{"op": "click", "at": "@wx.rail.discover"}
+{"op": "click", "find": {"text": "朋友圈", "within": [0.0, 0.06, 0.32, 0.5]}, "at": "@wx.fly.moments", "expect": {"kind": "changed", "min_frac": 0.003}}
+{"op": "scroll", "dy": -360, "at": [0.62, 0.55]}
+{"op": "scroll", "dy": -360, "at": [0.62, 0.55]}
+{"op": "click", "at": "@wx.rail.chat", "expect": {"kind": "changed", "min_frac": 0.001}}
+{"op": "send", "text": "$msg", "title_text": "文件传输助手", "title_region": "@regions.title", "input_rel": "@wx.input", "input_region": "@regions.input", "conv_region": "@regions.conv", "row_region": "@regions.row", "upscale": 2, "min_lcs": 0.45, "conv_min_lcs": 0.5}
+{"op": "assert", "expect": {"kind": "text", "query": "$msg", "region": "@regions.conv", "min_lcs": 0.5}}
