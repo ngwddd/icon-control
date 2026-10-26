@@ -174,3 +174,11 @@ def check_expect(expect, ...):
 **教训一句话**：`None`（没意见）和 `True`（已达成）是两件事，
 混在一起就会把"什么都没做"当成"做完了"。凡是"默认值"，都要问一句
 "它会让流程跳过真正的工作吗？"
+
+### 回归测试（不依赖任何外部应用）
+
+```powershell
+python tools/track_nopred_demo.py     # 退出码 0 = 无 expect 的步骤确实执行了
+```
+自开 Tk 窗口 + 按钮，按钮点一次记一次，然后跑一条**只有 action 没有 expect** 的轨道。
+修好之前它会是 `status=done` 而 `clicks=0`（正是那个 bug 的样子）。

@@ -80,3 +80,17 @@
 ```
 所以：点 QQ 之前先 `EnumWindows` 确认有**可见的、标题非空**的 QQ 窗口；
 没有就别硬按键（会打到别的应用）。QQ 未登录时不要尝试自动化，直接跳过。
+
+## 八、`winfo_id()` 是**子窗口**，抬不动真窗口（2026-10-27 实测）
+
+自动化 Tk / Qt 应用时，`root.winfo_id()` 返回的是**客户区子窗口**。
+对它 `SetWindowPos(HWND_TOPMOST)` 抬不动真正的 toplevel，点击会落到别的应用上
+（实测：轨道报 `click (431,403)`、按钮一次没被点到，clicks 恒为 0）。
+
+```python
+frame = int(root.wm_frame(), 16)      # ← 用这个：toplevel 帧句柄
+win32gui.GetWindowRect(frame)         # 外框（含标题栏），比例坐标要按它算
+```
+
+**通用规律**：任何"窗口句柄"先问一句——它是客户区还是顶层窗口？
+比例坐标必须和 `GetWindowRect` 用的是**同一个**句柄。
