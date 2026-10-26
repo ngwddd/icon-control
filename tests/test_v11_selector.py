@@ -57,6 +57,14 @@ class TestTextMatch(unittest.TestCase):
         # OCR 少了一个字，仍应过线
         self.assertGreaterEqual(S.score_line("文件传助手", "文件传输助手", min_lcs=0.5), 0.5)
 
+    def test_truncated_label(self) -> None:
+        """界面把长名字截断成「文件传」时，query「文件传输助手」也应命中（实测踩过）。"""
+        self.assertGreaterEqual(S.score_line("文件传", "文件传输助手"), 0.8)
+        self.assertGreaterEqual(S.score_line("文件传...", "文件传输助手"), 0.8)
+
+    def test_short_text_not_prefix_matched(self) -> None:
+        self.assertEqual(S.score_line("发", "文件传输助手"), 0.0)
+
     def test_score_miss(self) -> None:
         self.assertEqual(S.score_line("月.纹", "朋友圈"), 0.0)
 

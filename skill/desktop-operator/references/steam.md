@@ -59,3 +59,32 @@ card_top        ≈ 0.57·H      卡片高 ≈ 0.115·H
 | 弹窗挡着页面 | 后续所有悬停都失败（"+"不出现） | 先处理弹窗再继续 |
 | 依赖项是私有/已删除 | 日志 `Access Denied`，整组回滚 | 只订地图本体，别订依赖 |
 | 安装游戏时下到别的库 | 在 C 库找不到内容 | 先看 libraryfolders.vdf 有几个库 |
+
+## 六、验证只看 `workshop_log.txt`（ACF 会滞后）
+
+实测（2026-10-27）：
+```
+03:55:19  Subscribed to item 3823568393     ← 订阅成功
+03:55:26  Subscribed to item 3825097246
+而 ACF 的 mtime 还停在 03:53:31          ← 滞后 2 分钟
+```
+**所以：订阅/取消的判定一律读日志**，别信 ACF 条数（也容易被正则数错）。
+```
+C:\Program Files (x86)\Steam\logs\workshop_log.txt
+  搜 "Subscribed to item"      → 订阅成功
+  搜 "Unsubscribed from item"  → 取消成功
+```
+
+### 依赖弹窗必须用固定坐标点
+
+「额外的必需项目」弹窗出现时，页面**不响应任何悬停**（+ 不再出现）。
+OCR 判它是否打开并不可靠（实测漏判），**直接按固定位置点「仅订阅此项目」**：
+
+```
+窗口内 ≈ (0.583·W, 0.667·H)
+```
+
+### 取消订阅 = 再点同一个绿按钮
+
+订上之后，卡片信息行那个绿色「+」变成绿色「✓」；**点它一次就取消**。
+日志会写 `Unsubscribed from item <id>` + `removing unused item <id>`。

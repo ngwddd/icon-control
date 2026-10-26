@@ -46,7 +46,11 @@ def lcs_share(a: str, b: str) -> float:
 # ─────────────────────────── 候选打分（纯函数，可单测） ───────────────────────────
 
 def score_line(line_text: str, query: str, min_lcs: float = 0.6) -> float:
-    """一条 OCR 行对 query 的匹配分（0 表示不匹配）。"""
+    """一条 OCR 行对 query 的匹配分（0 表示不匹配）。
+
+    额外支持**截断**：界面常把长名字显示成「文件传...」，
+    OCR 读到的就是「文件传」——这时 query 以它开头就应当算命中（实测踩过）。
+    """
     q, t = norm_text(query), norm_text(line_text)
     if not q or not t:
         return 0.0
@@ -54,6 +58,8 @@ def score_line(line_text: str, query: str, min_lcs: float = 0.6) -> float:
         return 1.0
     if q in t:
         return 0.95
+    if len(t) >= 3 and q.startswith(t):
+        return 0.85          # 被截断的前缀
     share = lcs_share(q, t)
     return share if share >= min_lcs else 0.0
 
@@ -133,9 +139,10 @@ def choose_line(lines: list[dict], query: str, min_lcs: float = 0.6,
 _CACHE: dict[str, tuple[float, list[dict]]] = {}
 
 
-def _ocr_lines(rect: tuple[int, int, int, int], ttl: float = 0.6) -> list[dict]:
+def _ocr_lines(rect: tuple[int, int, int, int], ttl: float = 0.6,
+               upscale: float = 1.0) -> list[dict]:
     """对窗口做一次 OCR，0.6 秒内复用（同一轮里点多个控件不重复 OCR）。"""
-    key = f"{rect}"
+    key = f"{rect}|up={upscale}"
     now = time.time()
     hit = _CACHE.get(key)
     if hit and (now - hit[0]) < ttl:
@@ -143,8 +150,15 @@ def _ocr_lines(rect: tuple[int, int, int, int], ttl: float = 0.6) -> list[dict]:
     try:
         from computer_mcp import ocr_ext
 
-        res = ocr_ext.ocr_read(region={"x": rect[0], "y": rect[1],
-                                       "w": rect[2], "h": rect[3]}, max_lines=80)
+        kw = {"region": {"x": rect[0], "y": rect[1], "w": rect[2], "h": rect[3]},
+              "max_lines": 80}
+        if upscale and upscale > 1.0:
+            kw["upscale"] = upscale
+        try:
+            res = ocr_ext.ocr_read(**kw)
+        except TypeError:          # 老版本 ocr_read 不认 upscale
+            kw.pop("upscale", None)
+            res = ocr_ext.ocr_read(**kw)
         lines = list(res.get("lines") or [])
     except Exception:
         lines = []
@@ -171,7 +185,7 @@ def resolve(rect: tuple[int, int, int, int], spec: dict,
     # ① 文本
     q = spec.get("text")
     if q:
-        lines = _ocr_lines(rect)
+        lines = _ocr_lines(rect, upscale=float(spec.get("upscale", 1.0)))
         hit = choose_line(lines, str(q), min_lcs=float(spec.get("min_lcs", min_lcs)),
                           within=spec.get("within"), rect=rect)
         if hit:
