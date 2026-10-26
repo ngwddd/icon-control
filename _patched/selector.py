@@ -58,8 +58,13 @@ def score_line(line_text: str, query: str, min_lcs: float = 0.6) -> float:
         return 1.0
     if q in t:
         return 0.95
-    if len(t) >= 3 and q.startswith(t):
-        return 0.85          # 被截断的前缀
+    # 被截断的名字：OCR 常把「文件传...」读成「文件传 03:52」（名字后面粘着时间/角标），
+    # 所以不能要求"整串 t 是 q 的前缀"，而要看**最长公共前缀**够不够长。
+    n = 0
+    while n < min(len(q), len(t)) and q[n] == t[n]:
+        n += 1
+    if n >= 3:
+        return 0.85          # 前 3 个字一样 → 认为是被截断的同一个控件
     share = lcs_share(q, t)
     return share if share >= min_lcs else 0.0
 
@@ -185,9 +190,18 @@ def resolve(rect: tuple[int, int, int, int], spec: dict,
     # ① 文本
     q = spec.get("text")
     if q:
-        lines = _ocr_lines(rect, upscale=float(spec.get("upscale", 1.0)))
+        within = spec.get("within")
+        ocr_rect = rect
+        if within:
+            # 只在 within 子区域做 OCR：整窗 OCR 会把 11px 的列表文字读丢（实测），
+            # 裁小后分辨率等效提高，命中率明显不一样
+            rx, ry, rw, rh = [float(v) for v in within]
+            ocr_rect = (int(rect[0] + rx * rect[2]), int(rect[1] + ry * rect[3]),
+                        max(8, int(rw * rect[2])), max(8, int(rh * rect[3])))
+        lines = _ocr_lines(ocr_rect, upscale=float(spec.get("upscale", 1.0)))
+        # 裁过之后坐标已经是绝对的，不需要再按 within 过滤
         hit = choose_line(lines, str(q), min_lcs=float(spec.get("min_lcs", min_lcs)),
-                          within=spec.get("within"), rect=rect)
+                          within=None if within else None, rect=rect)
         if hit:
             return {"ok": True, "at": hit["at"], "method": "text",
                     "detail": f"命中「{hit['text']}」score={hit['score']}"}

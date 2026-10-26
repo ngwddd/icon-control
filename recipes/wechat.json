@@ -146,5 +146,49 @@
   "launch": {
     "method": "ShellExecuteW",
     "avoid": "cmd /c start（管道继承会卡住调用方）"
+  },
+  "find_specs": {
+    "note": "实测可用：小字必须 within + upscale>=2（1x 读不到列表行名字）",
+    "chat_row": {
+      "text": "文件传输助手",
+      "within": [
+        0.05,
+        0.08,
+        0.23,
+        0.84
+      ],
+      "upscale": 2,
+      "rel": [
+        0.142,
+        0.331
+      ]
+    },
+    "chat_title": {
+      "text": "文件传输助手",
+      "within": [
+        0.02,
+        0.0,
+        0.55,
+        0.09
+      ],
+      "rel": [
+        0.2,
+        0.045
+      ]
+    },
+    "input_box": {
+      "text": "发送",
+      "within": [
+        0.55,
+        0.84,
+        0.43,
+        0.14
+      ],
+      "rel": [
+        0.542,
+        0.9
+      ]
+    },
+    "do_not": "boost=True 会把「件」读成「亻牛」——CJK 上不要用 boost"
   }
 }
