@@ -26,6 +26,9 @@ COLORS = {
     "cyan": (80, 200, 220),
     "white": (230, 230, 230),
     "orange": (230, 140, 60),
+    # 实测取色（CANITY 之类的像素风 HUD）：纯青与金色
+    "cyan2": (0, 255, 255),
+    "gold": (232, 192, 64),
 }
 
 
@@ -61,7 +64,9 @@ def _color_mask(c: np.ndarray, rgb: tuple[int, int, int], tol: int) -> np.ndarra
 
 
 # ────────────────────────────── 原语 ──────────────────────────────
-def probe_prompt(img: np.ndarray, box, thr: int = 150, min_ratio: float = 0.004) -> dict:
+def probe_prompt(img: np.ndarray, box, thr: int = 150, min_ratio: float = 0.02) -> dict:
+    # 实测：游戏底部提示区「有 HOLD E」占 6%，「没有」占 0%。
+    # 默认 0.4% 太松 —— 稍亮的地面就会被判成提示（实测误按 E 20 次）。
     """这块区域里有没有"亮文字"（提示语）。
 
     实测：游戏底部提示区，有 HOLD E 时亮像素 1265 个（占 6%），没有时 0 个。
@@ -178,7 +183,7 @@ def locate_rows(img: np.ndarray, box=None, color: str = "cyan", tol: int = 70,
     硬编码坐标必然失效。颜色扫描一次 1~2 ms，比 OCR 定位快两个数量级。
     """
     rgb = COLORS.get(color, color if isinstance(color, tuple) else COLORS["cyan"])
-    c = crop(img, box)
+    c = img if box is None else crop(img, box)      # box=None 表示整张图
     if c.size == 0:
         return []
     mask = _color_mask(c, rgb, tol)

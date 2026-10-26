@@ -16,6 +16,10 @@
     {"op":"loop",  "times":40, "do":[...]}            # 循环
     {"op":"until", "timeout_ms":8000, "cond":{...}, "do":[...], "poll_ms":30}
     {"op":"if",    "cond":{...}, "then":[...], "else":[...]}
+    {"op":"walk_or_turn", "key":"w", "hold_ms":450,
+     "diff_box":[x,y,w,h], "min_diff":1.0, "turn_px":430}
+        # 走一步；如果画面几乎没变（被墙挡住）就转身。
+        # 这是迷宫/游戏里最常用的一条闭环，单列出来省得每步写 if+diff。
     {"op":"log",   "text":"..."}
 
 cond（条件）格式：
@@ -60,7 +64,7 @@ def eval_cond(cond: dict, frame, prev_frame=None, scale: float = 1.0,
 
     if kind == "prompt":
         r = perceive.probe_prompt(frame, box, thr=int(cond.get("thr", 150)),
-                                  min_ratio=float(cond.get("min_ratio", 0.004)))
+                                  min_ratio=float(cond.get("min_ratio", 0.02)))
         return bool(r.get("hit"))
 
     if kind in ("bar", "openness", "color", "digits"):
@@ -170,6 +174,8 @@ class Runner:
             elif kind == "click":
                 self.ms.click(getattr(__import__("pynput.mouse", fromlist=["Button"]).Button,
                                       op.get("button", "left")))
+            elif kind == "walk_or_turn":
+                self._walk_or_turn(op)
             elif kind == "sleep":
                 time.sleep(max(0, int(op.get("ms", 100))) / 1000.0)
             elif kind == "log":
@@ -188,6 +194,29 @@ class Runner:
                 self._until(op, depth)
             else:
                 self.log(f"未知 op：{kind}")
+
+    def _walk_or_turn(self, op: dict) -> None:
+        """走一步；画面没动就转身 —— 一条 op 顶一整段 if+diff。"""
+        key = op.get("key", "w")
+        hold = float(op.get("hold_ms", 450))
+        box = None
+        if op.get("diff_box"):
+            box = to_frame_box(op["diff_box"], self.scale, self.origin)
+        before = self.frame()
+        self._press(key, hold)
+        time.sleep(float(op.get("settle_ms", 60)) / 1000.0)
+        after = self.frame()
+        d = perceive.diff_region(before, after, box) if before is not None else {"mean": 0.0}
+        blocked = float(d.get("mean", 0.0)) < float(op.get("min_diff", 1.0))
+        if blocked:
+            px = int(op.get("turn_px", 430))
+            self.ms.move(px, 0)
+            self.trace.append({"t": round(time.time() - self._t0, 3), "op": "walk_or_turn",
+                               "blocked": True, "diff": round(float(d.get("mean", 0)), 2),
+                               "turn_px": px})
+        else:
+            self.trace.append({"t": round(time.time() - self._t0, 3), "op": "walk_or_turn",
+                               "blocked": False, "diff": round(float(d.get("mean", 0)), 2)})
 
     def _until(self, op: dict, depth: int) -> None:
         """重复 do 直到 cond 成立 / 超时。这是"闭环"的核心。"""

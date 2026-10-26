@@ -218,8 +218,17 @@ class CaptureDaemon:
                         shot = sct.grab(mon)
                         arr = np.asarray(shot, dtype=np.uint8)[:, :, :3]
                         if self.scale != 1.0:
+                            # 块平均，而不是隔点抽样 —— 抽样会把细笔画（HUD 的 1px 竖线）
+                            # 整条丢掉，实测导致 hud()/probe() 一个字都认不出来。
                             step = max(1, int(round(1 / self.scale)))
-                            arr = arr[::step, ::step]
+                            hh = (arr.shape[0] // step) * step
+                            ww = (arr.shape[1] // step) * step
+                            # 注意：切片出来的数组**不连续**，直接 reshape 会抛异常，
+                            # 而异常被我自己的 try/except 吞掉 → 守护静默变 0 fps。
+                            # astype 会复制成连续内存，顺便把均值算在 float 上。
+                            block = arr[:hh, :ww].astype(np.float32)
+                            arr = (block.reshape(hh // step, step, ww // step, step, 3)
+                                   .mean(axis=(1, 3)).astype(np.uint8))
                         self._last_shape = arr.shape[:2]
                         title = _active_window_title()
                         private = _is_private(title)

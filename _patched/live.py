@@ -305,9 +305,13 @@ def _grab_region(region) -> "np.ndarray | None":
 
 
 def tool_hud(args: dict) -> dict:
-    """自动定位 HUD：按颜色扫出文字行（窗口大小/位置变了也不怕），并可选读数字。
+    """自动定位 HUD：**按全分辨率抓取**再按颜色扫行。
 
-    返回每行的 box（屏幕坐标，可直接喂给 read_digits / probe）。
+    为什么不用守护的缩放帧：块平均会把 1px 的字体笔画和背景混成一半亮度
+    （纯青 (0,255,255) 变成 (0,127,127)），颜色根本匹配不上。
+    HUD 区域很小，抓一次 25 ms，正确性优先。
+
+    返回每行的屏幕坐标 box，可直接喂给 read_digits / probe。
     """
     a = args or {}
     f = _ensure_frame()
@@ -315,22 +319,22 @@ def tool_hud(args: dict) -> dict:
         return {"success": False, "error": "拿不到帧"}
     d = _daemon()
     search = a.get("box")
-    frame_box = _frame_box(search) if search else (0, 0, f.img.shape[1], f.img.shape[0])
+    if search is None:
+        return {"success": False, "error": "需要 box=[x,y,w,h]（HUD 所在区域，屏幕坐标）"}
+    img = _grab_region(search)
+    if img is None:
+        return {"success": False, "error": "全分辨率抓取失败"}
+    ox, oy = perceive.norm_box(search)[:2]
     out = {}
     for spec in (a.get("colors") or [{"name": "cyan", "color": "cyan"},
                                      {"name": "yellow", "color": "yellow"}]):
-        rows = perceive.locate_rows(f.img, frame_box, color=spec.get("color", "cyan"),
-                                    tol=int(spec.get("tol", 70)))
-        # 帧坐标 → 屏幕坐标
-        step = max(1, int(round(1.0 / max(0.05, d.scale))))
-        ox, oy = getattr(d, "origin", (0, 0))
-        rows_screen = []
-        for r in rows:
-            x, y, w, h = r["box"]
-            rows_screen.append({"box": [ox + x * step, oy + y * step, w * step, h * step],
-                                "y0": oy + r["y0"] * step, "y1": oy + r["y1"] * step})
-        out[spec.get("name", spec.get("color"))] = rows_screen
-    return {"success": True, "frame": f.idx, "scale": d.scale, "rows": out}
+        rows = perceive.locate_rows(img, None, color=spec.get("color", "cyan"),
+                                    tol=int(spec.get("tol", 70)),
+                                    min_px=int(spec.get("min_px", 6)))
+        out[spec.get("name", spec.get("color"))] = [
+            {"box": [ox + r["box"][0], oy + r["box"][1], r["box"][2], r["box"][3]],
+             "y0": oy + r["y0"], "y1": oy + r["y1"]} for r in rows]
+    return {"success": True, "frame": f.idx, "mode": "full_res", "rows": out}
 
 
 def tool_record(args: dict) -> dict:
@@ -388,3 +392,80 @@ def tool_housekeeping(args: dict) -> dict:
         res["success"] = True
         return res
     return {"success": False, "error": f"未知 action：{action}（status / sweep）"}
+
+
+# ══════════════════════════ M1/M2/M3：导航三层 ══════════════════════════
+_WS_CACHE: dict = {}
+
+
+def _world_state(args: dict):
+    """按配置构建（并缓存）WorldState —— pitch 标定要跨调用保留。"""
+    from computer_mcp import navigator
+
+    a = args or {}
+    key = (tuple(a.get("map_region") or ()), tuple(a.get("prompt_box") or ()),
+           tuple(a.get("battery_box") or ()))
+    if key in _WS_CACHE:
+        return _WS_CACHE[key]
+    cfg = navigator.MapConfig(region=a.get("map_region"),
+                             pitch=a.get("pitch"),
+                             dark_max=int(a.get("dark_max", 45)))
+    ws = navigator.WorldState(_grab_region, map_cfg=cfg,
+                              prompt_box=a.get("prompt_box"),
+                              battery_box=a.get("battery_box"))
+    _WS_CACHE[key] = ws
+    return ws
+
+
+def _servo(args: dict):
+    from computer_mcp import navigator
+    ws = _world_state(args)
+    kb, ms = _controllers()
+    s = navigator.Servo(ws, kb, ms,
+                        px_per_deg=float((args or {}).get("px_per_deg", 10.0)),
+                        tap_ms=float((args or {}).get("tap_ms", 140)))
+    return s
+
+
+def tool_world_state(args: dict) -> dict:
+    """M1：把画面压成结构化状态（小地图网格 + 玩家/目标 + 提示 + 电量）。"""
+    ws = _world_state(args)
+    snap = ws.snapshot()
+    return {"success": not snap.error, "state": snap.as_dict(),
+            "text": snap.text(), "error": snap.error}
+
+
+def tool_servo(args: dict) -> dict:
+    """M2：单条伺服动作。op=calibrate|face|approach|forward|turn。"""
+    a = args or {}
+    op = (a.get("op") or "calibrate").lower()
+    s = _servo(a)
+    if op == "calibrate":
+        return {"success": True, "heading_deg": s.estimate_heading(ttl=0)}
+    if op == "face":
+        r = s.face_toward(tuple(a["cell"]))
+        return {"success": bool(r.get("ok")), **r}
+    if op == "approach":
+        r = s.approach(tuple(a["cell"]), max_steps=int(a.get("max_steps", 40)),
+                       tol_cells=float(a.get("tol_cells", 1.0)))
+        return {"success": bool(r.get("ok")), **r}
+    if op == "forward":
+        s.forward(float(a.get("ms", 140)))
+        return {"success": True}
+    if op == "turn":
+        s.turn_px(int(a.get("px", 0)))
+        return {"success": True}
+    return {"success": False, "error": f"未知 op：{op}"}
+
+
+def tool_navigate(args: dict) -> dict:
+    """M3：跑一段计划（goto/search/face/wait/key），只在卡住或达成时返回。"""
+    from computer_mcp import navigator
+    a = args or {}
+    plan = a.get("plan") or a.get("goals") or []
+    if not plan:
+        return {"success": False, "error": "plan 不能为空"}
+    s = _servo(a)
+    sup = navigator.Supervisor(_world_state(a), s)
+    r = sup.run(plan, max_seconds=float(a.get("max_seconds", 90)))
+    return {"success": bool(r.get("ok")), **r}

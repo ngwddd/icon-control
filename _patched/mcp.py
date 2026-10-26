@@ -716,6 +716,39 @@ async def list_tools() -> list[Tool]:
                 "additionalProperties": False},
         ),
         Tool(
+            name="world_state",
+            description="M1: compress the screen into structured state — minimap grid (auto-calibrated pitch), player cell, objective markers, prompt flag, battery. Returns a short text page you can read instead of an image. Needs map_region=[x,y,w,h] in screen coords.",
+            inputSchema={"type": "object", "properties": {
+                "map_region": {"type": "array", "items": {"type": "integer"}},
+                "prompt_box": {"type": "array", "items": {"type": "integer"}},
+                "battery_box": {"type": "array", "items": {"type": "integer"}},
+                "pitch": {"type": "number"}, "dark_max": {"type": "integer"}},
+                "additionalProperties": False},
+        ),
+        Tool(
+            name="servo",
+            description="M2: closed-loop servo toward a map cell. op=calibrate (estimate heading by stepping and watching the minimap displacement) | face | approach | forward | turn. Recomputes bearing every step instead of walking blind.",
+            inputSchema={"type": "object", "properties": {
+                "op": {"type": "string", "enum": ["calibrate", "face", "approach", "forward", "turn"]},
+                "cell": {"type": "array", "items": {"type": "integer"}, "description": "[col, row] map cell"},
+                "map_region": {"type": "array", "items": {"type": "integer"}},
+                "prompt_box": {"type": "array", "items": {"type": "integer"}},
+                "max_steps": {"type": "integer"}, "tol_cells": {"type": "number"},
+                "ms": {"type": "number"}, "px": {"type": "integer"},
+                "px_per_deg": {"type": "number"}, "tap_ms": {"type": "number"}},
+                "required": ["op"], "additionalProperties": False},
+        ),
+        Tool(
+            name="navigate",
+            description="M3: run a plan locally at 20+ Hz and come back only on success or stall. plan=[{kind:goto,cell:[c,r]}|{kind:search}|{kind:face,cell}|{kind:wait,ms}|{kind:key,key}]. Returns a short state page, so one call can cover a whole objective.",
+            inputSchema={"type": "object", "properties": {
+                "plan": {"type": "array", "items": {"type": "object"}},
+                "map_region": {"type": "array", "items": {"type": "integer"}},
+                "prompt_box": {"type": "array", "items": {"type": "integer"}},
+                "max_seconds": {"type": "number"}},
+                "required": ["plan"], "additionalProperties": False},
+        ),
+        Tool(
             name="housekeeping",
             description="Show disk usage of this tool's own folders (_draw / recordings / vision baselines) and optionally prune them. Assets (macros, recipes, templates, _patched) are never touched. action=status (default, read-only) or sweep (with dry_run).",
             inputSchema={"type": "object", "properties": {
@@ -1365,6 +1398,21 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
         elif name == "hud":
             from computer_mcp import live as _live
             result = _live.tool_hud(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "world_state":
+            from computer_mcp import live as _live
+            result = _live.tool_world_state(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "servo":
+            from computer_mcp import live as _live
+            result = _live.tool_servo(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "navigate":
+            from computer_mcp import live as _live
+            result = _live.tool_navigate(arguments or {})
             result.setdefault("success", True)
             screenshot_data = {"error": "intentionally skipped"}
         elif name == "housekeeping":
