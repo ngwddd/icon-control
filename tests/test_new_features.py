@@ -10,6 +10,10 @@
 
 from __future__ import annotations
 
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _bootstrap  # noqa: F401
+
 import ast
 import json
 import os
@@ -43,10 +47,13 @@ class TestRecipes(unittest.TestCase):
     def test_recipes_present_and_valid(self) -> None:
         base = os.path.join(HERE, "recipes")
         self.assertTrue(os.path.isdir(base), "recipes/ 目录不存在")
-        names = ["app-01", "app-02", "app-05", "app-06", "TextEditor"]
+        # 2026-10-27：改成「按实际存在的配方校验」——
+        # 原先硬编码 app-01/02/05/06 + TextEditor，但 TextEditor.json 已不存在，
+        # 硬编码会让新增/删除配方时误报。
+        names = sorted(f[:-5] for f in os.listdir(base) if f.endswith(".json"))
+        self.assertGreaterEqual(len(names), 4, f"配方太少：{names}")
         for name in names:
             path = os.path.join(base, f"{name}.json")
-            self.assertTrue(os.path.isfile(path), f"缺少配方 {name}.json")
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
             self.assertIn("app", data, f"{name}.json 缺 app")

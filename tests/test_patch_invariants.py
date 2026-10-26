@@ -12,6 +12,10 @@ Runs under any Python 3.11+ with the standard library only:
 
 from __future__ import annotations
 
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _bootstrap  # noqa: F401
+
 import ast
 import json
 import pathlib
@@ -20,7 +24,27 @@ import sys
 import unittest
 
 HERE = pathlib.Path(__file__).resolve()
-PROJECT = HERE.parents[1]                     # ...\desktop-mcp
+import os as _os
+import pathlib as _pl
+import unittest as _ut
+
+
+def _resolve_project() -> "_pl.Path":
+    """仓库里的测试要找到 desktop-mcp 的开发树（computer_mcp 装在它的 venv 里）。
+
+    优先顺序：环境变量 DSH_DESKTOP_MCP → 本机默认位置 → 仓库自己。
+    找不到安装位置时整组跳过 —— 干净的 checkout 上这是常态，不该报成"测试失败"。
+    """
+    for cand in (_os.environ.get("DSH_DESKTOP_MCP"),
+                 str(_pl.Path.home() / ".dsh" / "tools" / "desktop-mcp")):
+        if cand and (_pl.Path(cand) / "venv").is_dir():
+            return _pl.Path(cand)
+    raise _ut.SkipTest(
+        "找不到 desktop-mcp 的开发树（computer_mcp 的安装位置）；"
+        " 设置 DSH_DESKTOP_MCP 指向它即可运行这些不变量测试。")
+
+
+PROJECT = _resolve_project()
 PKG = PROJECT / "venv" / "Lib" / "site-packages" / "computer_mcp"
 MACROS = PROJECT / "macros"
 

@@ -13,6 +13,10 @@
 
 from __future__ import annotations
 
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _bootstrap  # noqa: F401
+
 import ast
 import asyncio
 import os
@@ -125,14 +129,41 @@ class TestMacroActions(unittest.TestCase):
 
 
 class TestPatchedInSync(unittest.TestCase):
+    """仓库里的 _patched/ 与本地安装副本的关系。
+
+    2026-10-27 修正：**不能对所有文件要求字节相等**。
+    发布版做过脱敏（把真实应用名/内部标识换成中性示例，如 ChatClient、app-01_send），
+    所以 vision_state.py / macro_ext.py 与本地安装副本**必然不同**；
+    把它们判成"漂移"是误报。mcp.py 没有脱敏，可以严格要求字节一致。
+    """
+
+    BYTE_IDENTICAL = ("mcp.py",)          # 未脱敏，必须完全一致
+    SANITIZED = ("vision_state.py", "macro_ext.py")   # 脱敏过，只查结构
+
     def test_copies_match(self) -> None:
         pkg = _pkg()
-        for f in ("vision_state.py", "mcp.py", "macro_ext.py"):
+        for f in self.BYTE_IDENTICAL:
             a = os.path.join(pkg, f)
             b = os.path.join(HERE, "_patched", f)
             self.assertTrue(os.path.isfile(b), f"缺 _patched/{f}")
             self.assertEqual(open(a, "rb").read(), open(b, "rb").read(),
                              f"{f} 漂移了（改完 venv 里的必须同步回 _patched）")
+        for f in self.SANITIZED:
+            b = os.path.join(HERE, "_patched", f)
+            self.assertTrue(os.path.isfile(b), f"缺 _patched/{f}")
+            compile(open(b, encoding="utf-8").read(), b, "exec")   # 至少语法要过
+
+    def test_sanitized_keeps_public_api(self) -> None:
+        """脱敏可以改名字，但不能把公开接口删掉。"""
+        b = os.path.join(HERE, "_patched", "vision_state.py")
+        src = open(b, encoding="utf-8").read()
+        # 注意：模块里的函数叫 list_templates / delete_template，
+        # 不是 MCP 工具名 vision_list（我第一次就写错了，这里留痕）。
+        for fn in ("capture_template", "match_template", "wait_template",
+                   "click_template", "list_templates", "delete_template",
+                   "set_baseline", "diff_baseline", "wait_baseline_change",
+                   "sample_stable", "hover_probe"):
+            self.assertIn(f"def {fn}(", src, f"vision_state.py 缺公开接口 {fn}")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,10 @@
 
 from __future__ import annotations
 
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _bootstrap  # noqa: F401
+
 import ast
 import os
 import time
@@ -76,9 +80,13 @@ class TestPanicModule(unittest.TestCase):
 
 class TestBotsWired(unittest.TestCase):
     def test_bots_check_panic(self) -> None:
-        for name in ("auto_bot.py", "auto_bot2.py", "auto_run.py"):
-            path = os.path.join(HERE, name)
-            self.assertTrue(os.path.isfile(path), f"缺 {name}")
+        # 2026-10-27：FNAF 时代的 auto_bot*.py / auto_run.py 已从项目移除，
+        # 这条测试保留为「如果哪天又把自动化脚本加回来，必须接急停」的守门人。
+        names = ("auto_bot.py", "auto_bot2.py", "auto_run.py")
+        present = [n for n in names if os.path.isfile(os.path.join(HERE, n))]
+        if not present:
+            self.skipTest("bots 已从项目移除（auto_bot*.py / auto_run.py 都不在）")
+        for name in present:
             src = open(path, encoding="utf-8").read()
             self.assertIn("panic", src, f"{name} 没接急停")
             self.assertIn("PanicAbort", src, f"{name} 缺 PanicAbort 硬停")
