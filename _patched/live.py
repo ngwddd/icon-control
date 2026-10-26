@@ -603,3 +603,118 @@ def tool_layout_mem(args: dict) -> dict:
         return {"success": True, "title": title, "key": prof.get("stem"),
                 "canvas": [cw, ch], "boxes": boxes}
     return {"success": False, "error": f"未知 action：{action}"}
+
+
+# ══════════════════════════ 列车：三轮回转 + 看门狗（v0.6）══════════════════════════
+_TRAINS: dict = {}
+_TRAIN_SEQ = [0]
+
+
+def _win_rect(hwnd: int) -> tuple[int, int, int, int]:
+    import win32gui
+    l, t, r, b = win32gui.GetWindowRect(hwnd)
+    return (int(l), int(t), int(r - l), int(b - t))
+
+
+def tool_track(args: dict) -> dict:
+    """列车控制：action = run | start | status | stop | selfcheck
+
+    run/start 都接受 track（dict）或 recipe（名字，从 recipes/ 读）。
+    不传 hwnd 时自动挑「符合 track.window 的可见窗口」。
+    """
+    from computer_mcp import train as T
+    import win32gui, win32process, psutil, threading, json
+
+    a = args or {}
+    action = str(a.get("action") or "status").lower()
+
+    if action == "selfcheck":
+        return {"success": True, **T.selfcheck(seconds=float(a.get("seconds", 3.0)))}
+
+    if action == "status":
+        tid = int(a.get("id") or 0)
+        if tid not in _TRAINS:
+            return {"success": False, "error": "没有正在跑的列车"}
+        r = _TRAINS[tid]["runner"]
+        return {"success": True, "id": tid, "alive": _TRAINS[tid]["thread"].is_alive(),
+                **r.bundle(r.result.get("status", "running"), r.result.get("step", ""),
+                           r.result.get("reason", ""))}
+
+    if action == "stop":
+        tid = int(a.get("id") or 0)
+        if tid not in _TRAINS:
+            return {"success": False, "error": "没有正在跑的列车"}
+        r = _TRAINS[tid]["runner"]
+        r.stop()
+        _TRAINS[tid]["thread"].join(timeout=3)
+        return {"success": True, "id": tid, **r.result}
+
+    # run / start
+    spec = a.get("track")
+    if not spec and a.get("recipe"):
+        import pathlib as _p
+        rp = _p.Path.home() / ".dsh" / "tools" / "desktop-mcp" / "recipes" / (str(a["recipe"]) + ".json")
+        if rp.is_file():
+            spec = json.loads(rp.read_text(encoding="utf-8")).get("track")
+    if not spec:
+        return {"success": False, "error": "需要 track（步骤表）或 recipe"}
+
+    track = T.Track.from_dict(spec)
+
+    # 找目标窗口
+    hwnd = int(a.get("hwnd") or spec.get("hwnd") or 0)
+    if not hwnd:
+        proc_want = ((spec.get("window") or {}).get("process") or "").lower()
+        title_want = (spec.get("window") or {}).get("title_contains") or ""
+        best = None
+        def _cb(h, _):
+            nonlocal best
+            if not win32gui.IsWindowVisible(h):
+                return
+            r = win32gui.GetWindowRect(h)
+            w, hh = r[2] - r[0], r[3] - r[1]
+            if w < 300 or hh < 200:
+                return
+            t = win32gui.GetWindowText(h)
+            okp = True
+            if proc_want:
+                try:
+                    _, pid = win32process.GetWindowThreadProcessId(h)
+                    okp = proc_want in psutil.Process(pid).name().lower()
+                except Exception:
+                    okp = False
+            okt = (title_want in t) if title_want else True
+            if okp and okt:
+                if best is None or w * hh > best[0]:
+                    best = (w * hh, h)
+        win32gui.EnumWindows(_cb, None)
+        if best:
+            hwnd = best[1]
+    if not hwnd:
+        return {"success": False, "error": "找不到目标窗口（传 hwnd 或 window.process）"}
+
+    rect = _win_rect(hwnd)
+    runner = T.Runner(track, rect, hwnd)
+    _TRAIN_SEQ[0] += 1
+    tid = _TRAIN_SEQ[0]
+    max_total = float(a.get("max_total_s", 120))
+
+    def _go():
+        try:
+            runner.run(max_total_s=max_total)
+        except Exception as e:
+            runner.result = {"status": "error", "reason": f"{type(e).__name__}: {e}"}
+            runner.events.add("ANOMALY", runner.result["reason"])
+
+    th = threading.Thread(target=_go, daemon=True)
+    th.start()
+    _TRAINS[tid] = {"runner": runner, "thread": th, "track": track.name}
+    print(f"[train] #{tid} 轨道 {track.name!r} 启动，窗口 {hwnd} {rect}")
+
+    if action == "run":
+        wait_s = float(a.get("wait_s", max_total))
+        th.join(timeout=wait_s)
+        return {"success": True, "id": tid, "alive": th.is_alive(), **runner.result}
+
+    return {"success": True, "id": tid, "alive": True,
+            "status": "running", "track": track.name, "hwnd": hwnd, "rect": list(rect)}

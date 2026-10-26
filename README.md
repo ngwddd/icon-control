@@ -499,3 +499,29 @@ Copy-Item -Recurse "skill\desktop-operator" "$env:USERPROFILE\.dsh\skills\"
 
 装好后模型在处理「用鼠标点…」「给微信发…」这类请求时会自动加载它，
 不再靠每次重新试错。
+
+---
+
+## 列车（track）：三轮回转 + 看门狗
+
+多步任务用 **一个工具** `track`，不是十几次截图：
+
+```json
+{"action":"run","track":{
+  "name":"给文件传输助手发666",
+  "window":{"process":"weixin"},
+  "steps":[
+    {"name":"进聊天","action":{"kind":"click","rel_frac":[0.037,0.147]},
+     "expect":{"kind":"stable","ms":200},"budget_ms":800},
+    {"name":"点会话","action":{"kind":"click","rel_frac":[0.142,0.343]},
+     "expect":{"kind":"changed","min_frac":0.02},"budget_ms":900},
+    {"name":"输入并发送","action":{"kind":"paste","text":"666"},
+     "expect":{"kind":"text","query":"666"},"budget_ms":2500}
+  ]}}
+```
+
+- `action=start` 后台跑 → `status` 随时取摘要（我思考时车不停）→ `stop` 停车
+- 每步带 `budget_ms`，**超 3 倍判异常并自动出拼图**；连续 2 次异常停车
+- OCR 读到模态对话框（「是否保留更改」等）会记 `dialog_hits` —— 那是"按键被吞"的头号原因
+
+实测：29.8 fps 抓帧 · 环形 150 帧 0.4–0.7 MB 恒定 · 内存 60 秒一条直线 · 3 步轨道 0.9 秒

@@ -116,6 +116,7 @@ description: >
 - Steam 创意工坊订阅 → `references/steam.md`
 - UWP / CEF / Electron 通用（记事本、浏览器、自绘 UI）→ `references/uwp-cef.md`
 - 坐标与缩放的细则（DPI、rel_frac、锚点记忆）→ `references/coords.md`
+- **多步任务 / 需要连续性 / 要看异常延迟** → `references/train.md`（track 工具：三轮回转 + 看门狗）
 
 ## 8. 什么时候**别**用这个 skill
 

@@ -716,6 +716,25 @@ async def list_tools() -> list[Tool]:
                 "additionalProperties": False},
         ),
         Tool(
+            name="track",
+            description=(
+                "列车：三轮回转（入帧 30fps / 处理差分状态机 / 输出摘要+拼图）+ 看门狗。"
+                "action=start 后列车常驻后台跑，随时用 status 取新鲜摘要（含一张拼图路径）；"
+                "action=run 阻塞跑到结束；stop 停车；selfcheck 短跑报 fps/内存。"
+                "track={'name':..,'window':{'process':..},'steps':[{name,expect,action,budget_ms}]}"
+            ),
+            inputSchema={"type": "object", "properties": {
+                "action": {"type": "string", "enum": ["run", "start", "status", "stop", "selfcheck"]},
+                "id": {"type": "integer"},
+                "track": {"type": "object"},
+                "recipe": {"type": "string"},
+                "hwnd": {"type": "integer"},
+                "max_total_s": {"type": "number"},
+                "wait_s": {"type": "number"},
+                "seconds": {"type": "number"}},
+                "required": ["action"], "additionalProperties": False},
+        ),
+        Tool(
             name="layout_mem",
             description="Layout calibration memory (generic): save normalized regions once per app, then resolve to pixels at any window size. action=save needs hwnd+regions{name:[x,y,w,h] rel 0..1}; action=resolve returns pixel boxes; list/delete manage profiles.",
             inputSchema={"type": "object", "properties": {
@@ -1417,6 +1436,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
         elif name == "hud":
             from computer_mcp import live as _live
             result = _live.tool_hud(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "track":
+            from computer_mcp import live as _live
+            result = _live.tool_track(arguments or {})
             result.setdefault("success", True)
             screenshot_data = {"error": "intentionally skipped"}
         elif name == "layout_mem":
