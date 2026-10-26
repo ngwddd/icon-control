@@ -1,4 +1,4 @@
-"""permission.py — 鼠标接管的**硬闸门**（v0.2）
+"""permission.py — 鼠标接管的**硬闸门**（v0.3，颜色+文字双判）
 
 v0.1 的授权开关只做到"agent 自己愿意先查一下"（`mouse_permission.py` 靠自觉）。
 v0.2 把它下沉到执行点：**任何会动输入的工具，在真正执行之前都会被这里拦一次**，
@@ -32,6 +32,10 @@ STATE_DIR = os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp"
 STATE_PATH = os.environ.get("DSH_MOUSE_STATE") or os.path.join(STATE_DIR, "mouse-permission.json")
 CACHE_TTL_S = float(os.environ.get("DSH_MOUSE_TTL", "45"))
 
+# 桥接状态（客户端插件经本地 HTTP 直报）的有效期：心跳 5s，15s 不更新即过期，
+# 过期后退回 OCR 读屏幕 —— 桥挂了也不会一直"以为已授权"。
+BRIDGE_TTL_S = float(os.environ.get("DSH_MOUSE_BRIDGE_TTL", "15"))
+
 # 会改变用户输入/焦点状态的工具 —— 这些必须先过闸门
 INPUT_TOOLS = frozenset({
     "click", "double_click", "triple_click", "button_down", "button_up", "drag",
@@ -41,10 +45,13 @@ INPUT_TOOLS = frozenset({
 })
 
 # 判断胶囊所在位置（GUI 输入框工具栏；从宽到窄多次尝试）
+# 只扫「输入框工具栏」这一条窄带。
+# ⚠ 原来第三条是 (0,1000,2560,440) —— 窗口下三分之一全都算进来，
+#   OCR 会读到聊天正文里的“鼠标·已授权”字样，再撞上一处绿色像素就误判成已授权
+#   （假阳性，最危险的方向）。现在宁可读不到（→ unknown → 按未授权处理）。
 SCAN_REGIONS = (
-    {"x": 900, "y": 1180, "w": 1200, "h": 120},
-    {"x": 400, "y": 1120, "w": 2000, "h": 240},
-    {"x": 0, "y": 1000, "w": 2560, "h": 440},
+    {"x": 900, "y": 1170, "w": 1250, "h": 110},
+    {"x": 780, "y": 1120, "w": 1500, "h": 200},
 )
 
 
@@ -78,27 +85,133 @@ def _write_state_file(payload: dict) -> None:
         pass
 
 
+def _green_capsule(region: dict) -> bool | None:
+    """粗判：该区域内是否存在一个「绿色胶囊」形状的色块。
+
+    绿色 = 用户在 GUI 上点了授权（GUI 用绿色表示已授权）。
+    只读像素，不改任何状态。拿不准就返回 None（fail closed）。
+    """
+    try:
+        import mss
+        from PIL import Image
+    except Exception:
+        return None
+    try:
+        mon = {"left": int(region["x"]), "top": int(region["y"]),
+               "width": int(region["w"]), "height": int(region["h"])}
+        with mss.mss() as sct:
+            shot = sct.grab(mon)
+        im = Image.frombytes("RGB", shot.size, shot.rgb)
+    except Exception:
+        return None
+
+    px = im.load()
+    W, H = im.size
+    xs, ys = [], []
+    count = 0
+    step = 1 if W * H <= 200_000 else 2
+    for yy in range(0, H, step):
+        for xx in range(0, W, step):
+            r, g, b = px[xx, yy]
+            if g > 110 and (g - r) > 45 and (g - b) > 35:
+                count += 1
+                xs.append(xx)
+                ys.append(yy)
+    if count < 25:
+        return None
+    bw = max(xs) - min(xs) + 1
+    bh = max(ys) - min(ys) + 1
+    # 胶囊形状：宽 50–420 px，高 8–70 px
+    if 50 <= bw <= 420 and 8 <= bh <= 70:
+        return True
+    return None
+
+
 def _read_pill() -> tuple[bool | None, str]:
-    """读 GUI 上那个胶囊。返回 (granted|None, 屏幕文字片段)。"""
+    """读 GUI 上那个胶囊。返回 (granted|None, 屏幕文字片段)。
+
+    v0.3：先读**颜色**（绿色=已授权），再用 OCR 文字交叉确认。
+    原因：OCR 会把「已授权」认成「已授杈/已授捘」，只靠文字会误判为未知。
+    """
     try:
         from computer_mcp import ocr_ext
     except Exception:
-        return None, "ocr_ext unavailable"
+        ocr_ext = None
 
     for region in SCAN_REGIONS:
-        try:
-            res = ocr_ext.ocr_read(region=region, max_lines=20, upscale=1.8, boost=True)
-        except Exception:
+        # --- 1) 颜色判定（权威信号）---
+        green = _green_capsule(region)
+
+        # --- 2) 文字判定（交叉确认）---
+        text = ""
+        if ocr_ext is not None:
+            try:
+                res = ocr_ext.ocr_read(region=region, max_lines=20, upscale=1.8, boost=True)
+                text = re.sub(r"\s+", "", " ".join(ln.get("text", "")
+                                                   for ln in (res.get("lines") or [])))
+            except Exception:
+                text = ""
+
+        if "鼠标" not in text and green is None:
             continue
-        text = re.sub(r"\s+", "", " ".join(ln.get("text", "") for ln in (res.get("lines") or [])))
-        if "鼠标" not in text:
-            continue
-        if "已授权" in text:
+
+        # 正面判定必须「绿 + 胶囊文字」同时成立；只有绿色块不算（聊天里也有绿）
+        if green is True and "鼠标" in text and "已授权" in text and "未授权" not in text:
             return True, text[:80]
-        if "未授权" in text or "床授权" in text:   # OCR 常把"未"认成"床"
+        if text and ("未授权" in text or "床授权" in text or "未授" in text):
             return False, text[:80]
-        return None, text[:80]
+        if text and "鼠标" in text:
+            # 有胶囊文字但没检测到绿色 → 视为灰色（未授权）
+            return False, text[:80]
     return None, ""
+
+
+_bridge_started = False
+
+
+def _bridge_port() -> int:
+    try:
+        return int(os.environ.get("DSH_MOUSE_BRIDGE_PORT", "18765"))
+    except Exception:
+        return 18765
+
+
+def _port_open(port: int) -> bool:
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+            return True
+    except OSError:
+        return False
+
+
+def _ensure_bridge() -> None:
+    """桥没起来就顺手拉起来（自愈）。
+
+    只在要走 OCR 之前调用一次；失败也无所谓 —— OCR 后备还在。
+    DSH_MOUSE_BRIDGE=off 可关掉这个行为（纯离线/审计场景）。
+    """
+    global _bridge_started
+    if _bridge_started:
+        return
+    _bridge_started = True
+    if os.environ.get("DSH_MOUSE_BRIDGE", "on").strip().lower() in {"0", "off", "false", "no"}:
+        return
+    if _port_open(_bridge_port()):
+        return
+    try:
+        import subprocess
+        flags = 0
+        if os.name == "nt":
+            flags = 0x00000008 | 0x08000000      # DETACHED_PROCESS | CREATE_NO_WINDOW
+        # 优先用包内模块启动（不依赖根目录脚本在不在）
+        subprocess.Popen([os.sys.executable, "-m", "computer_mcp.permission_bridge"],
+                         stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL,
+                         creationflags=flags, close_fds=True)
+    except Exception:
+        pass
 
 
 def status(force: bool = False) -> dict:
@@ -111,10 +224,23 @@ def status(force: bool = False) -> dict:
     cached = _read_state_file()
     if cached and not force:
         age = now - float(cached.get("checked_at_ts") or 0)
-        if 0 <= age < CACHE_TTL_S:
+        ttl = BRIDGE_TTL_S if cached.get("source") == "bridge" else CACHE_TTL_S
+        if 0 <= age < ttl:
             return {"granted": bool(cached["granted"]), "source": cached.get("source", "cache"),
                     "age_s": round(age, 1), "checked_at": cached.get("checked_at"),
                     "screen_text": cached.get("screen_text", "")}
+
+    _ensure_bridge()
+    time.sleep(0.7)
+    refreshed = _read_state_file()
+    if refreshed:
+        age2 = time.time() - float(refreshed.get("checked_at_ts") or 0)
+        if 0 <= age2 < BRIDGE_TTL_S:
+            return {"granted": bool(refreshed["granted"]),
+                    "source": refreshed.get("source", "cache"),
+                    "age_s": round(age2, 1),
+                    "checked_at": refreshed.get("checked_at"),
+                    "screen_text": refreshed.get("screen_text", "")}
 
     granted, snippet = _read_pill()
     source = "screen" if granted is not None else "unknown"

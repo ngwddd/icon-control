@@ -44,22 +44,28 @@ def _norm(text: str) -> str:
 
 
 def read_state() -> tuple[int, str]:
-    from computer_mcp import ocr_ext
+    """复用硬闸门的状态（v0.4：**桥优先**，OCR 只当后备）。
 
-    for region in SEARCH_REGIONS:
-        try:
-            res = ocr_ext.ocr_read(region=region, max_lines=20, upscale=1.8, boost=True)
-        except Exception:
-            continue
-        joined = _norm(" ".join(ln.get("text", "") for ln in res.get("lines") or []))
-        if "鼠标" not in joined:
-            continue
-        if "已授权" in joined:
-            return GRANTED, joined
-        if "未授权" in joined or "床授权" in joined:
-            return DENIED, joined
-        return UNKNOWN, joined
-    return UNKNOWN, ""
+    以前这里直接调 _read_pill() 读屏幕，结果被聊天记录里的“鼠标·已授权”字样
+    骗成已授权（假阳性 —— 最危险的方向）。现在统一走 permission.status()：
+      来源 bridge  → 客户端插件经本地 HTTP 直报，最可信
+      来源 screen  → OCR 后备（扫描区域已收窄到输入框工具栏）
+      来源 unknown → 读不到，按未授权处理
+    """
+    try:
+        from computer_mcp import permission as _perm
+    except Exception as exc:
+        return UNKNOWN, f"permission import failed: {exc}"
+    try:
+        st = _perm.status()
+    except Exception as exc:
+        return UNKNOWN, f"status() failed: {exc}"
+    detail = f"source={st.get('source')}  age={st.get('age_s')}s"
+    if st.get("granted"):
+        return GRANTED, detail
+    if st.get("source") in ("bridge", "screen"):
+        return DENIED, detail
+    return UNKNOWN, detail
 
 
 def main() -> int:
@@ -71,7 +77,7 @@ def main() -> int:
     label = {GRANTED: "已授权（绿色）", DENIED: "未授权（灰色）", UNKNOWN: "读不到开关"}[code]
     if not args.quiet:
         print(f"鼠标接管权限：{label}")
-        print(f"  屏幕文字片段：{text[:60]!r}")
+        print(f"  判定依据：{text}")
         if code != GRANTED:
             print("  → 未授权：不得移动鼠标 / 按键 / 点击。请让用户在 GUI 里点一下开关。")
     return code

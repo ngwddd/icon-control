@@ -4,6 +4,23 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
 
+    // 程序层直报：把授权状态 POST 给本地桥（Host 读文件，不再依赖 OCR 看颜色）
+    const PERMISSION_BRIDGE = 'http://127.0.0.1:18765/state';
+    const BRIDGE_HEARTBEAT_MS = 5000;
+
+    function pushToBridge(granted) {
+      try {
+        window.fetch(PERMISSION_BRIDGE, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill' }),
+        }).catch(function () { /* 桥没起来就忽略，Host 会退回 OCR */ });
+      } catch (err) {
+        /* 环境不支持 fetch 也不影响按钮本身 */
+      }
+    }
+
     const KEY = 'dsh.mousePermission';
     const EVENT = 'dsh:mouse-permission';
 
@@ -33,6 +50,15 @@ window.__ModuleLoader__.load({
     function MousePermissionPill() {
       const [granted, setGranted] = React.useState(readGranted);
 
+      // 挂载即上报，之后每 5 秒心跳（桥侧 15 秒有效期）
+      React.useEffect(function heartbeat() {
+        pushToBridge(readGranted());
+        const id = window.setInterval(function () {
+          pushToBridge(readGranted());
+        }, BRIDGE_HEARTBEAT_MS);
+        return function () { window.clearInterval(id); };
+      }, []);
+
       React.useEffect(function subscribe() {
         const sync = function sync() {
           setGranted(readGranted());
@@ -50,6 +76,7 @@ window.__ModuleLoader__.load({
         writeGranted(next);
         setGranted(next);
         window.dispatchEvent(new CustomEvent(EVENT));
+        pushToBridge(next);
       };
 
       const dot = {
