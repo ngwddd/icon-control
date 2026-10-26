@@ -502,6 +502,27 @@ def _resolve_point(rect: tuple[int, int, int, int], rel_frac: list[float]) -> tu
     return int(x + rel_frac[0] * w), int(y + rel_frac[1] * h)
 
 
+def _probe_region(rect: tuple[int, int, int, int],
+                  rel: list[float] | None = None) -> float | None:
+    """取窗口内一小块的平均亮度，用于"点了有没有反应"的判定。"""
+    try:
+        import mss
+        import numpy as np
+        from PIL import Image
+
+        x, y, w, h = rect
+        rx, ry, rw, rh = (rel or [0.0, 0.0, 1.0, 1.0])
+        box = {"left": int(x + rx * w), "top": int(y + ry * h),
+               "width": max(8, int(rw * w)), "height": max(8, int(rh * h))}
+        with mss.mss() as sct:
+            s = sct.grab(box)
+        a = np.asarray(Image.frombytes("RGB", s.size, s.bgra, "raw", "BGRX"),
+                       dtype=np.float32)
+        return float(a.mean())
+    except Exception:
+        return None
+
+
 def text_landed(sent: str, got: str, min_lcs: float = 0.5) -> bool:
     """刚粘贴的文字是否真的落在输入框里（OCR 容错）。
 
@@ -542,12 +563,32 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 pt = _resolve_point(rect, action.get("rel_frac") or [0.5, 0.5])
                 method = "rel"
             ms = MS()
-            ms.position = pt
-            time.sleep(float(action.get("settle_ms", 120)) / 1000.0)
             btn = {"left": Button.left, "right": Button.right}.get(
                 str(action.get("button", "left")), Button.left)
-            ms.click(btn, int(action.get("clicks", 1)))
-            return {"ok": True, "detail": f"click {pt} [{method}]{(' ' + note) if note else ''}"}
+            clicks = int(action.get("clicks", 1))
+            settle = float(action.get("settle_ms", 120)) / 1000.0
+            retries = int(action.get("retries", 1))
+            verify = bool(action.get("verify", False))
+            before = None
+            if verify:
+                before = _probe_region(rect, action.get("verify_region"))
+            tries = 0
+            for tries in range(1, max(1, retries) + 1):
+                ms.position = pt
+                time.sleep(settle + (0.25 * (tries - 1)))   # 自绘 UI 丢包：重试时放慢
+                ms.click(btn, clicks)
+                if not verify:
+                    break
+                time.sleep(float(action.get("verify_wait_ms", 180)) / 1000.0)
+                after = _probe_region(rect, action.get("verify_region"))
+                if before is None or after is None:
+                    break
+                if abs(after - before) >= float(action.get("verify_min", 0.4)):
+                    break
+            tag = f" [text]" if method == "text" else (f" [{method}]" if method else "")
+            extra = f" 验证{'✓' if verify else '-'} 第{tries}次"
+            return {"ok": True,
+                    "detail": f"click {pt}{tag}{extra}{(' ' + note) if note else ''}"}
 
         if kind == "key":
             kb = KB()
@@ -946,12 +987,11 @@ class Runner:
         if not self.hwnd:
             return True
         try:
-            import win32con
-            import win32gui
+            from computer_mcp import winutil
 
-            win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
-                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
-            if win32gui.GetForegroundWindow() == self.hwnd:
+            # 句柄可能已被应用重建（Unity/CEF 常见）→ 先自愈
+            self.hwnd = winutil.heal(self.hwnd) or self.hwnd
+            if winutil.activate(self.hwnd):
                 return True
             from computer_mcp import appkit
 

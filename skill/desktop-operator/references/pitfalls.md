@@ -94,3 +94,36 @@ win32gui.GetWindowRect(frame)         # 外框（含标题栏），比例坐标�
 
 **通用规律**：任何"窗口句柄"先问一句——它是客户区还是顶层窗口？
 比例坐标必须和 `GetWindowRect` 用的是**同一个**句柄。
+
+## 九、自绘 UI 的点击会丢包（2026-10-27 实测）
+
+同一个按钮，间隔 0.32 秒连点 12 次，只有 6 次生效；改成 0.55~0.75 秒后 12 次全部生效。
+Unity / CEF / Electron 这类自绘界面常见（它们按帧处理输入，太快会被合并或丢弃）。
+
+对策（已内置到 `click`）：
+
+```json
+{"kind":"click","rel_frac":[0.5,0.55],"verify":true,
+ "verify_region":[0.4,0.5,0.2,0.1],"retries":3,"settle_ms":250}
+```
+
+- `verify`：点击前后各取一小块画面比亮度，变化不够就**重试**（重试自动放慢 0.25s）
+- 详情里会写 `验证✓ 第2次`，一眼看出是不是第一次没点上
+- **判断"点了没反应"要看画面差，不要看返回值** —— 返回值几乎总是 ok
+
+## 十、窗口句柄会被应用重建
+
+Unity / CEF / Electron 在切全屏、恢复最小化、重建渲染表面时，会把原 HWND **销毁再新建**。
+之后所有 `GetWindowRect` / `ClientToScreen` 都抛 `(1400, '无效的窗口句柄')`，
+而动作本身"看起来执行了"。
+
+```python
+from computer_mcp import winutil
+
+hwnd = winutil.heal(hwnd, "窗口标题片段")      # 失效就按标题重找，找到返回新句柄
+r = winutil.win_rect(hwnd)                     # 失效返回 None，不抛异常
+ok = winutil.ensure_front(hwnd, probe=(x, y))  # 前台 + 落点校验（WindowFromPoint）
+```
+
+**一个隐蔽的坑**：`pid_of(0)` 在 pywin32 里返回的是**垃圾值**（实测 -840758880），不是 0。
+所以任何"先取 pid 再过滤"的代码，都必须先判句柄有效。

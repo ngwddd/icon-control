@@ -1,3 +1,38 @@
+## [1.1.0] - 2026-10-27
+
+**通用健壮性：窗口句柄自愈 + 点击丢包重试（不针对任何具体应用）。**
+
+### 新增 computer_mcp/winutil.py
+
+| 函数 | 作用 |
+|---|---|
+| `is_alive` / `win_rect` | 句柄失效时返回 False / None，**不抛异常** |
+| `find_window(title, pid)` | 按标题片段 / 进程号找窗口 |
+| `heal(hwnd, title)` | 句柄被重建后按标题重找（没有线索就不乱找） |
+| `activate(hwnd)` | 置顶 + 前台，并校验是否真的到了前台 |
+| `point_owner(x, y)` | 屏幕坐标落点属于哪个顶层窗口（判断是否被盖住） |
+| `ensure_front(hwnd, probe)` | 上面几步的组合，返回 (可用句柄, 是否就绪) |
+
+### click 支持 verify / retries
+
+```json
+{"kind":"click","rel_frac":[0.5,0.55],"verify":true,
+ "verify_region":[0.4,0.5,0.2,0.1],"retries":3,"settle_ms":250}
+```
+
+自绘 UI（Unity / CEF / Electron）按帧处理输入，点太快会被吞：
+实测 0.32s 间隔连点 12 次只生效 6 次，0.55~0.75s 全部生效。
+
+### 顺带修的两个真 bug
+
+| bug | 现象 |
+|---|---|
+| `pid_of(0)` 返回垃圾值（-840758880） | "按 pid 过滤"的代码在无效句柄下会找错窗口 |
+| `heal()` 在没有标题/pid 时调 `find_window("")` | 会命中**任意第一个窗口**，等于乱抓 |
+
+### 测试
+
+232 → **241** 项全绿（新增 winutil 9 项，含真 Tk 窗口的 find/heal/point_owner）
 ## [1.0.0] - 2026-10-27
 
 指令流（program）落地并跑通：facts.json + program.jsonl，一行一条指令。

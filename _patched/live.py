@@ -611,9 +611,13 @@ _TRAIN_SEQ = [0]
 
 
 def _win_rect(hwnd: int) -> tuple[int, int, int, int]:
-    import win32gui
-    l, t, r, b = win32gui.GetWindowRect(hwnd)
-    return (int(l), int(t), int(r - l), int(b - t))
+    from computer_mcp import winutil
+
+    r = winutil.win_rect(hwnd)
+    if not r:
+        raise ValueError(f"窗口句柄失效：{hwnd}")
+    return r
+
 
 
 def tool_track(args: dict) -> dict:

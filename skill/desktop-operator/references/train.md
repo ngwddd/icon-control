@@ -182,3 +182,14 @@ python tools/track_nopred_demo.py     # 退出码 0 = 无 expect 的步骤确实
 ```
 自开 Tk 窗口 + 按钮，按钮点一次记一次，然后跑一条**只有 action 没有 expect** 的轨道。
 修好之前它会是 `status=done` 而 `clicks=0`（正是那个 bug 的样子）。
+
+### click 的 verify / retries（自绘 UI 必备）
+
+```json
+{"kind":"click","find":{"text":"确定"},
+ "verify":true,"verify_region":[0.3,0.4,0.4,0.2],
+ "retries":3,"verify_min":0.4,"settle_ms":250}
+```
+
+点击前后比一小块画面；没变化就重试（每次多等 0.25 秒）。
+适合 Unity / CEF / 自绘面板 —— 它们按帧处理输入，点太快会被吞掉。
