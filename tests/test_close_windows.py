@@ -62,18 +62,29 @@ class TestCloseWindows(unittest.TestCase):
 
 
 class TestTaskFinishDoc(unittest.TestCase):
-    def test_agents_md_mentions_close_windows(self) -> None:
-        agents = os.path.join(os.path.expanduser("~"), ".dsh", "AGENTS.md")
-        if not os.path.isfile(agents):
-            self.skipTest("没有 AGENTS.md")
-        with open(agents, encoding="utf-8") as fh:
-            content = fh.read()
-        self.assertIn("收尾", content)
-        self.assertTrue(
-            "close_windows" in content or "关窗" in content,
-            "AGENTS.md 里要写明「任务收尾必须关窗」这条规则",
-        )
+    def test_rules_live_in_skill_not_agents_md(self) -> None:
+        """v0.5.0 起桌面规则搬到 skill/desktop-operator/。
 
+        这条不变量改成：规则本体必须在 skill 里，AGENTS.md 只保留指针（不能断链）。
+        """
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        skill = os.path.join(repo, "skill", "desktop-operator", "SKILL.md")
+        self.assertTrue(os.path.isfile(skill), f"skill 缺失：{skill}")
+        with open(skill, encoding="utf-8") as fh:
+            skill_text = fh.read()
+        self.assertIn("收尾", skill_text)
+        self.assertTrue(
+            "close_windows" in skill_text or "关窗" in skill_text,
+            "skill 里要写明「任务收尾必须关窗」",
+        )
+        self.assertIn("desktop-operator", skill_text)
+
+        agents = os.path.join(os.path.expanduser("~"), ".dsh", "AGENTS.md")
+        if os.path.isfile(agents):
+            with open(agents, encoding="utf-8") as fh:
+                content = fh.read()
+            self.assertIn("desktop-operator", content,
+                          "AGENTS.md 要指向 skill（规则已迁出，不能断链）")
 
 if __name__ == "__main__":
     unittest.main()

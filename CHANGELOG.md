@@ -1,3 +1,26 @@
+## [0.5.1] - 2026-10-27
+
+**修 0.5.0 的自测断链：规则搬走后，仓库里那条不变量还在看 AGENTS.md。**
+
+验证助手直接判 FAIL：
+```
+测试【高】退出码 1
+  test_agents_md_mentions_close_windows → 断言 AGENTS.md 里有「关窗/收尾」
+```
+
+### 修法（两边都改，不是放宽断言）
+
+1. **测试跟着规则搬家**：改成 `test_rules_live_in_skill_not_agents_md`
+   - 规则本体必须在 `skill/desktop-operator/SKILL.md`（含收尾/关窗）
+   - `AGENTS.md` 必须留 `desktop-operator` 指针（断链也算失败）
+2. **skill 补上确切词**：§5 收尾原来写"关掉/最小化"，没有 `close_windows`/「关窗」这两个词。
+   改成写明 `close_windows`（只发 WM_CLOSE，不杀进程）与「关窗」，并补上边界
+   （只关自己开的窗口、有未保存改动先问用户）。
+
+### 结果
+```
+仓库测试 163 项 OK（skipped 7）
+```
 ## [0.5.0] - 2026-10-27
 
 **新增 Skill `desktop-operator`：把「规则」从 AGENTS.md 搬进可复用的技能，随本包一起发布。**
