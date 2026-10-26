@@ -42,7 +42,7 @@ def _isolated_state() -> tuple[str, str]:
 class TestBridgeModule(unittest.TestCase):
     @NEED
     def test_constants(self) -> None:
-        self.assertEqual(int(bridge.PORT), 18765)
+        self.assertEqual(int(bridge.DEFAULT_PORT), 18765)
         self.assertFalse(hasattr(bridge, "TOKEN"), "不该再把 token 写死在源码里")
         self.assertTrue(bridge.STATE_PATH.endswith("mouse-permission.json"))
 
@@ -146,8 +146,9 @@ class TestClientReportsToBridge(unittest.TestCase):
 
     def test_has_bridge_url_and_heartbeat(self) -> None:
         src = self._client_src()
-        self.assertIn("PERMISSION_BRIDGE", src)
-        self.assertIn("BRIDGE_HEARTBEAT_MS", src)
+        self.assertIn("const BRIDGE", src)
+        self.assertIn("HEARTBEAT_MS", src)
+        self.assertIn("/beacon", src, "必须有图片信标通道")
         self.assertIn("127.0.0.1:18765", src)
         self.assertRegex(src, r"method:\s*'POST'")
         self.assertIn("no-cors", src, "跨源简单请求，避免预检")
@@ -155,7 +156,7 @@ class TestClientReportsToBridge(unittest.TestCase):
     def test_reports_on_mount_and_click(self) -> None:
         src = self._client_src()
         self.assertGreaterEqual(src.count("pushToBridge("), 4,
-                                "应在挂载、心跳、点击三处都上报")
+                                "应在插件级心跳、组件挂载、点击三处都上报")
 
 
 class TestCliUsesGate(unittest.TestCase):

@@ -2,6 +2,28 @@
 
 所有改动记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [0.3.1] - 2026-10-26
+
+修 v0.3.0 里三个会让通道「看起来接了、其实没通」的问题。
+
+### Fixed
+- **客户端模块改动不随刷新生效**：DSH Host 缓存了 client 模块，F5 无效。
+  → `_authorized` 改为**来源校验（Origin 或 Referer）**，无 token 也可接受，
+  这样 Host 里那份旧模块也能立刻上报；带 token 的请求一旦出现，自动收紧为「只收带 token」。
+- **图片信标没有 Origin**：`<img>` 请求不带 Origin，只靠 Origin 校验等于对任何站点敞开。
+  → 加本机 token（`state/bridge-token.txt`，不进源码/仓库；仓库里只有 `__BRIDGE_TOKEN__` 占位符）。
+- **client.js 被写成乱码**：读写文件时混用了系统编码。
+  → 整文件按 UTF-8 重写，并加体检（UTF-8 合法性、token 存在性、`/beacon?k=` 存在性）。
+
+### Added
+- `GET /beacon?k=<token>&granted=1|0` 图片信标通道：不受 fetch 的 CSP/CORS 限制
+- 心跳从「组件 effect」提到「插件级」：热重载/重挂不会再把它清掉
+- `visibilitychange` / `focus` 补发：Electron 节流后台定时器时尽快恢复
+- 桥日志记录 `REJECT`（路径 / 来源 / token），排查时不用猜
+
+### Changed
+- 测试仍 **86 项**（断言已跟上新实现：`DEFAULT_PORT` / `const BRIDGE` / `/beacon`）
+
 ## [0.3.0] - 2026-10-26
 
 把「有没有授权」从**看屏幕像素**改成**走程序层通道**。
