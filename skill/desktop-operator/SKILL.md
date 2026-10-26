@@ -116,6 +116,7 @@ description: >
 | 坐标 / 缩放 / 记忆 | `references/coords.md` |
 | **界面一变就点偏 / 想按文字找按钮** | `references/selector.md`（三级降级 + 两个必踩坑） |
 | 多步任务、要连续性、看门狗 | `references/train.md` |
+| 想把流程固化成可复用的剧本 | `references/program.md`（facts + program.jsonl） |
 | 本机工具链（清垃圾、验证、解释器） | `references/toolbox.md` |
 
 ## 8. 什么时候**别**用这个 skill

@@ -1,3 +1,40 @@
+## [1.0.0] - 2026-10-27
+
+指令流（program）落地并跑通：facts.json + program.jsonl，一行一条指令。
+
+### 新增 computer_mcp/program.py
+
+| 能力 | 说明 |
+|---|---|
+| load_facts / load_program | 不变量 + 指令流（JSONL，支持 # 注释，报第几行） |
+| expand | @name 取结构值、$name 插值；找不到就 KeyError 停下 |
+| run | 按序执行；每条可带 expect（轮询）与 on_fail |
+| 帧环自管 | changed / stable 需要的 FrameWheel 由 run 创建与回收 |
+
+### 首次跑通（微信，04:18）
+
+    L3 click 发现 -> L4 click 朋友圈(changed) -> L5/L6 scroll
+    L7 回聊天(changed) -> L8 send(面板/输入/会话区/残留 四段全过)
+    L9 assert 通过  ->  ok=True done=7 · 6.0 秒 · 截图两条气泡
+
+文件：programs/wx_facts.json、programs/wx_send.jsonl
+
+### 顺手修掉四个 bug
+
+| bug | 现象 |
+|---|---|
+| FrameWheel 参数传错（hwnd 当 ring） | 0 帧，changed 永远 False |
+| 后置条件一次性判 | 朋友圈要 1-2 秒加载，立刻判必 False |
+| since 每轮重置成 now | 永远只看最近 120ms，变化率恒 0 |
+| assert 不轮询 | OCR 把流读成氵夼，一次判死 |
+
+### 全链路状态
+
+    微信全轨道 7 步 done，消息真发出（闭环验证 04:16:24）
+    指令流 ok=True done=7（指令流 04:18:00 / 04:18:28）
+    回归测试 clicks=1（无 expect 的步骤确实执行）
+    测试 234 / 235 全绿
+
 ## [0.9.1] - 2026-10-27
 
 **给 0.9.0 那个根因 bug 补一个不依赖外部应用的回归测试，并记录"子窗口句柄"这个坑。**
