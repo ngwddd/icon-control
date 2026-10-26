@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any
 
 # ─────────────────────────── 文本归一化（OCR 容错） ───────────────────────────
 
