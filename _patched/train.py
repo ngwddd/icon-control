@@ -369,6 +369,8 @@ class FrameWheel(threading.Thread):
         self.last_small: np.ndarray | None = None
         self._prev: np.ndarray | None = None
         self._t0 = time.time()
+        self.history: deque[tuple[float, float]] = deque(maxlen=240)   # (t, frac)
+        self._first = True
         self.error = ""
 
     def stop(self) -> None:
@@ -388,6 +390,15 @@ class FrameWheel(threading.Thread):
                     arr = np.asarray(shot)                    # BGRA
                     gray = gray_from_bgra(arr)
                     small = block_reduce(gray, self.down)
+                    if self._first:
+                        # 第一帧没有 prev，change_blocks 会返回 100% → 假事件，跳过
+                        self._first = False
+                        self._prev = small
+                        self.last_small = small
+                        self.last_mask = None
+                        self.ring.push(time.time(), encode_jpeg(small, self.q), small)
+                        time.sleep(max(0.0, interval - (time.perf_counter() - t0)))
+                        continue
                     n, frac, mask = change_blocks(self._prev, small)
                     now = time.time()
                     self._prev = small
@@ -408,6 +419,7 @@ class FrameWheel(threading.Thread):
                             self.state = STATE_STABLE
                             self.events.add("SETTLED", "画面稳定")
 
+                    self.history.append((now, frac))
                     self.ring.push(now, encode_jpeg(small, self.q), small)
                     dt = time.perf_counter() - t0
                     if dt < interval:
@@ -415,6 +427,13 @@ class FrameWheel(threading.Thread):
         except Exception as e:                       # 线程内异常不要静默
             self.error = f"{type(e).__name__}: {e}"
             self.events.add("ANOMALY", f"抓帧线程异常：{self.error}")
+
+    def max_frac_since(self, t0: float) -> float:
+        """某时刻之后出现过的最大变化率（锁存判据用，避免"变完就稳"的竞态）。"""
+        return max((f for (t, f) in self.history if t >= t0), default=0.0)
+
+    def changed_since(self, t0: float) -> bool:
+        return self.max_frac_since(t0) > 0.0
 
     def crop_from_last_full(self, mask: np.ndarray, limit: int = 4) -> list[np.ndarray]:
         """从最近整帧里裁出"变化过的块"（拼图用）。"""
@@ -496,12 +515,17 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
         if kind == "scroll":
             import ctypes
 
-            x, y, w, h = rect
+            # 先把光标移到滚动目标区（默认内容中心）：滚轮只作用于"鼠标下面的窗口/区域"。
+            # 实测：不移动光标时，滚轮落在左栏浮层上，朋友圈列表不动（下滑2 就是这么失败的）
+            at = action.get("at_rel_frac") or [0.6, 0.5]
+            pt = _resolve_point(rect, at)
+            MS().position = pt
+            time.sleep(0.15)
             k = int(action.get("dy", -360))
             for _ in range(int(action.get("times", 1))):
                 ctypes.windll.user32.mouse_event(0x0800, 0, 0, k, 0)
-                time.sleep(float(action.get("gap_ms", 250)) / 1000.0)
-            return {"ok": True, "detail": f"scroll {k}×{action.get('times', 1)}"}
+                time.sleep(float(action.get("gap_ms", 300)) / 1000.0)
+            return {"ok": True, "detail": f"scroll {k}×{action.get('times', 1)} at {pt}"}
 
         if kind == "wait":
             time.sleep(float(action.get("ms", 500)) / 1000.0)
@@ -525,7 +549,8 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
 # ─────────────────────────── 判据（expect） ───────────────────────────
 
 def check_expect(expect: dict | None, wheel: FrameWheel,
-                 rect: tuple[int, int, int, int], hwnd: int = 0) -> bool | None:
+                 rect: tuple[int, int, int, int], hwnd: int = 0,
+                 since: float | None = None) -> bool | None:
     """True=成立 False=不成立 None=判不了（算"不确定"）。"""
     if not expect:
         return True
@@ -536,7 +561,11 @@ def check_expect(expect: dict | None, wheel: FrameWheel,
         return wheel.state == STATE_STABLE and (time.time() - wheel.last_change_at) >= need
 
     if kind == "changed":
-        return wheel.last_frac >= float(expect.get("min_frac", 0.002))
+        # 锁存：自 since 起**出现过**足够大的变化就算成立（不等它稳定）
+        need = float(expect.get("min_frac", 0.002))
+        if since is not None and hasattr(wheel, "max_frac_since"):
+            return wheel.max_frac_since(since) >= need
+        return wheel.last_frac >= need
 
     if kind == "window":
         try:
@@ -625,6 +654,15 @@ class Runner:
             self.wheel.join(timeout=1.5)
         except Exception:
             pass
+        if self.hwnd:                       # 跑完取消置顶，别把用户桌面钉死
+            try:
+                import win32con
+                import win32gui
+
+                win32gui.SetWindowPos(self.hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
+                                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+            except Exception:
+                pass
 
     # ---- 出包（轮子3）----
     def bundle(self, status: str, step: str = "", reason: str = "") -> dict:
@@ -674,18 +712,46 @@ class Runner:
             **mem,
         }
 
+    def _ensure_foreground(self, step_name: str = "") -> bool:
+        """每步动手前把目标窗口拉到前台**并置顶**。
+
+        实测（微信那轮）：被别的窗口盖住时，点击/滚轮全落在遮盖窗口上，
+        而看门狗/fps/画面差异一切"正常" —— 属于最难发现的静默失败。
+        所以这里不只 activate，还要 HWND_TOPMOST；stop() 时再取消。
+        """
+        if not self.hwnd:
+            return True
+        try:
+            import win32con
+            import win32gui
+
+            win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+            if win32gui.GetForegroundWindow() == self.hwnd:
+                return True
+            from computer_mcp import appkit
+
+            appkit.activate(self.hwnd)
+            time.sleep(0.25)
+            ok = win32gui.GetForegroundWindow() == self.hwnd
+            self.events.add("STEP", "目标失焦 → 已置顶+置前" if ok else "目标失焦，拉不回前台",
+                            step_name)
+            return ok
+        except Exception:
+            return False
+
     # ---- 判据（贵判据限频 150 ms）----
-    def _pred(self, step: Step) -> bool | None:
+    def _pred(self, step: Step, since: float | None = None) -> bool | None:
         kind = ((step.expect or {}).get("kind") or "")
         now = time.time()
         if kind in ("text", "template"):
             c = self._pred_cache.get(step.name)
             if c and (now - c[0]) < 0.15:
                 return c[1]
-            v = check_expect(step.expect, self.wheel, self.rect, self.hwnd)
+            v = check_expect(step.expect, self.wheel, self.rect, self.hwnd, since)
             self._pred_cache[step.name] = (now, v)
             return v
-        return check_expect(step.expect, self.wheel, self.rect, self.hwnd)
+        return check_expect(step.expect, self.wheel, self.rect, self.hwnd, since)
 
     # ---- 主循环 ----
     def run(self, max_total_s: float = 120.0) -> dict:
@@ -698,6 +764,7 @@ class Runner:
                 if time.time() - self._t0 > max_total_s:
                     return self._finish(STOP_TIMEOUT, step.name, f"总时长超 {max_total_s}s")
 
+                step_mark = time.time()
                 self.budget.begin(step.name, step.budget())
                 self.events.add("STEP", f"开始：{step.name}", step.name)
                 deadline = time.time() + step.timeout_ms / 1000.0
@@ -711,7 +778,7 @@ class Runner:
                             time.sleep(0.02)
                             continue
 
-                    pred = self._pred(step)
+                    pred = self._pred(step, step_mark)
                     if pred is True:
                         self.events.add("STEP", f"达成：{step.name}", step.name)
                         self.result["steps_done"] = idx + 1
@@ -739,6 +806,9 @@ class Runner:
                         uncertain_streak = 0
 
                     if not acted and step.action:
+                        # 每步动手前先确认目标窗口在前台：
+                        # 实测被别的窗口盖住时，点击/滚轮全落在遮盖窗口上，而库里一切正常
+                        self._ensure_foreground(step.name)
                         res = do_action(step.action, self.rect, self.hwnd)
                         acted = True
                         self.events.add("STEP", f"动作：{res.get('detail')}", step.name)

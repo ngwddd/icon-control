@@ -525,3 +525,19 @@ Copy-Item -Recurse "skill\desktop-operator" "$env:USERPROFILE\.dsh\skills\"
 - OCR 读到模态对话框（「是否保留更改」等）会记 `dialog_hits` —— 那是"按键被吞"的头号原因
 
 实测：29.8 fps 抓帧 · 环形 150 帧 0.4–0.7 MB 恒定 · 内存 60 秒一条直线 · 3 步轨道 0.9 秒
+
+---
+
+## Skill 分册（v0.7.0：弱点与踩坑全部入库）
+
+| 分册 | 什么时候看 |
+|---|---|
+| `SKILL.md` | 入口：开工顺序 / 失败模式速查 10 行 / 判活三连 / 工具分层 / 收尾 |
+| `references/failures.md` | **卡住了先看这张**：30 条症状 → 真因 → 正确做法 |
+| `references/pitfalls.md` | 要写代码前看：启动、窗口、DPI、输入、Shell、性能的实测事实 |
+| `references/wechat.md` | 微信：进入面板 / 朋友圈 / **独立聊天窗** / 发消息 |
+| `references/steam.md` | Steam 创意工坊订阅（只点一次 + ACF 验证） |
+| `references/uwp-cef.md` | UWP / CEF / Electron 判据与陷阱 |
+| `references/coords.md` | DPI / 四种坐标系 / rel_frac / 读图预算 |
+| `references/train.md` | track：三轮回转 + 看门狗 + v0.7 实战补丁 |
+| `references/toolbox.md` | 本机工具链：清垃圾 / 自检 / 解释器 / 验证 / Office 与媒体工具 |

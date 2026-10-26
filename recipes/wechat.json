@@ -75,5 +75,76 @@
     "narrow": "宽度 < 900 时左栏列表消失，只能走搜索框",
     "wide": "1566x1054 是实测过的大窗口，输入框在 (0.55W, 0.88H) 附近",
     "note": "隐藏窗口操作会破坏输入上下文；只最小化"
+  },
+  "measured_coords": {
+    "measured_at": "2026-10-27 03:30",
+    "window": "1566x1057（微信主窗口，任意位置）",
+    "coords_are": "window-relative fractions (x/W, y/H)，实测窗口 1566x1057",
+    "rail": {
+      "x": 0.0351,
+      "avatar_y": 0.0823,
+      "chat_y": 0.156,
+      "contacts_y": 0.224,
+      "fav_y": 0.294,
+      "discover_y": 0.359
+    },
+    "discover_flyout": {
+      "note": "点 rail.x/y=discover_y 后出现，位于窗口左上",
+      "moments": [
+        0.118,
+        0.1485
+      ],
+      "video": [
+        0.118,
+        0.203
+      ],
+      "search": [
+        0.118,
+        0.258
+      ],
+      "games": [
+        0.118,
+        0.313
+      ],
+      "miniapp": [
+        0.118,
+        0.368
+      ]
+    },
+    "chat_list": {
+      "x": 0.142,
+      "row_y": [
+        0.151,
+        0.239,
+        0.331,
+        0.416,
+        0.499,
+        0.583
+      ],
+      "note": "第 3 行通常是「文件传输助手」；点之前用 text 判据确认标题"
+    },
+    "input_box": [
+      0.542,
+      0.9
+    ],
+    "enter_wechat_panel": {
+      "panel_size": "442x581",
+      "button_frac_of_panel": [
+        0.498,
+        0.75
+      ],
+      "absolute_seen": [
+        1279,
+        835
+      ],
+      "note": "面板窗口 rect 含边框，用 window-relative 比例会偏 ~47px，优先用绝对量测或 panel 内比例"
+    },
+    "launch": {
+      "method": "ShellExecuteW（不要用 cmd /c start：子进程继承管道，工具会卡到 1 分钟）"
+    }
+  },
+  "launch": {
+    "method": "ShellExecuteW",
+    "avoid": "cmd /c start（管道继承会卡住调用方）"
   }
 }
