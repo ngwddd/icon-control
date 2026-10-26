@@ -7,9 +7,9 @@ the window does not break it.
 
 Macro file format (JSON, stored in MACRO_DIR):
 {
-  "name": "app-01_send",
-  "description": "send a text to the ChatClient file-transfer helper",
-  "window": {"title_contains": "ChatClient"},        # or {"process": "***.exe"}
+  "name": "wechat_send",
+  "description": "send a text to the WeChat file-transfer helper",
+  "window": {"title_contains": "微信"},        # or {"process": "Weixin.exe"}
   "steps": [
     {"action": "click", "rel": [220, 380]},
     {"action": "sleep", "ms": 250},
@@ -295,6 +295,19 @@ def _subst(value: Any, params: dict[str, Any]) -> Any:
 # coordinate helpers: top-left ("tl", default) or bottom-right ("br") anchored
 # --------------------------------------------------------------------------- #
 def _resolve_point(step: dict[str, Any], win: dict[str, Any] | None) -> tuple[int, int] | None:
+    # ── 按比例坐标（抗窗口缩放）──
+    # rel_frac = [fx, fy]，相对窗口客户区的 0~1 比例。
+    # 这是为「同一个宏在 600x700 和 1566x1054 窗口上都要能点对」而加的：
+    # 绝对 rel 在大窗口上会整体偏移（实测微信 type_verified 因此失配）。
+    if "rel_frac" in step:
+        if not win:
+            return None
+        fx, fy = float(step["rel_frac"][0]), float(step["rel_frac"][1])
+        wx = (win.get("rect_x", win["x"]) if win else 0)
+        wy = (win.get("rect_y", win["y"]) if win else 0)
+        ww = (win.get("rect_w", win["w"]) if win else 0)
+        wh = (win.get("rect_h", win["h"]) if win else 0)
+        return (int(round(wx + fx * ww)), int(round(wy + fy * wh)))
     if "rel" not in step:
         return None
     dx, dy = int(step["rel"][0]), int(step["rel"][1])
@@ -327,6 +340,17 @@ def _resolve_region(step: dict[str, Any], win: dict[str, Any] | None) -> dict[st
                 return got["region"]
         except Exception:
             pass
+
+    # region_frac = [fx, fy, fw, fh]：全部是 0~1 比例，最抗缩放
+    fr = step.get("region_frac")
+    if fr and win:
+        fx, fy, fw, fh = (float(v) for v in fr)
+        bx = win.get("rect_x", win["x"])
+        by = win.get("rect_y", win["y"])
+        rw = win.get("rect_w", win["w"])
+        rh = win.get("rect_h", win["h"])
+        return {"x": int(round(bx + fx * rw)), "y": int(round(by + fy * rh)),
+                "w": max(1, int(round(fw * rw))), "h": max(1, int(round(fh * rh)))}
 
     rr = step.get("region_rel")
     if not rr or not win:
@@ -381,7 +405,7 @@ def window_metrics(hwnd: int) -> dict[str, Any]:
     """Report both coordinate systems so a click can be self-checked.
 
     OCR (PrintWindow) works in window-rect space; code that mixes in the client
-    area is off by the border/title bar (measured +11px on ChatClient). That offset is
+    area is off by the border/title bar (measured +11px on WeChat). That offset is
     exactly what makes a *known* position click the wrong element.
     """
     import ctypes
@@ -759,7 +783,7 @@ def run_macro(
                         got = False
                         tries: list[dict[str, Any]] = []
                         for attempt in range(attempts):
-                            # the row toggles in ChatClient: retry until the title shows up
+                            # the row toggles in WeChat: retry until the title shows up
                             dx = (-40, 40, 0)[attempt % 3]
                             mouse.position = (t["cx"] + dx, t["cy"])
                             time.sleep(0.10)

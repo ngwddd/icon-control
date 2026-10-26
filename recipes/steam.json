@@ -1,0 +1,82 @@
+{
+  "app": "Steam (CEF)",
+  "window": {
+    "process": "steam",
+    "class_contains": "SDL_app|Chrome_WidgetWin"
+  },
+  "uia": "只回 DocumentControl；一切靠 OCR/坐标",
+  "flows": {
+    "open_workshop": [
+      "Start-Process 'steam://openurl/<完整URL>'（客户端地址栏不可输入）",
+      "等待页面渲染（约 5s）"
+    ],
+    "sort_workshop": [
+      "点结果区右上角排序下拉",
+      "选『订阅者总计』"
+    ],
+    "filter_levels": [
+      "左侧 类别 → 点 Level（条目数会从 21,618 降到 14,599）"
+    ],
+    "subscribe": [
+      "悬停卡片出现绿色 + → 点它",
+      "验证：悬停提示变成『取消订阅即可从您的游戏中移除』"
+    ]
+  },
+  "pitfalls": [
+    "item 详情页**没有**订阅按钮（客户端 CEF 渲染缺失）→ 回列表页悬停订阅",
+    "URL 里的 browsefilter/browsesort 参数无效 → 必须点页面里的下拉",
+    "下载验证看 workshop_log.txt + content/337320/<fileid>/"
+  ],
+  "workshop_subscribe": {
+    "note": "2026-10-27 实测：一小时内只订上 1 张，全是流程错，不是能力错",
+    "open_page": "cmd /c start \"\" steam://openurl/https://steamcommunity.com/app/<appid>/workshop/",
+    "card_grid": {
+      "first_card_left_frac": 0.5933,
+      "card_pitch_frac": 1.4642,
+      "card_top_frac": 0.3505,
+      "card_w_frac": 0.1384,
+      "card_h_frac": 0.0886,
+      "basis": "以窗口宽度做基准，乘窗口宽得到像素"
+    },
+    "plus_button": {
+      "where": "缩略图**右下角**的信息行里（不是右上角）",
+      "offset_frac_of_card": [
+        0.776,
+        1.19
+      ],
+      "color": "亮绿 RGB≈(110,190,90)，白 + 号",
+      "tooltip": "订阅即可下载"
+    },
+    "click_rule": "**每张只点一次**。再点一次就是取消订阅（日志出现 removing unused item）",
+    "verify": [
+      "读 C:\\Program Files (x86)\\Steam\\steamapps\\workshop\\appworkshop_<appid>.acf 看订阅表是否 +1",
+      "读 steamapps\\workshop\\content\\<appid>\\<fileid> 看文件是否落地",
+      "日志：Steam\\logs\\workshop_log.txt 搜 'Detected workshop change'"
+    ],
+    "dependency_dialog": {
+      "trigger": "该地图需要前置地图时弹出「额外的必需项目」",
+      "buttons": {
+        "仅订阅此项目": [
+          0.583,
+          0.701
+        ],
+        "全部订阅": [
+          0.699,
+          0.701
+        ],
+        "取消": [
+          0.746,
+          0.701
+        ]
+      },
+      "recommend": "仅订阅此项目（避免拉一长串依赖）",
+      "coords_are_frac_of_window": true
+    },
+    "pitfalls": [
+      "item 详情页**没有**订阅按钮（客户端 CEF 渲染缺失）→ 必须在列表页悬停订阅",
+      "URL 里的 browsefilter/browsesort 参数无效 → 必须点页面里的下拉",
+      "依赖项可能是私有/已删除 → 日志 Access Denied，整组会回滚",
+      "弹窗挡住页面时，后面所有悬停都失败 —— 先处理弹窗再继续"
+    ]
+  }
+}

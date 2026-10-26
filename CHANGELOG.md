@@ -1,3 +1,46 @@
+## [0.4.5] - 2026-10-27
+
+**把「零件」装回「会走路的车」。用户原话：「怎么感觉还变弱了呢？给他全部修好。」**
+
+### 诊断
+底层确实快了 100-300 倍（sense 0.010 ms / probe 0.155 ms / 41 步 0.41 s），
+但任务级效率退步：
+
+   微信发两段    宏本来 4.7 s    实际绕 1 小时（DPI、鬼影窗口、重复实例）
+   Steam 订地图  配方本来 3 步   实际 1 小时只订上 1 张（还点两次取消了 1 张）
+
+根因：新层与旧路（配方+宏）并行、入口没有仲裁、配方里的事实没沉淀进代码。
+
+### 修法一：按比例坐标（让旧宏抗缩放）
+宏引擎新增 `rel_frac: [fx, fy]` 与 `region_frac: [fx, fy, fw, fh]`（0~1）。
+旧宏用绝对像素，窗口从 600x700 变 1566x1054 后 `type_verified` 整体偏移而失败。
+新增 `macros/wechat_send_frac.json`：ensure_chat -> 点输入框（按比例）-> 剪贴板粘贴
+-> 回车 -> 断言气泡。任何窗口尺寸都能用。
+
+### 修法二：配方里的事实变成机器可读
+`recipes/steam.json` 新增 `workshop_subscribe`：
+卡片网格（按窗口宽的比例）、+ 按钮在缩略图右下角（0.776, 1.19 of card）、
+每张只点一次（再点就是取消）、验证走 appworkshop_<appid>.acf + content/<fileid>、
+依赖弹窗三个按钮的比例坐标。
+
+`recipes/wechat.json` 新增 `send_message`（按比例路径）与 `window_sizes_seen`。
+
+### 修法三：入口仲裁写进 AGENTS.md 第一条
+    ① 配方有 -> 照抄   ② 宏有 -> macro_run   ③ 都没有 -> 才用新层   ④ 再没有 -> 手工
+工具分层：78 个里只有 6 个是入口（macro_run/batch/ocr_read/find_text/layout_mem/sense）。
+
+### 修掉的 bug
+- 宏占位符 `${text_assert}` 没有默认值 -> 不变量测试抓到，改用 `${text}`
+- `layout_mem.py` 未使用的 `import os` -> 验证助手 imports 检查抓到
+
+### Tests
+154 -> **162**（desktop-mcp）/ 163（仓库）：新增 `test_v09_frac_coords.py` 8 项
+（按比例坐标在两种窗口尺寸下的换算、绝对 rel / br 锚点回归、区域最小 1px）
+
+### 验证
+    desktop-mcp  verify_start -> PASS（0 未回应）
+    图标控制      verify_start -> PASS（收敛）
+
 ## [0.4.4] - 2026-10-27
 
 **布局标定与记忆（走 A 路线）：看一眼 → 记住 → 复用。**

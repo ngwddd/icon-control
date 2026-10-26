@@ -1,0 +1,74 @@
+{
+  "name": "wechat_send_frac",
+  "description": "微信发送（**按比例坐标**，任何窗口尺寸都能用）：保证会话 -> 点输入框 -> 剪贴板粘贴 -> 回车 -> 断言气泡",
+  "window": {
+    "process": "weixin"
+  },
+  "defaults": {
+    "chat": "文件传",
+    "chat_title": "文件传输助手"
+  },
+  "steps": [
+    {
+      "action": "ensure_chat",
+      "title_query": "${chat_title}",
+      "list_query": "${chat}",
+      "title_region_rel": [
+        390,
+        60,
+        480,
+        80
+      ],
+      "list_region_rel": [
+        110,
+        60,
+        320,
+        900
+      ],
+      "min_lcs_share": 0.5,
+      "attempts": 3,
+      "settle_ms": 420,
+      "gap_ms": 0
+    },
+    {
+      "action": "click",
+      "rel_frac": [
+        0.55,
+        0.88
+      ],
+      "gap_ms": 220
+    },
+    {
+      "action": "clipboard_set",
+      "text": "${text}",
+      "gap_ms": 120
+    },
+    {
+      "action": "paste",
+      "gap_ms": 420
+    },
+    {
+      "action": "key",
+      "key": "enter",
+      "gap_ms": 260
+    },
+    {
+      "action": "wait_change",
+      "timeout_ms": 1500,
+      "poll_ms": 80,
+      "gap_ms": 0
+    },
+    {
+      "action": "assert_text",
+      "query": "${text}",
+      "region_frac": [
+        0.18,
+        0.1,
+        0.78,
+        0.72
+      ],
+      "min_lcs_share": 0.45,
+      "gap_ms": 0
+    }
+  ]
+}
