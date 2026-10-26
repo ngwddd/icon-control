@@ -389,3 +389,23 @@ MCP 工具（模型只在这里说话：少量、粗粒度）
 
 读法：一直走，直到屏幕底部出现提示；每走一步如果画面没变（撞墙），就右转 90°。
 条件和动作都在本地求值 —— 模型只发这一段，收一份 trace。
+
+---
+
+## v0.5：保留策略（跑起来不产生垃圾）
+
+```
+capture_daemon start / snapshot 写完 / record 存完  →  自动 sweep（静默）
+housekeeping(action=status)  看用量（只读）
+housekeeping(action=sweep)   立刻清（可 dry_run）
+```
+
+| 区域 | 上限 | 超了删什么 |
+|---|---|---|
+| `_draw/` | 80 个文件 / 80 MB / 3 天 | 最老的先删 |
+| `recordings/` | 10 个目录 / 300 MB / 7 天 | 最老的目录整个删 |
+| `vision/baselines/` | 40 个文件 / 30 天 | 最老的先删 |
+| `%TEMP%` 自己的 | `vh-*` / `canity_*` / `t_*.py`，超 6 小时 | 直接删 |
+
+**资产永不删**：`macros/`、`recipes/`、`templates/`、`vision/glyphs.json`、`_patched/`。
+**宿主的临时目录不碰**：`dsh-*` 明确排除（删了会影响运行中的会话）。

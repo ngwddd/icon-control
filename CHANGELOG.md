@@ -1,3 +1,39 @@
+## [0.4.2] - 2026-10-27
+
+**新增保留策略：这个助手跑起来不再产生垃圾文件。**
+
+用户原话：「你要考虑我以后这个鼠标助手跑起来不会产生垃圾文件。」
+
+问题不是「有临时文件」，而是**没人负责删**：`_draw/` 每次截图都多一张、
+`recordings/` 每次录制一个目录、`%TEMP%` 崩一次留一堆。
+
+### Added — `retention.py`
+```
+区域                上限                      超了删什么
+_draw               80 个文件 / 80 MB / 3 天   最老的先删
+recordings          10 个目录 / 300 MB / 7 天  最老的目录整个删
+vision/baselines    40 个文件 / 30 天          最老的先删
+%TEMP% 自己的东西   vh-* / canity_* / t_*.py   超过 6 小时的
+```
+**资产永不删除**：`macros/`、`recipes/`、`templates/`、`vision/glyphs.json`、`_patched/`。
+
+### 什么时候自动跑（不用你记得清）
+- `capture_daemon start` —— 每次开始接管屏幕时
+- `snapshot` 写完图之后
+- `record` 存完录制之后
+
+### 新工具
+- **`housekeeping`**：`action=status` 看用量（只读）、`action=sweep` 清扫（可 dry_run）
+
+### Fixed
+- `%TEMP%` 清理名单里**移除了 `dsh-`**：那是 DSH 宿主自己的临时目录
+  （`dsh-spill-*` / `dsh-subprocess-*`），删了会影响运行中的会话
+- `templates/` 一度被写进"可裁剪"策略里 —— 它是资产，测试当场抓出来了
+
+### Tests
+108 → **118**（新增 `tests/test_v05_retention.py` 10 项：按数量/天龄裁剪、
+最新保留、资产不动、录制目录上限、%TEMP% 只碰自己前缀、housekeeping 契约）
+
 ## [0.4.1] - 2026-10-27
 
 补上 v0.4.0 漏掉的东西，并让仓库自带的测试第一次真正跑通。

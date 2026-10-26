@@ -172,8 +172,15 @@ def tool_snapshot(args: dict) -> dict:
         im = im.resize((max(1, int(im.width * scale)), max(1, int(im.height * scale))), Image.LANCZOS)
     path = os.path.join(_DRAW, f"snap_{int(time.time()*1000)}.png")
     im.save(path)
+    # 写完就按策略裁剪，别让 _draw 无限长大
+    try:
+        from computer_mcp import retention
+        pruned = retention.sweep()
+    except Exception:
+        pruned = {}
     return {"success": True, "path": path, "size": list(im.size),
-            "bytes": os.path.getsize(path), "region": region}
+            "bytes": os.path.getsize(path), "region": region,
+            "pruned": pruned.get("removed_count", 0)}
 
 
 # ══════════════════════════ P1：闭环执行 ══════════════════════════
@@ -356,7 +363,28 @@ def tool_record(args: dict) -> dict:
                 continue
         with open(os.path.join(out, "manifest.json"), "w", encoding="utf-8") as fh:
             json.dump(manifest, fh, ensure_ascii=False, indent=1)
+        try:
+            from computer_mcp import retention
+            pruned = retention.sweep()
+        except Exception:
+            pruned = {}
         return {"success": True, "dir": out, "frames": len(manifest["frames"]),
                 "bytes": sum(os.path.getsize(os.path.join(out, f))
-                             for f in os.listdir(out))}
+                             for f in os.listdir(out)),
+                "pruned_old": pruned.get("removed_count", 0)}
     return {"success": False, "error": "action 只支持 start/stop"}
+
+
+def tool_housekeeping(args: dict) -> dict:
+    """看用量 / 清扫。默认只报告，不删。"""
+    from computer_mcp import retention
+    a = args or {}
+    action = a.get("action", "status")
+    dry = bool(a.get("dry_run", action == "status"))
+    if action == "status":
+        return {"success": True, **retention.usage()}
+    if action == "sweep":
+        res = retention.sweep_all(dry_run=dry)
+        res["success"] = True
+        return res
+    return {"success": False, "error": f"未知 action：{action}（status / sweep）"}

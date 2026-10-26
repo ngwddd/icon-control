@@ -716,6 +716,14 @@ async def list_tools() -> list[Tool]:
                 "additionalProperties": False},
         ),
         Tool(
+            name="housekeeping",
+            description="Show disk usage of this tool's own folders (_draw / recordings / vision baselines) and optionally prune them. Assets (macros, recipes, templates, _patched) are never touched. action=status (default, read-only) or sweep (with dry_run).",
+            inputSchema={"type": "object", "properties": {
+                "action": {"type": "string", "enum": ["status", "sweep"]},
+                "dry_run": {"type": "boolean"}},
+                "additionalProperties": False},
+        ),
+        Tool(
             name="record",
             description="Dump the daemon ring buffer (frames + manifest + last trace) to disk for evidence or replay.",
             inputSchema={"type": "object", "properties": {
@@ -1357,6 +1365,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
         elif name == "hud":
             from computer_mcp import live as _live
             result = _live.tool_hud(arguments or {})
+            result.setdefault("success", True)
+            screenshot_data = {"error": "intentionally skipped"}
+        elif name == "housekeeping":
+            from computer_mcp import live as _live
+            result = _live.tool_housekeeping(arguments or {})
             result.setdefault("success", True)
             screenshot_data = {"error": "intentionally skipped"}
         elif name == "record":
