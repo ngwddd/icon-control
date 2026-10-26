@@ -359,7 +359,7 @@ class FrameWheel(threading.Thread):
         self.fps = max(5, min(int(fps), 60))
         self.down = max(1, int(down))
         self.q = int(jpeg_quality)
-        self._stop = threading.Event()
+        self._stop_evt = threading.Event()
         self.state = STATE_STABLE
         self.last_change_at = time.time()
         self.last_frac = 0.0
@@ -374,7 +374,7 @@ class FrameWheel(threading.Thread):
         self.error = ""
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_evt.set()
 
     def run(self) -> None:                            # pragma: no cover（需要真实屏幕）
         try:
@@ -384,7 +384,7 @@ class FrameWheel(threading.Thread):
             with mss.mss() as sct:
                 box = {"left": int(left), "top": int(top), "width": max(8, int(w)),
                        "height": max(8, int(h))}
-                while not self._stop.is_set():
+                while not self._stop_evt.is_set():
                     t0 = time.perf_counter()
                     shot = sct.grab(box)
                     arr = np.asarray(shot)                    # BGRA
@@ -610,7 +610,7 @@ class Runner:
                                 jpeg_quality=int(track.capture.get("jpeg_quality", 70)))
         self.result: dict[str, Any] = {"status": STOP_STOPPED, "step": "", "steps_done": 0,
                                        "elapsed_s": 0.0, "events": [], "montage": ""}
-        self._stop = threading.Event()
+        self._stop_evt = threading.Event()
         self._t0 = time.time()
         self._pred_cache: dict[str, tuple[float, bool | None]] = {}
         self._noted: set[str] = set()
@@ -621,7 +621,7 @@ class Runner:
         self.wheel.start()
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_evt.set()
         self.wheel.stop()
         try:
             self.wheel.join(timeout=1.5)
@@ -695,7 +695,7 @@ class Runner:
         self.events.add("STEP", f"轨道开始：{self.track.name}")
         try:
             for idx, step in enumerate(self.track.steps):
-                if self._stop.is_set():
+                if self._stop_evt.is_set():
                     return self._finish(STOP_STOPPED, step.name, "用户停止")
                 if time.time() - self._t0 > max_total_s:
                     return self._finish(STOP_TIMEOUT, step.name, f"总时长超 {max_total_s}s")
@@ -707,7 +707,7 @@ class Runner:
                 pred_since = 0.0
                 uncertain_streak = 0
 
-                while time.time() < deadline and not self._stop.is_set():
+                while time.time() < deadline and not self._stop_evt.is_set():
                     if step.wait_before_action_ms and not acted:
                         if (time.time() - self.budget.step_start) * 1000 < step.wait_before_action_ms:
                             time.sleep(0.02)
