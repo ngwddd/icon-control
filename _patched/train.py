@@ -587,8 +587,12 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             urel = action.get("input_rel") or [0.5, 0.90]
             inreg = action.get("input_region") or [0.25, 0.72, 0.72, 0.22]
             creg = action.get("conv_region") or [0.22, 0.06, 0.78, 0.64]
+            title_txt = str(action.get("title_text") or "")
+            title_reg = action.get("title_region") or [0.02, 0.0, 0.55, 0.09]
+            row_reg = action.get("row_region") or [0.06, 0.28, 0.18, 0.12]
+            row_rel = action.get("row_rel") or [0.142, 0.331]
             up = float(action.get("upscale", 2.0))
-            lcs_need = float(action.get("min_lcs", 0.5))
+            lcs_need = float(action.get("min_lcs", 0.45))
 
             def _box(rel):
                 x, y, w, h = rect
@@ -602,13 +606,14 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 return np.asarray(Image.frombytes("RGB", s2.size, s2.bgra, "raw", "BGRX"),
                                   dtype=np.int16)
 
-            def _ocr(rel):
+            def _ocr(rel, scale: float | None = None):
                 from computer_mcp import ocr_ext
 
+                u = float(scale if scale is not None else up)
                 bx, by, bw, bh = _box(rel)
                 kw = {"region": {"x": bx, "y": by, "w": bw, "h": bh}, "max_lines": 30}
-                if up > 1:
-                    kw["upscale"] = up
+                if u > 1:
+                    kw["upscale"] = u
                 try:
                     res = ocr_ext.ocr_read(**kw)
                 except TypeError:
@@ -616,14 +621,33 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                     res = ocr_ext.ocr_read(**kw)
                 return "".join((l.get("text") or "") for l in (res.get("lines") or []))
 
-            # ① 点输入框
+            # ── ① 面板真的开着吗（读顶部标题）──
+            pane_ok = True
+            if title_txt:
+                pane_ok = text_landed(title_txt, _ocr(title_reg),
+                                      float(action.get("title_min_lcs", 0.55)))
+                if not pane_ok:
+                    # 没开 → 点一次会话行把它打开（点已开的会**关掉**，所以要判）
+                    MS().position = _resolve_point(rect, row_rel)
+                    time.sleep(0.2)
+                    MS().click(Button.left)
+                    time.sleep(float(action.get("open_wait_ms", 1200)) / 1000.0)
+                    pane_ok = text_landed(title_txt, _ocr(title_reg),
+                                          float(action.get("title_min_lcs", 0.55)))
+            if not pane_ok:
+                return {"ok": False,
+                        "detail": f"send 失败：聊天面板没打开（标题读不到「{title_txt}」）"}
+
+            # ── ② 记下会话列表里那一行的**预览文字**（最强证据：最新一条会显示在这）──
+            pv_up = float(action.get("preview_upscale", 3.0))
+            preview_before = _ocr(row_reg, pv_up)
+
+            # ── ③ 点输入框 → 粘贴 → 验文字 ──
             MS().position = _resolve_point(rect, urel)
             time.sleep(0.2)
             MS().click(Button.left)
             time.sleep(float(action.get("after_click_ms", 500)) / 1000.0)
-            focused = _grab(inreg)
 
-            # ② 粘贴（最多重试 paste_retries 次，每次都验文字）
             for _ in range(3):
                 try:
                     win32clipboard.OpenClipboard()
@@ -633,8 +657,9 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                     break
                 except Exception:
                     time.sleep(0.15)
+
             ok_text, got = False, ""
-            for _ in range(int(action.get("paste_retries", 2))):
+            for _ in range(int(action.get("paste_retries", 3))):
                 kb2 = KB()
                 with kb2.pressed(Key.ctrl):
                     kb2.press("v")
@@ -644,36 +669,38 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 ok_text = text_landed(text, got, lcs_need)
                 if ok_text:
                     break
+            if not ok_text:
+                return {"ok": False,
+                        "detail": (f"send 失败：粘贴没落进输入框（读到「{got[:24]}」）")}
 
-            # ③ 回车 + ④ **在会话区 OCR 到刚发的文字**才算发出去
-            #    （只比像素差会假成功：实测报 done 但截图上根本没这条消息）
+            # ── ④ 回车 → 用列表预览作为发送成功证据 ──
             conv_before = _grab(creg)
             kb3 = KB()
             kb3.press(Key.enter)
             kb3.release(Key.enter)
-            time.sleep(float(action.get("after_send_ms", 900)) / 1000.0)
-            conv_after = _grab(creg)
-            delta = float(np.abs(conv_after - conv_before).mean())
-            # 双条件：① 该区域像素确实变了 ② OCR 里确实出现这段文字（强匹配 0.7）
-            # 只靠像素差会假成功（实测报 done 但截图上没有这条消息）
-            ok_text_seen = False
-            seen = ""
-            need_px = float(action.get("bubble_min", 1.0))
-            for _ in range(int(action.get("send_checks", 3))):
-                seen = _ocr(creg)
-                if text_landed(text, seen, float(action.get("conv_min_lcs", 0.7))):
-                    ok_text_seen = True
-                    break
-                time.sleep(0.6)
-            ok_bubble = bool(delta >= need_px and ok_text_seen)
-            # 输入框里不该还留着这段文字（留着 = 没发出去）
-            still_there = text_landed(text, _ocr(inreg), lcs_need)
+            time.sleep(float(action.get("after_send_ms", 800)) / 1000.0)
+            delta = float(np.abs(_grab(creg) - conv_before).mean())
 
+            # **会话带**才是可靠证据（实测它稳定读到 三段验证1/2/3；
+            #  列表那一行 OCR 会在"名字/副标题"之间跳，不能作为判据）
+            conv_seen, conv_after = False, ""
+            for _ in range(int(action.get("conv_checks", 4))):
+                conv_after = _ocr(creg, float(action.get("conv_upscale", 2.0)))
+                if text_landed(text, conv_after, float(action.get("conv_min_lcs", 0.5))):
+                    conv_seen = True
+                    break
+                time.sleep(0.7)
+            preview_after = _ocr(row_reg, pv_up)      # 仅作诊断输出，不参与判定
+
+            still_there = text_landed(text, _ocr(inreg), lcs_need)
             return {
-                "ok": bool(ok_text and ok_bubble and not still_there),
-                "detail": (f"send 输入框={'✓' if ok_text else '✗'} "
-                           f"会话区={'✓' if ok_bubble else '✗'} "
-                           f"残留={'是' if still_there else '否'} Δ{delta:.2f} {len(text)}字"),
+                "ok": bool(pane_ok and ok_text and conv_seen and not still_there),
+                "detail": (f"send 面板={'✓' if pane_ok else '✗'} "
+                           f"输入={'✓' if ok_text else '✗'} "
+                           f"会话区={'✓' if conv_seen else '✗'} "
+                           f"残留={'是' if still_there else '否'} "
+                           f"Δ{delta:.2f} "
+                           f"会话带末[{conv_after[-26:]}]"),
             }
 
         if kind == "scroll":
@@ -717,7 +744,9 @@ def check_expect(expect: dict | None, wheel: FrameWheel,
                  since: float | None = None) -> bool | None:
     """True=成立 False=不成立 None=判不了（算"不确定"）。"""
     if not expect:
-        return True
+        # 没有判据 ≠ 已达成。返回 None（"没意见"），否则 Runner 会把
+        # "无 expect 的动作步骤" 当成已满足 → **动作永远不执行**（实测踩了一小时）
+        return None
     kind = str(expect.get("kind", ""))
 
     if kind == "stable":
@@ -1036,6 +1065,12 @@ class Runner:
                         self.events.add("STEP", f"动作：{res.get('detail')}", step.name)
                         if not res.get("ok") and step.on_fail == "stop":
                             return self._finish(STOP_TIMEOUT, step.name, str(res.get("detail")))
+                        # 只带动作、没有 expect 的步骤：动作成功就算这步完成。
+                        # 否则判据永远是 None → 6 次后误判"判不了"（实测踩过）
+                        if step.expect is None and res.get("ok"):
+                            self.events.add("STEP", f"达成（动作成功）：{step.name}", step.name)
+                            self.result["steps_done"] = idx + 1
+                            break
                         pred_since = time.time()
 
                     bad, msg = self.budget.check()

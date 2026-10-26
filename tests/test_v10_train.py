@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
                                 "venv", "Lib", "site-packages"))
 
 try:
+    from computer_mcp import train as train_mod
     from computer_mcp import train as T
     HAVE = True
 except Exception:
@@ -224,8 +225,15 @@ class TestExpectPure(unittest.TestCase):
         self.assertTrue(T.check_expect({"kind": "changed", "min_frac": 0.01}, FakeWheel(), (0, 0, 10, 10)))
         self.assertFalse(T.check_expect({"kind": "changed", "min_frac": 0.5}, FakeWheel(), (0, 0, 10, 10)))
 
-    def test_no_expect_is_true(self) -> None:
-        self.assertTrue(T.check_expect(None, None, (0, 0, 1, 1)))
+    def test_no_expect_means_no_opinion(self) -> None:
+        """没有判据 ≠ 已达成。
+
+        实测教训：以前 check_expect(None) 返回 True，导致 Runner 把"只带动作、
+        不带 expect 的步骤"当成已满足 → **动作根本不执行**，轨道 0 秒报 done。
+        现在返回 None（判不了），动作才会真的跑。
+        """
+        self.assertIsNone(train_mod.check_expect(None, None, (0, 0, 100, 100), 0))
+        self.assertIsNone(train_mod.check_expect({}, None, (0, 0, 100, 100), 0))
 
     def test_unknown_kind_is_uncertain(self) -> None:
         self.assertIsNone(T.check_expect({"kind": "???"}, None, (0, 0, 1, 1)))

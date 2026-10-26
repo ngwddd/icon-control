@@ -150,3 +150,27 @@ action=selfcheck  short run，报 fps / 内存
 · 粘贴「达成」但输入框其实是空的 → 说明 stable 判据不等于"贴进去了"
 · 最终判据要用**发送后画面变化**（气泡出现），别用"输入框里有字"
 ```
+
+## 十二、★ `check_expect(None)` 必须返回 None（2026-10-27 血的教训）
+
+**这个 bug 让"轨道 0 秒报 done"骗了我一小时。**
+
+```python
+def check_expect(expect, ...):
+    if not expect:
+        return True      # ← 错！
+```
+`Runner` 的循环是「先判 `pred`，是 True 就"达成"并**跳过动作**」。
+所以任何**只带 action、不带 expect** 的步骤（scroll / paste / send / key）
+都会被判"已达成"，**动作根本不执行**，而轨道照样 `status=done`。
+
+修法两条：
+```python
+① check_expect(None) → None        # 没有判据 = 判不了，不是已达成
+② Runner：动作成功且 expect is None → 这步算完成（否则永远判不了 →
+   uncertain_streak≥6 会误报"判据连续判不了"）
+```
+
+**教训一句话**：`None`（没意见）和 `True`（已达成）是两件事，
+混在一起就会把"什么都没做"当成"做完了"。凡是"默认值"，都要问一句
+"它会让流程跳过真正的工作吗？"
