@@ -16,3 +16,7 @@ vision/baselines/
 .env
 *.key
 *.token
+.verify-artifacts/
+.verify-noise.json
+.verify-accept.json
+.verify-baseline.json
