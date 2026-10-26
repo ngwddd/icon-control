@@ -53,7 +53,8 @@
   "pitfalls": [
     "隐藏窗口 ShowWindow 出来是鬼影（不重绘）→ 用 SetWindowPos(..., SWP_FRAMECHANGED)",
     "重跑 Weixin.exe 会开出第二个实例 → 抢前台，必须先杀掉新的那个",
-    "任何坐标运算前先 SetProcessDpiAwareness(2)"
+    "任何坐标运算前先 SetProcessDpiAwareness(2)",
+    "不要用 SW_HIDE 隐藏微信主窗口：重新 SW_SHOW 后画面正常但**完全不接受模拟输入**（点击/按键全 0.00 差异，WindowFromPoint 与前台都对）。要清桌面就 SW_MINIMIZE。"
   ],
   "send_message": {
     "macro": "wechat_send_frac（按比例坐标，任何窗口尺寸都能用）",
@@ -72,6 +73,7 @@
   },
   "window_sizes_seen": {
     "narrow": "宽度 < 900 时左栏列表消失，只能走搜索框",
-    "wide": "1566x1054 是实测过的大窗口，输入框在 (0.55W, 0.88H) 附近"
+    "wide": "1566x1054 是实测过的大窗口，输入框在 (0.55W, 0.88H) 附近",
+    "note": "隐藏窗口操作会破坏输入上下文；只最小化"
   }
 }

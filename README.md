@@ -476,3 +476,26 @@ layout_mem(action="save", hwnd=…, regions={
 宏支持 `rel_frac: [fx, fy]` 与 `region_frac: [fx, fy, fw, fh]`（0~1）。
 写死像素的宏在窗口变大后会整体偏移 —— 微信 `wechat_send` 就是这么坏的，
 新宏 `wechat_send_frac` 用比例坐标，600×700 和 1566×1054 都能点对。
+
+---
+
+## Skill：`desktop-operator`（随本包发布）
+
+桌面操作的经验不该写在 agent 的记忆里 —— 它是**可复用的技能**。
+
+```
+skill/desktop-operator/
+  SKILL.md               开工顺序 / 一步一截图 / 判活三连 / 假阴性清单 / 工具分层
+  references/wechat.md   微信 4.x 已验证流程（含比例坐标）
+  references/steam.md    Steam 创意工坊订阅（含「只点一次」与 ACF 验证）
+  references/uwp-cef.md  UWP / CEF / Electron 判据与陷阱
+  references/coords.md   DPI / 坐标系 / rel_frac / 读图预算
+```
+
+安装：
+```powershell
+Copy-Item -Recurse "skill\desktop-operator" "$env:USERPROFILE\.dsh\skills\"
+```
+
+装好后模型在处理「用鼠标点…」「给微信发…」这类请求时会自动加载它，
+不再靠每次重新试错。

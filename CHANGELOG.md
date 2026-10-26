@@ -1,3 +1,53 @@
+## [0.5.0] - 2026-10-27
+
+**新增 Skill `desktop-operator`：把「规则」从 AGENTS.md 搬进可复用的技能，随本包一起发布。**
+
+用户原话：「你缺一个 SKILL……把规则从 AGENTS.md 里删除，迁移到这个 skill 里，
+然后把它一起上线开源平台，跟这个 MCP 在同一个包里面。」
+
+### 为什么搬
+
+AGENTS.md 里光桌面部分就 22 KB，越堆越长、每次都要整份加载，而且**混在通用记忆里**。
+搬到 skill 后：
+```
+AGENTS.md   31.2 KB → 8.3 KB  （-73%）
+skill       一个入口 + 4 个分册，按需读，不再每次全量加载
+```
+
+### 包内结构
+
+```
+skill/desktop-operator/
+  SKILL.md               入口：开工顺序 / 三条铁律 / 判活三连 / 假阴性清单 / 工具分层
+  references/wechat.md   微信 4.x：进入微信面板、主窗口比例坐标、发消息、朋友圈
+  references/steam.md    Steam 创意工坊：卡片网格、+ 位置、只点一次、ACF 验证
+  references/uwp-cef.md  UWP(记事本)/CEF/Electron 的通用判据与陷阱
+  references/coords.md   DPI、四种坐标系、rel_frac、判活三连、读图预算
+```
+
+### 安装（一条命令）
+
+```powershell
+Copy-Item -Recurse "图标控制\skill\desktop-operator" "$env:USERPROFILE\.dsh\skills\"
+```
+装好后在 DSH 里直接说「帮我给微信发…」就会命中它。
+
+### 这次迁移掉的（AGENTS.md）
+
+```
+· 开工顺序（配方 → 宏 → 工具 → 手写）
+· 接管桌面 / 桌面 MCP 是手和眼
+· 急停约定、鼠标授权开关说明
+· v0.4 采集守护、快慢双层导航、布局标定与记忆
+· 微信窗口唤不醒三条硬规则
+→ 全部并入 skill（内容保留，位置变了）
+```
+
+### 同时修掉
+
+- `diag_input.py`：L3 打不进去时不再断言「被系统拦截」，改判 **UNKNOWN** 并列出假阴性排查项
+- `recipes/wechat.json`：补上实测通过的 15 步流程与比例坐标
+
 ## [0.4.5] - 2026-10-27
 
 **把「零件」装回「会走路的车」。用户原话：「怎么感觉还变弱了呢？给他全部修好。」**
