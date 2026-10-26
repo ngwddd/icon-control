@@ -11,7 +11,7 @@
 
 触发后行为：
     1. 立刻打印 ✋ 提示
-    2. 枚举 python 进程里命令行含 auto_ / macro_run / desk.py 的，全部终止
+    2. 枚举 python 进程里命令行含 *_bot*.py / *_run*.py / macro_run / desk.py 的，全部终止
     3. 打印被杀的 PID 列表，然后退出（不自动重启任何东西）
 """
 
@@ -31,10 +31,10 @@ import psutil  # noqa: E402
 
 # 哪些进程算"自动化进程"（急停时必须一并清掉）
 AUTOMATION_PATTERNS = [
-    r"auto_(run|bot|bot2)\.py",
+    r"[\w\-]+_(bot|run|play|fight)\w*\.py",
     r"macro_run",
     r"desk\.py\s+macro",
-    r"auto_bot",
+    r"(bot|run|fight)_?[\w\-]*",
 ]
 
 
