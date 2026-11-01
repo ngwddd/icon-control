@@ -64,14 +64,70 @@ def load_token() -> str:
         return ""
 
 
-def write_state(granted: bool, origin: str = "bridge") -> None:
+# ── 多窗口状态表（2026-11-02 修 bug）─────────────────────────────────
+# 历史问题：所有窗口都往同一个状态文件写「自己的当前值」，后写的覆盖先写的。
+# 于是一个窗口点了授权（绿），另一个窗口的心跳仍在上报 false，Host 就读到 false
+# —— 表现就是「前端是绿的，后台被拦」。
+# 现在按 client 分开记，并区分「用户动作」与「心跳」：
+#   动作（点按钮）能改变全局授权；心跳只表示「这个窗口还活着、它当前是什么值」。
+CLIENTS: dict[str, dict] = {}
+CLIENT_HB_TTL_S = 30.0          # 心跳多久内算这个窗口还活着
+CLIENT_ACTION_TTL_S = 1800.0    # 用户动作的有效期（30 分钟）
+
+
+def note_client(client: str, granted: bool, event: str) -> None:
+    now = time.time()
+    key = (client or "default")[:64]
+    CLIENTS[key] = {"granted": bool(granted), "ts": now, "event": event}
+    for k in list(CLIENTS):                    # 清掉陈旧条目，避免无限增长
+        if now - CLIENTS[k]["ts"] > CLIENT_ACTION_TTL_S:
+            CLIENTS.pop(k, None)
+
+
+def effective_state() -> tuple:
+    """返回 (是否授权, 依据)。None 表示没有任何客户端报过状态。
+
+    规则：
+      1. 最近一次「用户动作」说了算（授权与收回都算），有效期 30 分钟
+      2. 没有动作 → 看心跳：任一窗口在心跳里报 granted 即视为授权
+      3. 都没有 → None（Host 会退回 OCR，读不到就 fail closed）
+    """
+    now = time.time()
+    actions = [(v["ts"], v["granted"]) for v in CLIENTS.values()
+               if v["event"] == "action" and now - v["ts"] <= CLIENT_ACTION_TTL_S]
+    if actions:
+        ts, granted = max(actions, key=lambda x: x[0])
+        return granted, "action@%ds" % int(now - ts)
+    hbs = [v["granted"] for v in CLIENTS.values()
+           if now - v["ts"] <= CLIENT_HB_TTL_S]
+    if hbs:
+        return any(hbs), "heartbeat"
+    return None, "none"
+
+
+def write_state(granted: bool, origin: str = "bridge",
+                client: str = None, event: str = None) -> None:
+    now = time.time()
+    if client is None and event is None:
+        # 兼容旧调用（测试 / CLI 直接写状态文件）：当成唯一客户端的动作
+        note_client("default", granted, "action")
+        eff, why = bool(granted), "action@0s"
+    else:
+        note_client(client or "default", granted, event or "hb")
+        eff, why = effective_state()
+        if eff is None:                        # 理论上不会走到
+            eff, why = bool(granted), "single"
     payload = {
-        "granted": bool(granted),
+        "granted": bool(eff),
         "source": "bridge",
         "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "checked_at_ts": time.time(),
+        "checked_at_ts": now,
         "screen_text": "",
         "origin": origin,
+        "effective_from": why,
+        "clients": {k: {"granted": v["granted"], "event": v["event"],
+                        "age_s": round(now - v["ts"], 1)}
+                    for k, v in list(CLIENTS.items())[:8]},
     }
     with _lock:
         os.makedirs(STATE_DIR, exist_ok=True)
@@ -170,8 +226,12 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == BEACON_PATH:
             q = parse_qs(parsed.query)
             granted = (q.get("granted") or ["0"])[0] in ("1", "true", "True")
-            write_state(granted, origin="beacon")
-            log(f"BEACON granted={granted}")
+            client = (q.get("client") or ["default"])[0]
+            event = (q.get("event") or ["hb"])[0]
+            if event not in ("action", "hb"):
+                event = "hb"
+            write_state(granted, origin="beacon", client=client, event=event)
+            log(f"BEACON granted={granted} client={client} event={event}")
             self.send_response(204)
             self._cors()
             self.end_headers()
@@ -206,7 +266,12 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         granted = bool(data.get("granted"))
-        write_state(granted, origin=str(data.get("origin") or "client"))
+        client = str(data.get("client") or "default")
+        event = str(data.get("event") or "hb")
+        if event not in ("action", "hb"):
+            event = "hb"
+        write_state(granted, origin=str(data.get("origin") or "client"),
+                    client=client, event=event)
         log(f"POST granted={granted}")
         self.send_response(204)
         self._cors()

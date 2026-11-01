@@ -222,6 +222,9 @@ def learn(app: str, key: str, hwnd: int, abs_x: int, abs_y: int,
         "patch": cur or rec.get("patch"),
         "layout": layout_signature(hwnd),
         "last_point": [int(abs_x), int(abs_y)],
+        # P1-7：记下学习时的窗口尺寸。同尺寸时用绝对坐标更准（raw > 归一化），
+        # 尺寸变了才退回 corner / npos。外部 ablation：SS-Pro 42.3 vs 37.9。
+        "geom": {"w": int(g["w"]), "h": int(g["h"])},
         "hits": hits + 1,
         "misses": rec.get("misses", 0),
         "updated": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -238,7 +241,19 @@ def locate(app: str, key: str, hwnd: int) -> dict[str, Any] | None:
     if not rec:
         return None
     g = _geometry(hwnd)
-    # 优先用「右下角偏移」：按比例布局变化时它更稳
+    lg = rec.get("geom") or {}
+    last = rec.get("last_point")
+    same_size = bool(lg) and lg.get("w") == g["w"] and lg.get("h") == g["h"]
+    if same_size and last:
+        # 窗口尺寸没变 → 绝对坐标最准（不经过比例换算，误差为 0）
+        x, y = last[0], last[1]
+        x, y = int(x), int(y)
+        return {"x": x, "y": y, "source": "absolute", "patch": rec.get("patch"),
+                "prototypes": rec.get("prototypes") or ([rec["patch"]] if rec.get("patch") else []),
+                "hits": rec.get("hits", 0), "misses": rec.get("misses", 0),
+                "same_layout": rec.get("layout", {}).get("aspect") == layout_signature(hwnd)["aspect"],
+                "updated": rec.get("updated")}
+    # 尺寸变了：优先「右下角偏移」，它比纯比例更稳
     dxr = (rec.get("corner") or {}).get("dx_right")
     dyb = (rec.get("corner") or {}).get("dy_bottom")
     if dxr is not None and dyb is not None:
@@ -249,7 +264,7 @@ def locate(app: str, key: str, hwnd: int) -> dict[str, Any] | None:
         y = g["y"] + npos.get("y", 0) * g["h"]
     x, y = int(round(x)), int(round(y))
     same_layout = rec.get("layout", {}).get("aspect") == layout_signature(hwnd)["aspect"]
-    return {"x": x, "y": y, "patch": rec.get("patch"),
+    return {"x": x, "y": y, "source": "corner_or_ratio", "patch": rec.get("patch"),
             "prototypes": rec.get("prototypes") or ([rec["patch"]] if rec.get("patch") else []),
             "hits": rec.get("hits", 0), "misses": rec.get("misses", 0),
             "same_layout": same_layout, "updated": rec.get("updated")}
@@ -290,7 +305,7 @@ def confirm(app: str, key: str, success: bool) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # P2：区域与列表项记忆（2026-10-25）
 #
-# 点记忆只能记住"一个坐标"；列表类界面（ChatClient聊天列表、ChatClient 联系人、工坊卡片）
+# 点记忆只能记住"一个坐标"；列表类界面（微信聊天列表、QQ 联系人、工坊卡片）
 # 更需要「第 N 项在哪」和「一块区域在哪」。这里用「归一化位置 + 右下角偏移」
 # 两条冗余线索，窗口缩放跟移动都能算回来。
 # --------------------------------------------------------------------------- #

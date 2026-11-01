@@ -191,6 +191,7 @@ class TestWiring(unittest.TestCase):
         names = {t.name for t in tools}
         self.assertIn("verify_flow", names, "verify_flow 未注册")
         src = open(os.path.join(_pkg_dir(), "mcp.py"), encoding="utf-8").read()
+        src += open(os.path.join(_pkg_dir(), "zones", "dispatch.py"), encoding="utf-8").read()
         self.assertIn('name == "verify_flow"', src, "verify_flow 无分发分支")
         self.assertGreaterEqual(len(names), 58, f"工具总数异常：{len(names)}")
 

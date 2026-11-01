@@ -1,0 +1,210 @@
+"""zones/z2_sense/tools.py — 判据：把像素变成结构化状态（Z2）
+
+自动生成（R3）：定义与实现在一起，schema 是唯一来源。
+不要手改生成标记之间的内容之外的 schema 结构；改工具请改本文件后跑测试。
+"""
+
+from __future__ import annotations
+
+from computer_mcp.tool_spec import ToolSpec
+
+SPECS: list[ToolSpec] = [
+    ToolSpec(
+        name='diff_baseline',
+        zone='Z2',
+        description='Compare a region against its stored baseline. Returns diff (mean abs difference 0-255) and changed = diff >= threshold.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'threshold': {'type': 'number', 'default': 8.0}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'hwnd': {'type': 'integer'}}, 'required': ['name']},
+    ),
+    ToolSpec(
+        name='find_text',
+        zone='Z2',
+        description='OCR the screen (or a region) and find a string, tolerating OCR mistakes: whitespace between CJK glyphs is ignored and a single mis-read character still matches. Returns centre coordinates.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'query': {'type': 'string'}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'min_ratio': {'type': 'number', 'default': 0.72}, 'min_lcs_share': {'type': 'number', 'default': 0.6}, 'max_lines': {'type': 'integer', 'default': 120}, 'hwnd': {'type': 'integer', 'description': 'Raise this window first, then OCR its rectangle'}}, 'required': ['query']},
+    ),
+    ToolSpec(
+        name='frame_diff',
+        zone='Z2',
+        description='Compare two buffered frames by index in an optional region: mean abs diff and changed flag.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'from_frame': {'type': 'integer'}, 'to_frame': {'type': 'integer'}, 'region': {'type': 'array', 'items': {'type': 'integer'}}}, 'required': ['from_frame'], 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='frame_mark',
+        zone='Z2',
+        description='Mark a frame index by name, used with frame_diff to verify an action took effect.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}}, 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='get_window_info',
+        zone='Z2',
+        description='Get detailed information about a window',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'hwnd': {'type': 'integer', 'description': 'Window handle'}}, 'required': ['hwnd']},
+    ),
+    ToolSpec(
+        name='hud',
+        zone='Z2',
+        description='Auto-locate HUD text rows by color (cyan/yellow/...) and return their screen boxes. Survives window resize/move; optional per-color rows list. Feed the boxes to read_digits or probe.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'box': {'type': 'array', 'items': {'type': 'integer'}, 'description': 'search area in screen coords, default whole screen'}, 'colors': {'type': 'array', 'items': {'type': 'object'}, 'description': '[{name, color, tol}]'}}, 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='list_virtual_desktops',
+        zone='Z2',
+        description='List all virtual desktops with their IDs and names',
+        read_only=True,
+        schema={'type': 'object', 'properties': {}},
+    ),
+    ToolSpec(
+        name='list_windows',
+        zone='Z2',
+        description='List all visible windows with their handles, titles, processes, and bounds',
+        read_only=True,
+        schema={'type': 'object', 'properties': {}},
+    ),
+    ToolSpec(
+        name='match_template',
+        zone='Z2',
+        description='Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. No OCR, no UIA - works on games, Electron and CEF windows.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'confidence': {'type': 'number', 'default': 0.8}, 'hwnd': {'type': 'integer'}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}}, 'required': ['name']},
+    ),
+    ToolSpec(
+        name='ocr_read',
+        zone='Z2',
+        description='Read text off the screen with the Windows OCR engine and return the recognised lines with boxes. Text only - much cheaper than sending an image when all you need is what the UI says. Pass a region to scan just one window.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'max_lines': {'type': 'integer', 'default': 80}, 'hwnd': {'type': 'integer', 'description': 'Raise this window first, then OCR its rectangle'}}},
+    ),
+    ToolSpec(
+        name='probe',
+        zone='Z2',
+        description='One pixel primitive on the cached frame (1-3 ms): prompt (bright text present), bar (colored bar fill), openness (view open), color (blob), digits (number).',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'kind': {'type': 'string', 'enum': ['prompt', 'bar', 'openness', 'color', 'digits']}, 'box': {'type': 'array', 'items': {'type': 'integer'}}, 'color': {'type': 'string'}, 'thr': {'type': 'integer'}, 'tol': {'type': 'integer'}}, 'required': ['kind'], 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='read_digits',
+        zone='Z2',
+        description='Read a digit string from a region of the cached frame with 5x7 template matching (1-3 ms). Works on pixel fonts that defeat OCR.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'box': {'type': 'array', 'items': {'type': 'integer'}}, 'thr': {'type': 'integer'}, 'min_conf': {'type': 'number'}}, 'required': ['box'], 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='sample_stable',
+        zone='Z2',
+        description='Sample a region several times and report whether it is stable (all hashes equal). Use it before trusting a state reading: this is how you avoid judging a UI while an animation is still running.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'times': {'type': 'integer', 'default': 2}, 'gap_ms': {'type': 'integer', 'default': 200}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'hwnd': {'type': 'integer'}}},
+    ),
+    ToolSpec(
+        name='screen_layout',
+        zone='Z2',
+        description='Generic layout detection for ANY window (no app-specific constants): content box (letterbox-aware), HUD text rows, lattice panels (minimaps/radars/boards) via periodicity, and progress bars with fill ratio. Returns pixel boxes plus normalized rel coords.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'hwnd': {'type': 'integer'}, 'region': {'type': 'array', 'items': {'type': 'integer'}}}, 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='screen_state',
+        zone='Z2',
+        description='Cheap screen check WITHOUT returning an image (~40 ms). Reports whether the screen changed since the last capture, by how much (mean abs diff %), and a short hash. Use this to poll instead of screenshot.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'x': {'type': 'integer', 'description': 'Optional region left (default: full screen)'}, 'y': {'type': 'integer', 'description': 'Optional region top'}, 'w': {'type': 'integer', 'description': 'Optional region width'}, 'h': {'type': 'integer', 'description': 'Optional region height'}}},
+    ),
+    ToolSpec(
+        name='sense',
+        zone='Z2',
+        description='Return what changed since a frame index plus requested primitives (prompt/bar/openness/color/digits). Reads the daemon buffer; typically under 10 ms and transfers no image.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'since_frame': {'type': 'integer'}, 'primitives': {'type': 'array', 'items': {'type': 'object'}}, 'regions': {'type': 'array', 'items': {'type': 'object'}}}, 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='ui_find',
+        zone='Z2',
+        description='Find controls by accessible name (substring, or exact=true). Returns candidates with their centre coordinates. Cheaper and more reliable than reading a screenshot.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'hwnd': {'type': 'integer'}, 'depth': {'type': 'integer', 'default': 8}, 'exact': {'type': 'boolean', 'default': False}, 'index': {'type': 'integer', 'default': 0}}, 'required': ['name']},
+    ),
+    ToolSpec(
+        name='ui_tree',
+        zone='Z2',
+        description='Compact UI-Automation control tree for a window (or the focused one). Text only, no screenshot: control type + name + rect. Use it to find what is clickable before clicking.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'hwnd': {'type': 'integer', 'description': 'Window handle (default: focused window)'}, 'depth': {'type': 'integer', 'default': 3}, 'max_nodes': {'type': 'integer', 'default': 60}, 'only_named': {'type': 'boolean', 'default': True}}},
+    ),
+    ToolSpec(
+        name='wait_baseline_change',
+        zone='Z2',
+        description='Block until a region deviates from its baseline by more than threshold, or until timeout.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'threshold': {'type': 'number', 'default': 8.0}, 'timeout_ms': {'type': 'integer', 'default': 5000}, 'poll_ms': {'type': 'integer', 'default': 120}, 'hwnd': {'type': 'integer'}}, 'required': ['name']},
+    ),
+    ToolSpec(
+        name='wait_for_change',
+        zone='Z2',
+        description='Block until the screen changes above the threshold, or until timeout. Cheaper than the model polling screen_state in a loop.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'timeout_ms': {'type': 'integer', 'description': 'Max time to wait (default 5000)', 'default': 5000}, 'poll_ms': {'type': 'integer', 'description': 'Internal poll interval (default 120)', 'default': 120}}},
+    ),
+    ToolSpec(
+        name='wait_template',
+        zone='Z2',
+        description='Block until a template appears (appear=true) or disappears (appear=false), or until timeout. Event driven and cheaper than polling match_template from the model.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'timeout_ms': {'type': 'integer', 'default': 5000}, 'poll_ms': {'type': 'integer', 'default': 120}, 'appear': {'type': 'boolean', 'default': True}, 'confidence': {'type': 'number', 'default': 0.8}, 'hwnd': {'type': 'integer'}}, 'required': ['name']},
+    ),
+    ToolSpec(
+        name='watch',
+        zone='Z2',
+        description='Block until a condition holds (event-driven wait, replaces sleep+re-screenshot polling). Kinds: prompt/bar/openness/color/digits/diff.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'cond': {'type': 'object'}, 'condition': {'type': 'object'}, 'timeout_ms': {'type': 'integer'}}, 'additionalProperties': False},
+    ),
+    ToolSpec(
+        name='world_state',
+        zone='Z2',
+        description='M1: compress the screen into structured state — minimap grid (auto-calibrated pitch), player cell, objective markers, prompt flag, battery. Returns a short text page you can read instead of an image. Needs map_region=[x,y,w,h] in screen coords.',
+        read_only=True,
+        schema={'type': 'object', 'properties': {'map_region': {'type': 'array', 'items': {'type': 'integer'}}, 'prompt_box': {'type': 'array', 'items': {'type': 'integer'}}, 'battery_box': {'type': 'array', 'items': {'type': 'integer'}}, 'pitch': {'type': 'number'}, 'dark_max': {'type': 'integer'}}, 'additionalProperties': False},
+    ),
+
+    ToolSpec(
+        name='wait_for',
+        zone='Z2',
+        description='统一等待入口：等屏幕变化/文字出现/模板出现/元素出现/窗口聚焦（单次调用内轮询）',
+        read_only=True,
+        schema={
+            'type': 'object',
+            'properties': {
+                'kind': {'type': 'string',
+                         'enum': ['change', 'text', 'template', 'element', 'focused'],
+                         'default': 'change'},
+                'query': {'type': 'string', 'description': 'text 时是要找的文字；template 时是模板名'},
+                'element_id': {'type': 'string', 'description': 'element 时按 ui_tree 的 id 等'},
+                'timeout_ms': {'type': 'integer', 'default': 5000},
+                'interval_ms': {'type': 'integer', 'default': 150},
+            },
+        },
+    ),
+
+    ToolSpec(
+        name='find_element',
+        zone='Z2',
+        description='统一寻址：依次尝试 UIA / OCR / 模板，返回元素的屏幕坐标（自绘界面也能用）',
+        read_only=True,
+        schema={
+            'type': 'object',
+            'properties': {
+                'query': {'type': 'string', 'description': '控件名（UIA）或文字（OCR）或模板名（template）'},
+                'hwnd': {'type': 'integer'},
+                'limit': {'type': 'integer', 'default': 5},
+                'sources': {'type': 'array', 'items': {'type': 'string'},
+                            'description': '默认 ["uia","ocr","template"]，可只给一部分'},
+            },
+            'required': ['query'],
+        },
+    ),
+]

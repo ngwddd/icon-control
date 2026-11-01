@@ -1,4 +1,4 @@
-"""Batch execution and UI-Automation helpers for the Shell desktop MCP patch.
+"""Batch execution and UI-Automation helpers for the DSH desktop MCP patch.
 
 Two problems this solves:
   1. Every model-side tool call costs a full round trip (seconds). run_batch()
@@ -40,6 +40,53 @@ def _control_from(hwnd: int | None):
         return None
 
 
+# ── P0-2：进程排除表 ──────────────────────────────────────────────────
+def _proc_name(hwnd) -> str:
+    """窗口所属进程名（不含路径）。拿不到返回空串。"""
+    try:
+        import ctypes
+        import ctypes.wintypes as wt
+
+        pid = wt.DWORD(0)
+        ctypes.windll.user32.GetWindowThreadProcessId(int(hwnd), ctypes.byref(pid))
+        if not pid.value:
+            return ""
+        h = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid.value)
+        if not h:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(600)
+            size = wt.DWORD(600)
+            if ctypes.windll.kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                return buf.value.rsplit("\\", 1)[-1]
+        finally:
+            ctypes.windll.kernel32.CloseHandle(h)
+    except Exception:                                   # noqa: BLE001
+        return ""
+    return ""
+
+
+def excluded_processes() -> set:
+    """DSH_UI_EXCLUDE_PROCESSES=Code.exe,Cursor.exe（大小写不敏感）。"""
+    import os
+
+    raw = os.environ.get("DSH_UI_EXCLUDE_PROCESSES", "") or ""
+    return {x.strip().lower() for x in raw.split(",") if x.strip()}
+
+
+def is_excluded(hwnd) -> tuple:
+    """返回 (是否排除, 进程名)。"""
+    name = _proc_name(hwnd).lower()
+    return (bool(name) and name in excluded_processes()), name
+
+
+def _element_id(ctype: str, name: str, pos: tuple) -> str:
+    import hashlib
+
+    raw = f"{ctype}|{name}|{pos[0]},{pos[1]},{pos[2]},{pos[3]}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+
+
 def _walk(ctrl, depth, out, max_nodes, only_named=False):
     if len(out) >= max_nodes:
         return
@@ -55,14 +102,19 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False):
             rect = c.BoundingRectangle
             ctype = c.ControlTypeName
             if not only_named or name:
+                pos = (int(rect.left), int(rect.top),
+                       int(rect.width()), int(rect.height()))
                 out.append(
                     {
                         "type": ctype,
                         "name": name,
-                        "x": int(rect.left),
-                        "y": int(rect.top),
-                        "w": int(rect.width()),
-                        "h": int(rect.height()),
+                        "x": pos[0],
+                        "y": pos[1],
+                        "w": pos[2],
+                        "h": pos[3],
+                        # P0-3：稳定元素 id（类型+名字+几何），后续可按 id 点击，
+                        # 避免同名控件点错（"确定" 在对话框里到处都是）
+                        "element_id": _element_id(ctype, name, pos),
                     }
                 )
         except Exception:
@@ -76,14 +128,21 @@ def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60, only_n
     if not _UIA_OK:
         return {"error": "uiautomation not installed in this venv"}
     t0 = time.perf_counter()
+    skip, proc = is_excluded(hwnd) if hwnd else (False, "")
+    if skip:
+        return {"error": f"进程 {proc} 在排除表里（DSH_UI_EXCLUDE_PROCESSES），跳过 UIA 遍历",
+                "hwnd": hwnd, "excluded": True}
     root = _control_from(hwnd)
     if root is None:
         return {"error": "could not resolve window", "hwnd": hwnd}
+    if not proc:
+        proc = _proc_name(hwnd)
     out: list[dict[str, Any]] = []
     _walk(root, max(0, int(depth)), out, max(1, int(max_nodes)), bool(only_named))
     return {
         "ok": True,
         "hwnd": hwnd,
+        "process": proc,
         "window": (root.Name or "").strip(),
         "count": len(out),
         "nodes": out,
@@ -127,6 +186,21 @@ def ui_find(
     }
 
 
+def find_by_element_id(element_id: str, hwnd: int | None = None,
+                       depth: int = 8, max_nodes: int = 600):
+    """P0-3：按 element_id 找回控件（比名字匹配稳）。"""
+    tree = ui_tree(hwnd=hwnd, depth=depth, max_nodes=max_nodes, only_named=False)
+    if not tree.get("ok"):
+        return None, tree
+    hit = next((n for n in tree.get("nodes", []) if n.get("element_id") == element_id), None)
+    if hit is None:
+        return None, {"error": f"没有 element_id={element_id}", "count": tree.get("count")}
+    hit = dict(hit)
+    hit["cx"] = hit["x"] + hit["w"] // 2
+    hit["cy"] = hit["y"] + hit["h"] // 2
+    return hit, tree
+
+
 def _resolve(hwnd, name, exact, index):
     res = ui_find(name=name, hwnd=hwnd, exact=exact, index=index)
     if not res.get("ok"):
@@ -145,9 +219,16 @@ def ui_click(
     button: str = "left",
     mouse=None,
     settle_ms: int = 250,
+    element_id: str | None = None,
 ) -> dict[str, Any]:
-    """Move the real cursor to a control's centre and click it."""
-    target, res = _resolve(hwnd, name, exact, index)
+    """Move the real cursor to a control's centre and click it.
+
+    P0-3：给了 element_id 就按 id 定位（优先），不再靠名字匹配。
+    """
+    if element_id:
+        target, res = find_by_element_id(str(element_id), hwnd=hwnd)
+    else:
+        target, res = _resolve(hwnd, name, exact, index)
     if target is None:
         return res
     if mouse is None:

@@ -7,9 +7,9 @@
 
 | 事实 | 当前值 |
 |---|---|
-| 版本 | **v1.1.0** |
-| 工具数 | **79**（底座 31 + 本项目补丁 48） |
-| 测试 | **242 项**（仓库）/ 241 项（工具目录），全绿 |
+| 版本 | **v1.2.0** |
+| 工具数 | **89**（底座 31 + 本项目补丁 58，全部按 7 个分区归位） |
+| 测试 | **298 项**，全绿（含 5 项环境相关跳过） |
 | 平台 | Windows 11 · 2560×1440 @150% |
 | 底座 | [computer-mcp](https://github.com/)（MIT，31 工具）+ 本项目补丁层 |
 | 许可证 | MIT |
@@ -37,7 +37,7 @@
 | 抓帧（窗口区域 + 4× 块平均） | 34.6 ms（全屏） | **13.7 ms** → 29.8 fps |
 | 授权状态读取 | OCR 118.6 ms | **桥接 0.1 ms**（约 948×） |
 | 20 步动作的模型往返 | 20 次 | **1 次**（`batch`，协议层 2 ms） |
-| 工具数 / 测试数 | 31 / 0 | **79 / 242** |
+| 工具数 / 测试数 | 31 / 0 | **89 / 298** |
 
 ---
 
@@ -72,7 +72,7 @@
 
 ---
 
-## 功能清单（79 个工具，按组）
+## 功能清单（89 个工具，按 7 个分区）
 
 | 组 | 工具 | 说明 |
 |---|---|---|
@@ -89,7 +89,7 @@
 
 ---
 
-## 四个核心机制
+## 七个核心机制
 
 ### ① 软选择器 `selector.resolve` —— 按语义找控件，找不到才退回坐标
 
@@ -141,6 +141,50 @@ ensure_front(hwnd, probe) 置顶 + WindowFromPoint 落点校验
 click(..., verify, retries) 点前后比一小块画面，没变就重试并放慢
 ```
 
+### ⑤ 控制权交接 `control` —— 用户随时能抢回鼠标
+
+授权是**一次性开关**，但真实使用中用户随时会想"别动了，我来"。
+
+```
+control_status              读当前归属（ai / user / idle）+ 还差几秒恢复
+control_claim               action=claim 申请 / action=release 交还
+物理鼠标一动                 立即夺回（不用点任何按钮）
+Ctrl+Alt+Shift+Backspace    强制夺回
+闲置 10 秒                   自动回到 idle，agent 可再次申请
+```
+
+闸门因此变成两层：**授权 granted → 控制权 owner**。被拒时返回 `control` 字段与剩余秒数，
+模型能自己判断该等还是该问人，而不是干等。
+
+> 有个坑值得记：pynput 的全局监听器**也会看到我们自己注入的事件**。所以注入前后各开 250 ms
+> 静默窗，否则 AI 每点一下就把自己锁死。这条有专门的测试守着。
+
+### ⑥ 训练数据分区 `dataset` —— 用完即入、离线回流
+
+每次工具调用都被路由层的一个 tee 记成一条 episode：
+
+```
+工具 + 参数（脱敏后）+ 结果 + 耗时 + 分区
+  ├─ 成功 → 校准集（坐标/时序）
+  ├─ 失败 ≥3 次同类 → dataset_triage 自动生成回归用例 cases/*.json
+  └─ dataset_explore 随机游走 → 弱语义轨迹（打 explore 标签）
+```
+
+**隐私按最保守来**：抓屏默认关；六类脱敏（身份证/银行卡/手机/邮箱/token/家目录）落盘前完成；
+剪贴板与键盘原文永不采集；raw 保留 90 天、帧 30 天或 8 GB。
+**Z6 单向**：只被 tee 写，不被运行时读——防止"改样本 → 改行为"的隐式耦合。
+
+### ⑦ 统一寻址 `find_element` —— 自绘界面也能定位
+
+UIA 对微信 4.x、Electron、CEF、游戏几乎无效。`find_element(query)` 依次尝试：
+
+```
+UIA 控件名  →  OCR 文字  →  模板匹配
+```
+
+命中即返回，统一成 `{x, y, w, h, cx, cy, source, score}`；单条来源出错只记进 `errors`，
+不影响后面的尝试。定位与点击分离：它只负责"在哪"，点还是交给 `click` / `ui_click`。
+
 ---
 
 ## 版本时间线
@@ -158,6 +202,7 @@ click(..., verify, retries) 点前后比一小块画面，没变就重试并放�
 | v0.9 | **根因修复**：`check_expect(None)` 返回 True 导致"无 expect 的步骤"从不执行 → 假成功 |
 | v1.0 | 指令流 `program`（facts + jsonl）跑通；`send` 四段验证 |
 | v1.1 | 窗口句柄自愈 + 点击丢包重试（`winutil`） |
+| v1.2 | **模块化 + 训练数据分区**：1806 行路由拆成 7 个分区（190 行）+ 控制权交接 + 统一寻址 + 数据闭环（89 工具 / 298 测试） |
 
 完整逐版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -168,13 +213,13 @@ click(..., verify, retries) 点前后比一小块画面，没变就重试并放�
 ```powershell
 # 0) 前置：Python 3.11+，computer-mcp 装进 venv；本项目以"补丁层"工作，不 fork 上游
 
-# 1) 打补丁（把 computer_mcp 扩到 79 个工具）
+# 1) 打补丁（把 computer_mcp 扩到 89 个工具）
 venv\Scripts\python.exe _patched\reapply.py
 
 # 2) 环境体检（6 组检查，5~10 秒）
 venv\Scripts\python.exe doctor.py
 
-# 3) 不变量测试（242 项）
+# 3) 不变量测试（298 项）
 venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
 
 # 4) 真操作冒烟（会动鼠标，需要 GUI 上授权变绿）
@@ -208,8 +253,8 @@ venv\Scripts\python.exe tools\track_nopred_demo.py  # 无 expect 的步骤是否
 ```
 icon-control/
 ├─ README.md                 # 你正在读的这份
-├─ CHANGELOG.md              # 24 个版本，逐条记录（含失败）
-├─ VERSION                   # 1.1.0
+├─ CHANGELOG.md              # 25 个版本，逐条记录（含失败）
+├─ VERSION                   # 1.2.0
 ├─ LICENSE                   # MIT
 ├─ docs/                     # 发展历程长文 + 踩坑清单
 ├─ recipes/                  # 每个验证过的应用一份"配方"（含 measured_coords + 坑）
@@ -230,23 +275,33 @@ icon-control/
 │   ├─ selector_demo.py      # 软选择器 A/B（自开靶子）
 │   ├─ track_nopred_demo.py  # 无 expect 步骤的回归测试
 │   └─ track_oneshot.py      # 列车一次性自测（11 项检查）
-├─ _patched/                 # computer_mcp 补丁层（reapply.py 可重放，27 个文件）
+├─ _patched/                 # computer_mcp 补丁层（含 zones/ 与 dataset/ 两个子包）
 ├─ skill/desktop-operator/   # 随身 skill（SKILL.md + 10 个分册）
-├─ tests/                    # 242 项不变量测试
+├─ tests/                    # 298 项不变量测试
 ├─ templates/                # 模板文件
 └─ plugin/                   # GUI 授权开关
 ```
 
-`computer_mcp` 侧共 30 个模块，核心几个：
+`computer_mcp` 侧共 30+ 个模块，v1.2 起按**七分区**组织：
 
 ```
-train.py 52 KB     列车：帧环 + 看门狗 + 判据
-mcp.py 86 KB       工具注册与分发（79 个）
-macro_ext.py 55 KB 宏引擎
-live.py 29 KB      实时动作
-program.py 10 KB   指令流
-selector.py 11 KB  软选择器
-winutil.py 5 KB    窗口健壮性
+tool_registry.py    工具清单聚合（89 条，含 zone/read_only/aliases）
+tool_spec.py        ToolSpec 数据结构
+mcp.py 190 行       只剩闸门 + 路由 + 数据 tee（原来是 1806 行）
+zones/              按决策阶段分区
+  z0_governance 4   治理：授权、控制权、配置、保留
+  z1_capture    7   采集：截图、录屏、守护、模板抓取
+  z2_sense     25   判据：OCR、模板、数字、HUD、统一寻址、统一等待
+  z3_act       31   动作：鼠标、键盘、窗口、UIA
+  z4_compose    8   编排：脚本、宏、闭环、导航、验证
+  z5_memory     8   资产：宏、模板、基线、字形
+  z6_learning   6   训练数据：采样、查询、提升、导出、分拣、探索
+  dispatch.py       分发链（原 mcp.py 里的 522 行 if/elif）
+  aliases.py        旧名 → 新名（domain_noun_verb）
+dataset/            训练数据分区（采样/脱敏/查询/保留/导出/分拣/探索/导入器）
+conveyor.py 1018 行 列车（原 train.py，改名消除与"训练数据"的撞名）
+macro_ext.py       宏引擎
+live.py            实时动作
 ```
 
 ---
@@ -287,4 +342,9 @@ winutil.py 5 KB    窗口健壮性
 ---
 
 **v1.1.0 的含义**：能力面（看/点/验/停/授权）+ 流程面（配方/宏/列车/指令流）+ 健壮性面（句柄自愈、点击重试）都已就位。
+
+**v1.2.0 的含义**：从"能干活"走到"能长期干活"——结构上把 1806 行的单文件路由拆成 7 个有边界的分区，
+行为上补了两块短板（**用户随时能夺回鼠标**、**自绘界面也能定位**），
+数据上开了训练分区（**每次调用自动沉淀、失败自动变回归用例**）。
+工具 89 个、测试 298 项，`mcp.py` 从 1806 行降到 190 行。
 下一版重点：把"证据链"做成默认行为 —— 每个动作都自带"我怎么证明它生效了"。

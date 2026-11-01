@@ -24,27 +24,7 @@ import sys
 import unittest
 
 HERE = pathlib.Path(__file__).resolve()
-import os as _os
-import pathlib as _pl
-import unittest as _ut
-
-
-def _resolve_project() -> "_pl.Path":
-    """仓库里的测试要找到 desktop-mcp 的开发树（computer_mcp 装在它的 venv 里）。
-
-    优先顺序：环境变量 DSH_DESKTOP_MCP → 本机默认位置 → 仓库自己。
-    找不到安装位置时整组跳过 —— 干净的 checkout 上这是常态，不该报成"测试失败"。
-    """
-    for cand in (_os.environ.get("DSH_DESKTOP_MCP"),
-                 str(_pl.Path.home() / ".dsh" / "tools" / "desktop-mcp")):
-        if cand and (_pl.Path(cand) / "venv").is_dir():
-            return _pl.Path(cand)
-    raise _ut.SkipTest(
-        "找不到 desktop-mcp 的开发树（computer_mcp 的安装位置）；"
-        " 设置 DSH_DESKTOP_MCP 指向它即可运行这些不变量测试。")
-
-
-PROJECT = _resolve_project()
+PROJECT = HERE.parents[1]                     # ...\desktop-mcp
 PKG = PROJECT / "venv" / "Lib" / "site-packages" / "computer_mcp"
 MACROS = PROJECT / "macros"
 
@@ -166,11 +146,23 @@ class TestToolRegistration(unittest.TestCase):
     ]
 
     def setUp(self):
-        self.src = _read(PKG / "mcp.py")
+        # R4 起分发链搬到 zones/dispatch.py，注册断言两处一起看
+        self.src = _read(PKG / "mcp.py") + _read(PKG / "zones" / "dispatch.py")
 
     def test_every_new_tool_registered(self):
-        missing = [t for t in self.NEW_TOOLS if f'name="{t}"' not in self.src]
+        # R3 起定义搬进 zones/*/tools.py，注册表才是事实来源。
+        # 断言改为：必须在 tool_registry 里登记，且定义体确实落在 zones/ 下。
+        from computer_mcp import tool_registry
+
+        missing = [t for t in self.NEW_TOOLS if t not in tool_registry.TOOLS]
         self.assertEqual(missing, [], f"未注册的工具：{missing}")
+
+        zones_src = "\n".join(
+            p.read_text(encoding="utf-8")
+            for p in (PKG / "zones").rglob("tools.py")
+        )
+        not_in_zones = [t for t in self.NEW_TOOLS if f"name={t!r}" not in zones_src]
+        self.assertEqual(not_in_zones, [], f"已登记但定义不在 zones/：{not_in_zones}")
 
     def test_every_new_tool_dispatched(self):
         """每个工具都要么有 `elif name == "x"`，要么在某个 `name in (...)` 元组里。"""
@@ -216,9 +208,9 @@ class TestMacros(unittest.TestCase):
 
     def test_send_macro_uses_enter_not_send_button(self):
         """实测：点「发送」按钮无效，必须用回车。"""
-        spec = self._macros().get("app-01_send.json")
+        spec = self._macros().get("wechat_send.json")
         if not spec:
-            self.skipTest("没有 app-01_send 宏")
+            self.skipTest("没有 wechat_send 宏")
         actions = [s.get("action") for s in spec["steps"]]
         self.assertIn("key", actions, "发送宏应当用 key=enter，而不是点发送按钮")
         keys = [s.get("key") for s in spec["steps"] if s.get("action") == "key"]
@@ -251,7 +243,7 @@ class TestCleanScript(unittest.TestCase):
 
     def test_user_files_are_not_matched(self):
         pats = self.clean.TEMP_PATTERNS + self.clean.TOOL_PATTERNS
-        for name in ("app_facts.md", "app-01_send.json", "报告.docx", "invoice.pdf"):
+        for name in ("app_facts.md", "wechat_send.json", "报告.docx", "invoice.pdf"):
             self.assertFalse(any(re.match(p, name) for p in pats),
                              f"{name} 不应被当成垃圾")
 

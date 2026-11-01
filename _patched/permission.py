@@ -1,4 +1,11 @@
-"""permission.py — 鼠标接管的**硬闸门**（v0.3，颜色+文字双判）
+"""permission.py — 鼠标接管的**硬闸门**（v0.4，颜色+文字双判）
+
+v0.4（2026-11-02）修「前端绿、后台灰」三个根因：
+  ① 负向结果（未授权 / 读不到）原来缓存 45s，期间**连桥都不问** → 改成 NEG_TTL_S（3s）
+  ② OCR 把「已授权」认成「床授权」被当成未授权 → 现在只有明确「未授权」才判灰，
+     含糊一律返回 None，交给桥裁决
+  ③ 桥侧多窗口互相覆盖（A 授权、B 心跳上报 false 盖掉）→ 桥改为按 client 记账、
+     区分 action/hb，见 permission_bridge.py
 
 v0.1 的授权开关只做到"agent 自己愿意先查一下"（`mouse_permission.py` 靠自觉）。
 v0.2 把它下沉到执行点：**任何会动输入的工具，在真正执行之前都会被这里拦一次**，
@@ -35,6 +42,12 @@ CACHE_TTL_S = float(os.environ.get("DSH_MOUSE_TTL", "45"))
 # 桥接状态（客户端插件经本地 HTTP 直报）的有效期：心跳 5s，15s 不更新即过期，
 # 过期后退回 OCR 读屏幕 —— 桥挂了也不会一直"以为已授权"。
 BRIDGE_TTL_S = float(os.environ.get("DSH_MOUSE_BRIDGE_TTL", "15"))
+
+# 负向结果（未授权 / 读不到）的缓存时间。
+# 原来负向结果也走 CACHE_TTL_S（45s）：一次 OCR 失败（窗口被挡、GUI 被切走、
+# 胶囊被 OCR 认错）就会让你在接下来 45 秒里**连桥都不再问**，表现就是
+# 「GUI 上是绿的，后台一直判灰」。现在负向只缓存 3 秒。
+NEG_TTL_S = float(os.environ.get("DSH_MOUSE_NEG_TTL", "3"))
 
 # 会改变用户输入/焦点状态的工具 —— 这些必须先过闸门
 INPUT_TOOLS = frozenset({
@@ -155,14 +168,20 @@ def _read_pill() -> tuple[bool | None, str]:
         if "鼠标" not in text and green is None:
             continue
 
-        # 正面判定必须「绿 + 胶囊文字」同时成立；只有绿色块不算（聊天里也有绿）
-        if green is True and "鼠标" in text and "已授权" in text and "未授权" not in text:
+        # ── 2026-11-02 修 bug：OCR 读不清时**不许判灰** ──────────────────
+        # 旧逻辑：只要文字里出现「鼠标」，而绿色没测到（窗口被遮挡 / 移出固定
+        # 扫描区 / DPI 变了），或文字被 OCR 认成「床授权」，就直接 return False。
+        # 结果是「前端明明是绿的，后台被拦」，而且写进缓存后还会持续 45 秒。
+        # 现在：只有明确读到「未授权」才判灰；其余含糊情况一律返回 None，
+        # 交给 status() 再问一次桥（桥才是权威信号）。
+        if text and ("未授权" in text or "未授" in text):
+            return False, text[:80]
+        # 正面：绿色像素是权威信号，文字只要带「授权」且没有「未授权」即可
+        #（容忍 OCR 把「已」认成别的字，例如实测过的「床授权」）
+        if green is True and "鼠标" in text and "授权" in text and "未授权" not in text:
             return True, text[:80]
-        if text and ("未授权" in text or "床授权" in text or "未授" in text):
-            return False, text[:80]
         if text and "鼠标" in text:
-            # 有胶囊文字但没检测到绿色 → 视为灰色（未授权）
-            return False, text[:80]
+            return None, text[:80]          # 含糊 → 不表态
     return None, ""
 
 
@@ -214,6 +233,20 @@ def _ensure_bridge() -> None:
         pass
 
 
+def _ttl_for(cached: dict) -> float:
+    """这条缓存能信多久。
+
+    · 桥来的 → BRIDGE_TTL_S（15s，桥每 5s 心跳一次）
+    · 屏幕来的正向 → CACHE_TTL_S（45s，绿色胶囊不会莫名其妙变灰）
+    · 屏幕来的负向 / 读不到 → NEG_TTL_S（3s，给桥一个马上翻案的机会）
+    """
+    if cached.get("source") == "bridge":
+        return BRIDGE_TTL_S
+    if cached.get("granted"):
+        return CACHE_TTL_S
+    return NEG_TTL_S
+
+
 def status(force: bool = False) -> dict:
     """当前授权状态。命中缓存时几乎是零成本。"""
     now = time.time()
@@ -224,11 +257,11 @@ def status(force: bool = False) -> dict:
     cached = _read_state_file()
     if cached and not force:
         age = now - float(cached.get("checked_at_ts") or 0)
-        ttl = BRIDGE_TTL_S if cached.get("source") == "bridge" else CACHE_TTL_S
-        if 0 <= age < ttl:
+        if 0 <= age < _ttl_for(cached):
             return {"granted": bool(cached["granted"]), "source": cached.get("source", "cache"),
                     "age_s": round(age, 1), "checked_at": cached.get("checked_at"),
-                    "screen_text": cached.get("screen_text", "")}
+                    "screen_text": cached.get("screen_text", ""),
+                    "effective_from": cached.get("effective_from", "")}
 
     _ensure_bridge()
     time.sleep(0.7)
@@ -244,11 +277,12 @@ def status(force: bool = False) -> dict:
 
     granted, snippet = _read_pill()
     source = "screen" if granted is not None else "unknown"
+    stamp = time.time()                      # 修：原来用的是函数开头那个 now（早于 0.7s 等待）
     payload = {
         "granted": bool(granted),
         "source": source,
         "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "checked_at_ts": now,
+        "checked_at_ts": stamp,
         "screen_text": snippet,
     }
     _write_state_file(payload)
@@ -262,6 +296,22 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         return None
     st = status()
     if st["granted"]:
+        # P0-1：授权之外还看「控制权是否在用户手上」（用户随时可以夺回）
+        try:
+            from computer_mcp import control as _ctl
+            why = _ctl.blocking_reason()
+            if why:
+                return {
+                    "success": False,
+                    "blocked": True,
+                    "error": f"控制权在用户手上：{why}",
+                    "tool": name,
+                    "permission": st,
+                    "control": _ctl.status(),
+                    "hint": "用户动了鼠标/键盘即视为接管；闲置到期或 control_claim 后恢复。",
+                }
+        except Exception:                               # noqa: BLE001
+            pass
         return None
     return {
         "success": False,

@@ -1,3 +1,100 @@
+## [1.2.0] - 2026-11-02
+
+**模块化 + 训练数据分区 + 控制权交接：从"能干活"到"能长期干活"。**
+
+工具 79 → **89**，测试 242 → **298**，`mcp.py` 1806 → **190 行**。
+
+---
+
+### 一、结构：1806 行单文件路由 → 7 个分区
+
+原来 `mcp.py` 一个文件里塞着 79 个工具定义（L40–1165）+ 80 个 if/elif 分发分支（L1165–1806）。
+任何工具改动都要碰它，是天然的冲突热点。
+
+现在按**决策阶段**切成 7 区（不是按 API 切）：
+
+| 区 | 职责 | 工具 |
+|---|---|---|
+| Z0 治理 | 授权、控制权、配置、保留 | 4 |
+| Z1 采集 | 截图、录屏、守护、模板抓取 | 7 |
+| Z2 判据 | OCR、模板、数字、HUD、布局、世界状态、统一寻址、统一等待 | 25 |
+| Z3 动作 | 鼠标、键盘、窗口、UIA | 31 |
+| Z4 编排 | 脚本、宏、闭环、导航、验证 | 8 |
+| Z5 资产 | 宏、模板、基线、字形 | 8 |
+| Z6 训练数据 | 采样、查询、提升、导出、分拣、探索 | 6 |
+
+新增：`tool_registry.py`（聚合 + 白黑名单）、`tool_spec.py`、`zones/*/tools.py`、
+`zones/dispatch.py`（原 522 行分发链原样搬出）、`zones/aliases.py`（旧名→新名）。
+
+**依赖单向**：Z0 ← 全部入口；Z1→Z2→Z3→Z4；Z5 只被读；**Z6 只被 tee 写，不被运行时读**。
+
+### 二、训练数据分区（新）
+
+每次工具调用被路由层的一个 tee 记成一条 episode（工具 + 脱敏参数 + 结果 + 耗时 + 分区）。
+
+```
+dataset/
+  schema / writer / redact / query / retention / export / promote / triage / explore
+  importers/   base + local_fixture + hf_grounding（外部数据转换框架）
+```
+
+- `dataset_status` / `dataset_query` / `dataset_promote` / `dataset_export` / `dataset_triage` / `dataset_explore`
+- 失败样本同类 ≥3 次 → `dataset_triage` 自动生成 `cases/*.json` 回归用例（按签名去重）
+- `dataset_explore` 随机游走采集**弱语义轨迹**（只调只读工具，样本打 `explore` 标签）
+- **隐私**：抓屏默认关；六类脱敏（身份证/银行卡/手机/邮箱/token/家目录）落盘前完成；
+  剪贴板与键盘原文**永不采集**；raw 保留 90 天、帧 30 天或 8 GB
+- 刻意**不提供**"删除全部"工具，清理由保留策略负责
+
+### 三、控制权交接（新 `control.py`）
+
+授权是"允不允许"，控制权是"现在谁在用"——后者原来完全缺失。
+
+- 物理鼠标一动 → 立即夺回；闲置 10 秒 → 自动回到 idle
+- `Ctrl+Alt+Shift+Backspace` 强制夺回
+- 闸门两层化：授权通过后再看控制权；被拒时返回 `control` 字段与剩余恢复秒
+- 注入前后各 250 ms 静默窗——否则 pynput 会看到自己注入的事件，AI 每点一下把自己锁死
+
+### 四、自绘界面寻址（新 `find_element`）
+
+UIA 对微信 4.x / Electron / CEF / 游戏几乎无效。`find_element(query)` 依次尝试：
+
+```
+UIA 控件名 → OCR 文字 → 模板匹配
+```
+
+命中即返回，统一成 `{x,y,w,h,cx,cy,source,score}`；单条来源出错只记 `errors`，不中断。
+定位与点击分离。
+
+### 五、其它
+
+- `wait_for(kind=change|text|template|element|focused)` 统一等待入口（**委托**已有实现，不重写轮询）
+- `ui_tree` 每个节点新增稳定 `element_id`；`ui_click` 支持按 id 点
+- `DSH_UI_EXCLUDE_PROCESSES`：绕开卡死的 UIA 提供者（VS Code / Cursor 这类 Electron 应用）
+- `DSH_TOOLS_ALLOW` / `DSH_TOOLS_DENY`：按场景裁剪模型可见的工具
+- 截图后端 `dxcam → mss` 自动探测 + 回退；`capture_config` 报告当前 `backend`
+- `anchor_mem` 坐标分层：窗口尺寸未变用**绝对坐标**（误差 0），变了才退回 corner/比例
+- `train.py` → `conveyor.py`（消除与"训练数据"的撞名），`train.py` 保留为兼容层
+
+### 六、修掉的 bug
+
+| bug | 现象 | 根因 |
+|---|---|---|
+| 权限状态「前端绿、后台灰」 | 界面已授权，工具仍被拦 | ① 桥单槽状态被多窗口心跳互相覆盖；② 负向结果缓存 45s，期间不问桥；③ OCR 把「已授权」认成「床授权」直接判灰 |
+| `asyncio.run` 在事件循环里静默失败 | 探索器 `ok=true` 但 `recorded=0` | 被 `call_tool` 在已运行的 loop 里调用 → 改独立线程 + 自己的 loop |
+| `threading.local` 不跨线程 | 探索样本拿不到 `explore` 标签 | 标签作用域开在主线程 → 移到子线程内 |
+| PowerShell 写入 UTF-8 BOM | `ast.parse` 报 `U+FEFF` | `Set-Content -Encoding UTF8` 会带 BOM |
+
+### 七、验证
+
+```
+298 项测试全绿（5 项环境相关跳过）
+控制权   claim → ai；物理输入 → user/takeover；闲置到期 → idle
+静默窗   注入期间事件不算接管（test_quiet_window_ignores_our_own_events）
+wait_for 五种 kind 全测：change 命中、其余正确超时
+anchor   learn→locate source=absolute，坐标与期望完全一致
+explore  3 步 → 记录 3 条、失败 0，labels=['explore','weak-semantic']
+```
+
 ## [1.1.0] - 2026-10-27
 
 **通用健壮性：窗口句柄自愈 + 点击丢包重试（不针对任何具体应用）。**

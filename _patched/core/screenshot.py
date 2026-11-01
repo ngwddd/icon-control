@@ -1,4 +1,4 @@
-"""Screenshot capture functionality (patched for Shell: smaller, faster, diff-aware).
+"""Screenshot capture functionality (patched for DSH: smaller, faster, diff-aware).
 
 Upstream behaviour: full-resolution PNG, ~128 ms and ~960 KB per call, and no way
 to tell whether anything actually changed.
@@ -41,6 +41,56 @@ _last_change_ts = 0.0
 _change_count = 0
 
 
+# ── P1-6：后端探测（dxcam 快，装不上就退回 mss）──────────────────────
+_DXCAM = {"tried": False, "cam": None}
+_DXCAM_DOWN = False
+
+
+def backend() -> str:
+    """当前实际使用的截图后端。"""
+    return "dxcam" if _dxcam_cam() else "mss"
+
+
+def _dxcam_cam():
+    if _DXCAM["tried"]:
+        return _DXCAM["cam"]
+    _DXCAM["tried"] = True
+    try:
+        import dxcam  # type: ignore
+
+        cam = dxcam.create(output_color="RGB")
+        _DXCAM["cam"] = cam
+    except Exception:                                   # noqa: BLE001
+        _DXCAM["cam"] = None
+    return _DXCAM["cam"]
+
+
+def _grab_dxcam(region):
+    """dxcam 抓一帧；失败返回 None（调用方回退 mss）。"""
+    global _DXCAM_DOWN
+    if _DXCAM_DOWN:
+        return None
+    cam = _dxcam_cam()
+    if not cam:
+        return None
+    try:
+        import numpy as np
+
+        if region:
+            frame = cam.grab(region=(int(region["x"]), int(region["y"]),
+                                     int(region["x"]) + int(region["w"]),
+                                     int(region["y"]) + int(region["h"])))
+        else:
+            frame = cam.grab()
+        if frame is None:
+            return None
+        img = Image.fromarray(np.asarray(frame, dtype="uint8"), "RGB")
+        return img, img.width, img.height
+    except Exception:                                   # noqa: BLE001
+        _DXCAM_DOWN = True                              # 本进程内不再尝试
+        return None
+
+
 def get_capture_config() -> dict[str, Any]:
     return dict(_CONFIG)
 
@@ -81,6 +131,20 @@ def _sct():
 
 
 def _grab(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
+    fast = _grab_dxcam(region)
+    if fast is not None:
+        return fast
+    return _grab_mss(region)
+
+
+def _grab_mss(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
+    fast = _grab_dxcam(region)
+    if fast is not None:
+        return fast
+    return _grab_mss(region)
+
+
+def _grab_mss(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
     sct = _sct()
     shot = sct.grab(_monitor(region, sct))
     img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
