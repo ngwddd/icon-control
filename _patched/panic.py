@@ -90,11 +90,13 @@ class PanicSwitch:
             if len(self._press_times) >= 2 and not self._event.is_set():
                 self._event.set()
                 self.triggered_at = now
+                from computer_mcp import input_guard
+                input_guard.release_all()  # Release before any disk or IPC operation.
                 from computer_mcp import security
                 try:
                     self.triggered_at_wall = security.latch_stop()
                     self.durable_saved = True
-                except OSError:
+                except Exception:
                     self.triggered_at_wall = time.time()
                     self.durable_saved = False
                 from computer_mcp import control

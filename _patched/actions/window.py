@@ -115,7 +115,7 @@ if IS_WINDOWS:
             import time
             placement = win32gui.GetWindowPlacement(hwnd)
             if placement[1] == win32con.SW_SHOWMAXIMIZED:
-                _execution.checkpoint('move_window')
+                _execution.checkpoint('move_window', hwnd=hwnd)
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                 _execution.sleep(0.05)
         except Exception:
@@ -175,11 +175,11 @@ if IS_WINDOWS:
             
             placement = win32gui.GetWindowPlacement(hwnd)
             if placement[1] == win32con.SW_SHOWMAXIMIZED:
-                _execution.checkpoint('move_window')
+                _execution.checkpoint('move_window', hwnd=hwnd)
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                 _execution.sleep(0.05)
             
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.SetWindowPos(
                 hwnd, 0, L, T, W, H,
                 win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW
@@ -205,7 +205,7 @@ if IS_WINDOWS:
             corrW = max(1, int(round(corrW)))
             corrH = max(1, int(round(corrH)))
             
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.SetWindowPos(
                 hwnd, 0, corrL, corrT, corrW, corrH,
                 win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW
@@ -217,14 +217,14 @@ if IS_WINDOWS:
                 import time
                 placement = win32gui.GetWindowPlacement(hwnd)
                 if placement[1] == win32con.SW_SHOWMAXIMIZED:
-                    _execution.checkpoint('move_window')
+                    _execution.checkpoint('move_window', hwnd=hwnd)
                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                     _execution.sleep(0.05)
                 
                 L, T, R, B = target_ltrb
                 W = max(1, R - L)
                 H = max(1, B - T)
-                _execution.checkpoint('move_window')
+                _execution.checkpoint('move_window', hwnd=hwnd)
                 win32gui.SetWindowPos(
                     hwnd, 0, L, T, W, H,
                     win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE
@@ -267,9 +267,11 @@ if IS_WINDOWS:
                 return {"error": "Either 'hwnd' or 'title' parameter is required"}
         
         try:
-            _execution.checkpoint('move_window')
+            from computer_mcp.capabilities import require_target
+            require_target(hwnd=hwnd)
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.SetForegroundWindow(hwnd)
             
             window_data = _get_window_data(hwnd)
@@ -295,7 +297,7 @@ if IS_WINDOWS:
                 width = rect[2] - rect[0]
                 height = rect[3] - rect[1]
             
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.SetWindowPos(hwnd, 0, x, y, width, height, flags)
             
             window_data = _get_window_data(hwnd)
@@ -320,7 +322,7 @@ if IS_WINDOWS:
             y = rect[1]
             
             flags = win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.SetWindowPos(hwnd, 0, x, y, width, height, flags)
             
             window_data = _get_window_data(hwnd)
@@ -337,7 +339,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
             window_data = _get_window_data(hwnd)
             return {"success": True, "action": "minimize_window", "window": window_data}
@@ -353,7 +355,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
             window_data = _get_window_data(hwnd)
             return {"success": True, "action": "maximize_window", "window": window_data}
@@ -369,7 +371,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             window_data = _get_window_data(hwnd)
             return {"success": True, "action": "restore_window", "window": window_data}
@@ -387,7 +389,7 @@ if IS_WINDOWS:
         try:
             hwnd_insert_after = win32con.HWND_TOPMOST if topmost else win32con.HWND_NOTOPMOST
             flags = win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.SetWindowPos(hwnd, hwnd_insert_after, 0, 0, 0, 0, flags)
             
             window_data = _get_window_data(hwnd)
@@ -417,7 +419,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
-            _execution.checkpoint('move_window')
+            _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
             return {"success": True, "action": "close_window", "hwnd": hwnd}
         except Exception as e:

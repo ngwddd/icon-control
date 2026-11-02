@@ -105,7 +105,7 @@ def note_physical(reason: str = "physical input") -> None:
 
 def claim(reason: str = "agent") -> dict:
     from computer_mcp import permission, panic
-    if not permission.status().get('granted'):
+    if permission.check_tool('control_claim') is not None:
         return dict(status(), ok=False, error='User authorization required')
     if panic.default().triggered or not panic.default().ready:
         return dict(status(), ok=False, error='Emergency listener unavailable or stopped')

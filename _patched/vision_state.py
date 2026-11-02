@@ -107,6 +107,8 @@ def _gray(region: dict[str, int] | None = None, hwnd: int | None = None) -> np.n
         import mss
         with mss.mss() as sct:
             box = region or {"x": 0, "y": 0, "w": 1920, "h": 1080}
+            from computer_mcp.permission import require
+            require('screenshot')
             shot = sct.grab({"left": box["x"], "top": box["y"],
                              "width": box["w"], "height": box["h"]})
         img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")

@@ -48,8 +48,8 @@ class TestAppKit(unittest.TestCase):
 
     def test_launch_uses_explorer_shell(self) -> None:
         src = _read("appkit.py")
-        self.assertIn("explorer.exe", src,
-                      "launch 必须走 Explorer shell —— 直接 CreateProcess 会让部分应用静默秒退")
+        self.assertIn('os.startfile(',src,'Launch must use Windows ShellExecute')
+        self.assertIn('require_launch(',src,'Launch requires exact native approval')
 
     def test_exit_documents_tray_residue(self) -> None:
         src = _read("appkit.py")

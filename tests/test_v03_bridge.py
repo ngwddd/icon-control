@@ -145,17 +145,19 @@ class TestClientReportsToBridge(unittest.TestCase):
     def test_has_bridge_url_and_heartbeat(self) -> None:
         src = self._client_src()
         self.assertIn("const BRIDGE", src)
-        self.assertIn("HEARTBEAT_MS", src)
+        self.assertIn("setInterval", src)
         self.assertNotIn("/beacon", src, "长期凭据不得通过信标 URL 发送")
         self.assertIn("127.0.0.1:__BRIDGE_PORT__", src)
-        self.assertRegex(src, r"method:\s*'POST'")
-        self.assertIn("'Authorization': 'Bearer '", src)
+        self.assertRegex(src, r"method:\s*'GET'")
+        self.assertNotIn('Authorization', src)
+        self.assertNotIn('__BRIDGE_TOKEN__', src)
         self.assertIn("mode: 'cors'", src)
 
     def test_reports_on_mount_and_click(self) -> None:
         src = self._client_src()
-        self.assertGreaterEqual(src.count("pushToBridge("), 4,
-                                "应在插件级心跳、组件挂载、点击三处都上报")
+        self.assertIn('/status',src)
+        self.assertNotIn("method: 'POST'",src,'The renderer cannot mutate authority')
+        self.assertIn('icon-control://permissions',src)
 
 
 class TestCliUsesGate(unittest.TestCase):

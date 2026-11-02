@@ -4,6 +4,8 @@ from computer_mcp import snapshots as S, ui_ext as U, execution as E
 
 class SnapshotTests(unittest.TestCase):
     def setUp(self):
+        target=patch('computer_mcp.capabilities.check_target',return_value=None)
+        target.start();self.addCleanup(target.stop)
         S._snapshots.clear()
         self.identity=(11,21,123.0,'Fixture',(0,0,300,200),144)
         self.window=patch.object(S,'window_identity',return_value=self.identity);self.ident=self.window.start()

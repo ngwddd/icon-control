@@ -1,0 +1,43 @@
+"""Runtime identities are assigned by transport, never by tool arguments."""
+from __future__ import annotations
+from contextlib import contextmanager
+from contextvars import ContextVar
+import json
+import os
+import secrets
+import time
+import psutil
+from computer_mcp import security
+
+_stdio_id = secrets.token_hex(24)
+_context = ContextVar('icon_agent_session', default=None)
+
+def current():
+    return _context.get() or _stdio_id
+
+@contextmanager
+def bind(identity):
+    token = _context.set(identity)
+    try: yield
+    finally: _context.reset(token)
+
+def register(label=None):
+    process = psutil.Process(os.getpid())
+    record = dict(id=current(), pid=process.pid, created=process.create_time(),
+                  label=(label or 'MCP process '+str(process.pid))[:120], checked_at=time.time())
+    record['signature'] = security.signature(record, security.load_token())
+    folder = security.data_home()/'state'/'sessions'
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder/(current()+'.json')
+    path.write_text(json.dumps(record), encoding='utf-8')
+    return record
+
+def active():
+    for path in (security.data_home()/'state'/'sessions').glob('*.json'):
+        try:
+            record = json.loads(path.read_text(encoding='utf-8'))
+            if (security.authentic(record) and
+                    psutil.Process(record['pid']).create_time() == record['created']):
+                yield record
+        except (OSError, ValueError, KeyError, psutil.Error):
+            continue

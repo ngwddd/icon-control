@@ -97,7 +97,8 @@ class TestGateRespectsControl(unittest.TestCase):
 
     @NEED
     def test_blocked_when_user_owns(self):
-        P.status = lambda force=False: {"granted": True, "source": "bridge",
+        from authority_fixture import approval
+        P.status = lambda force=False: {"granted": True, 'authorization':approval(), "source": "bridge",
                                         "age_s": 0.0, "checked_at": "", "screen_text": ""}
         C.claim("test")
         time.sleep(0.3)
@@ -110,7 +111,8 @@ class TestGateRespectsControl(unittest.TestCase):
 
     @NEED
     def test_allowed_when_ai_owns(self):
-        P.status = lambda force=False: {"granted": True, "source": "bridge",
+        from authority_fixture import approval
+        P.status = lambda force=False: {"granted": True, 'authorization':approval(), "source": "bridge",
                                         "age_s": 0.0, "checked_at": "", "screen_text": ""}
         C.claim("test")
         self.assertIsNone(P.check_tool("click", {"x": 1, "y": 2}))

@@ -11,7 +11,7 @@ from computer_mcp.tool_spec import ToolSpec
 SPECS: list[ToolSpec] = [
     ToolSpec(
         name='diff_baseline',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Compare a region against its stored baseline. Returns diff (mean abs difference 0-255) and changed = diff >= threshold.',
         read_only=True,
@@ -19,7 +19,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='find_text',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='OCR the screen (or a region) and find a string, tolerating OCR mistakes: whitespace between CJK glyphs is ignored and a single mis-read character still matches. Returns centre coordinates.',
         read_only=True,
@@ -27,7 +27,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='frame_diff',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Compare two buffered frames by index in an optional region: mean abs diff and changed flag.',
         read_only=True,
@@ -43,7 +43,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='get_window_info',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Get detailed information about a window',
         read_only=True,
@@ -51,7 +51,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='hud',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Auto-locate HUD text rows by color (cyan/yellow/...) and return their screen boxes. Survives window resize/move; optional per-color rows list. Feed the boxes to read_digits or probe.',
         read_only=True,
@@ -59,7 +59,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='list_virtual_desktops',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='List all virtual desktops with their IDs and names',
         read_only=True,
@@ -67,7 +67,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='list_windows',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='List all visible windows with their handles, titles, processes, and bounds',
         read_only=True,
@@ -75,7 +75,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='match_template',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. No OCR, no UIA - works on games, Electron and CEF windows.',
         read_only=True,
@@ -83,7 +83,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='ocr_read',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Read text off the screen with the Windows OCR engine and return the recognised lines with boxes. Text only - much cheaper than sending an image when all you need is what the UI says. Pass a region to scan just one window.',
         read_only=True,
@@ -91,7 +91,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='probe',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='One pixel primitive on the cached frame (1-3 ms): prompt (bright text present), bar (colored bar fill), openness (view open), color (blob), digits (number).',
         read_only=True,
@@ -99,7 +99,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='read_digits',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Read a digit string from a region of the cached frame with 5x7 template matching (1-3 ms). Works on pixel fonts that defeat OCR.',
         read_only=True,
@@ -107,7 +107,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='sample_stable',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Sample a region several times and report whether it is stable (all hashes equal). Use it before trusting a state reading: this is how you avoid judging a UI while an animation is still running.',
         read_only=True,
@@ -115,7 +115,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='screen_layout',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Generic layout detection for ANY window (no app-specific constants): content box (letterbox-aware), HUD text rows, lattice panels (minimaps/radars/boards) via periodicity, and progress bars with fill ratio. Returns pixel boxes plus normalized rel coords.',
         read_only=True,
@@ -123,7 +123,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='screen_state',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Cheap screen check WITHOUT returning an image (~40 ms). Reports whether the screen changed since the last capture, by how much (mean abs diff %), and a short hash. Use this to poll instead of screenshot.',
         read_only=True,
@@ -131,7 +131,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='sense',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Return what changed since a frame index plus requested primitives (prompt/bar/openness/color/digits). Reads the daemon buffer; typically under 10 ms and transfers no image.',
         read_only=True,
@@ -139,7 +139,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='ui_find',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Find controls by accessible name (substring, or exact=true). Returns candidates with their centre coordinates. Cheaper and more reliable than reading a screenshot.',
         read_only=True,
@@ -147,7 +147,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='ui_tree',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Compact UI-Automation control tree for a window (or the focused one). Text only, no screenshot: control type + name + rect. Use it to find what is clickable before clicking.',
         read_only=True,
@@ -155,7 +155,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='wait_baseline_change',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Block until a region deviates from its baseline by more than threshold, or until timeout.',
         read_only=True,
@@ -163,7 +163,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='wait_for_change',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Block until the screen changes above the threshold, or until timeout. Cheaper than the model polling screen_state in a loop.',
         read_only=True,
@@ -171,7 +171,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='wait_template',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Block until a template appears (appear=true) or disappears (appear=false), or until timeout. Event driven and cheaper than polling match_template from the model.',
         read_only=True,
@@ -179,7 +179,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='watch',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='Block until a condition holds (event-driven wait, replaces sleep+re-screenshot polling). Kinds: prompt/bar/openness/color/digits/diff.',
         read_only=True,
@@ -187,7 +187,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='world_state',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='M1: compress the screen into structured state — minimap grid (auto-calibrated pitch), player cell, objective markers, prompt flag, battery. Returns a short text page you can read instead of an image. Needs map_region=[x,y,w,h] in screen coords.',
         read_only=True,
@@ -196,7 +196,7 @@ SPECS: list[ToolSpec] = [
 
     ToolSpec(
         name='wait_for',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='统一等待入口：等屏幕变化/文字出现/模板出现/元素出现/窗口聚焦（单次调用内轮询）',
         read_only=True,
@@ -216,7 +216,7 @@ SPECS: list[ToolSpec] = [
 
     ToolSpec(
         name='find_element',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z2',
         description='统一寻址：依次尝试 UIA / OCR / 模板，返回元素的屏幕坐标（自绘界面也能用）',
         read_only=True,

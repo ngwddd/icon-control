@@ -391,6 +391,8 @@ class FrameWheel(threading.Thread):
                        "height": max(8, int(h))}
                 while not self._stop_evt.is_set():
                     t0 = time.perf_counter()
+                    from computer_mcp.permission import require
+                    require('screenshot')
                     shot = sct.grab(box)
                     arr = np.asarray(shot)                    # BGRA
                     gray = gray_from_bgra(arr)
@@ -516,6 +518,8 @@ def _probe_region(rect: tuple[int, int, int, int],
         box = {"left": int(x + rx * w), "top": int(y + ry * h),
                "width": max(8, int(rw * w)), "height": max(8, int(rh * h))}
         with mss.mss() as sct:
+            from computer_mcp.permission import require
+            require('screenshot')
             s = sct.grab(box)
         a = np.asarray(Image.frombytes("RGB", s.size, s.bgra, "raw", "BGRX"),
                        dtype=np.float32)
@@ -647,6 +651,8 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             def _grab(rel):
                 bx, by, bw, bh = _box(rel)
                 with mss.mss() as sct:
+                    from computer_mcp.permission import require
+                    require('screenshot')
                     s2 = sct.grab({"left": bx, "top": by, "width": bw, "height": bh})
                 return np.asarray(Image.frombytes("RGB", s2.size, s2.bgra, "raw", "BGRX"),
                                   dtype=np.int16)

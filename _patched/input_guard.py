@@ -37,11 +37,11 @@ def _watch_held():
         if not pending:
             continue
         try:
-            state=permission.status()
-            revision=(state.get('session'),state.get('revision'))
             generation=control.status()['generation']
             stopped=bool(panic._DEFAULT and panic._DEFAULT.triggered)
             for controller in pending:
+                state=permission.status(agent_session_id=controller.agent_session)
+                revision=(state.get('session'),state.get('revision'))
                 if not state.get('granted') or stopped or controller.authority!=(revision,generation):
                     controller.cleanup()
         except Exception:
@@ -51,6 +51,8 @@ def _retain(controller):
     global _monitor_thread
     from computer_mcp import permission, control
     state=permission.status()
+    from computer_mcp import agent_session
+    controller.agent_session = agent_session.current()
     controller.authority=((state.get('session'),state.get('revision')),control.status()['generation'])
     with _lock:
         _held_controllers.add(controller)
@@ -109,15 +111,22 @@ class MouseController(_Held):
     @position.setter
     def position(self, point):
         check('mouse_move')
+        from computer_mcp.capabilities import require_target
+        require_target(point=point)
         self.raw.position = point
 
     def move(self, dx, dy):
         check('mouse_move')
+        from computer_mcp.capabilities import require_target
+        x,y = self.raw.position
+        require_target(point=(x+dx,y+dy))
         self.raw.move(dx, dy)
 
     def press(self, button):
         with self._mutex:
             check('button_down')
+            from computer_mcp.capabilities import require_target
+            require_target(point=self.raw.position)
             self.held.add(button)
             _retain(self)
             self.raw.press(button)
@@ -130,6 +139,8 @@ class MouseController(_Held):
 
     def scroll(self, dx, dy):
         check('mouse_move')
+        from computer_mcp.capabilities import require_target
+        require_target(point=self.raw.position)
         self.raw.scroll(dx, dy)
 
 class KeyboardController(_Held):
@@ -140,6 +151,8 @@ class KeyboardController(_Held):
     def press(self, key):
         with self._mutex:
             check('key_down')
+            from computer_mcp.capabilities import require_target
+            require_target(hwnd=getattr(self.raw,'hwnd',None))
             self.held.add(key)
             _retain(self)
             self.raw.press(key)

@@ -135,6 +135,8 @@ if IS_WINDOWS:
             controller = _window_controller(hwnd)
             for char in text:
                 check('type')
+                from computer_mcp.capabilities import require_target
+                require_target(hwnd=hwnd)
                 if char == '\n':
                     controller.press(Key.enter)
                     controller.release(Key.enter)
@@ -143,6 +145,7 @@ if IS_WINDOWS:
                     units = char.encode('utf-16-le')
                     for offset in range(0, len(units), 2):
                         check('type')
+                        require_target(hwnd=hwnd)
                         win32gui.PostMessage(hwnd, win32con.WM_CHAR,
                                              int.from_bytes(units[offset:offset+2], 'little'), 0)
             return {"success": True, "action": "type", "text": text, "hwnd": hwnd}

@@ -160,6 +160,8 @@ def _grab_screen(region: dict[str, int] | None):
             }
         else:
             mon = sct.monitors[1]
+        from computer_mcp.permission import require
+        require('screenshot')
         shot = sct.grab(mon)
         img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
         return img, int(mon["left"]), int(mon["top"])

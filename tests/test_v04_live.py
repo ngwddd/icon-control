@@ -272,7 +272,13 @@ class TestMicroInterpreter(AuthorityCase,unittest.TestCase):
         self.assertEqual(box2, (0, 0, 20, 10))
 
 
-class TestDaemonBasics(unittest.TestCase):
+class TestDaemonBasics(AuthorityCase, unittest.TestCase):
+    fixture_authorized=True
+    fixture_monitoring=True
+    def setUp(self):
+        super().setUp()
+        from screen_fixture import synthetic_screen
+        synthetic_screen(self)
     @NEED
     def test_start_status_stop(self) -> None:
         d = CaptureDaemon(scale=0.25, active_fps=8, idle_fps=2, max_frames=20)
@@ -293,8 +299,7 @@ class TestDaemonBasics(unittest.TestCase):
             d.start()
             time.sleep(0.5)
             f = d.latest()
-            if f is None:
-                self.skipTest("本机抓不到屏幕")
+            self.assertIsNotNone(f,'Synthetic capture must produce a frame')
             summ = f.summary()
             for k in ("idx", "ts", "diff", "bbox", "active_window"):
                 self.assertIn(k, summ)
@@ -315,6 +320,11 @@ class TestDaemonBasics(unittest.TestCase):
 class TestLiveSurface(AuthorityCase, unittest.TestCase):
     fixture_authorized = True
     fixture_monitoring = True
+    def setUp(self):
+        super().setUp()
+        from screen_fixture import synthetic_screen
+        synthetic_screen(self)
+        self.addCleanup(live._daemon().stop)
     @NEED
     def test_capture_tool_contract(self) -> None:
         r = live.tool_capture({"action": "status"})
@@ -332,8 +342,7 @@ class TestLiveSurface(AuthorityCase, unittest.TestCase):
     @NEED
     def test_snapshot_writes_file(self) -> None:
         r = live.tool_snapshot({"region": [0, 0, 120, 80], "scale": 1.0})
-        if not r.get("success"):
-            self.skipTest("本机抓不到屏幕")
+        self.assertTrue(r.get('success'),r)
         self.assertTrue(os.path.isfile(r["path"]))
         self.assertEqual(r["size"], [120, 80])
         os.remove(r["path"])

@@ -24,7 +24,8 @@ class ToolSpec:
 
     def __post_init__(self):
         supported={'observe','input','compose','window','process','control','capture',
-                   'clipboard_write','file_write','file_delete','config_write'}
+                   'clipboard_write','file_write','file_delete','config_write',
+                   'screen_read','text_entry','window_close'}
         if not isinstance(self.effects,tuple) or not self.effects or not set(self.effects)<=supported:
             raise ValueError(f'{self.name}: explicit nonempty supported effects are required')
 

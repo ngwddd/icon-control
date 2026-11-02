@@ -163,6 +163,8 @@ def _sct():
 def _grab(x: int, y: int, w: int, h: int):
     from PIL import Image
 
+    from computer_mcp.permission import require
+    require('screenshot')
     shot = _sct().grab({"left": int(x), "top": int(y), "width": int(w), "height": int(h)})
     return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX").convert("L")
 
@@ -246,7 +248,7 @@ def locate(app: str, key: str, hwnd: int) -> dict[str, Any] | None:
     same_size = bool(lg) and lg.get("w") == g["w"] and lg.get("h") == g["h"]
     if same_size and last:
         # 窗口尺寸没变 → 绝对坐标最准（不经过比例换算，误差为 0）
-        x, y = last[0], last[1]
+        x, y = last[0]+g['x']-lg.get('x',g['x']), last[1]+g['y']-lg.get('y',g['y'])
         x, y = int(x), int(y)
         return {"x": x, "y": y, "source": "absolute", "patch": rec.get("patch"),
                 "prototypes": rec.get("prototypes") or ([rec["patch"]] if rec.get("patch") else []),

@@ -31,7 +31,12 @@ class TestBackend(unittest.TestCase):
 
     @NEED
     def test_grab_falls_back_to_mss(self):
-        img, w, h = cap._grab(None)
+        from unittest.mock import patch
+        from PIL import Image
+        from authority_fixture import AuthorityFixture
+        with AuthorityFixture(True), patch.object(cap,'_grab_dxcam',return_value=None), \
+             patch.object(cap,'_grab_mss',return_value=(Image.new('RGB',(20,10)),20,10)):
+            img, w, h = cap._grab(None)
         self.assertGreater(w, 0)
         self.assertGreater(h, 0)
         self.assertEqual(img.size, (w, h))
@@ -76,27 +81,17 @@ class TestWaitFor(unittest.TestCase):
 class TestAnchorAbsolute(unittest.TestCase):
     @NEED
     def test_same_size_uses_absolute(self):
-        import asyncio
-        from computer_mcp import mcp as M
-
-        def text(r):
-            return "\n".join(getattr(c, "text", "") for c in r if getattr(c, "text", None))
-
-        wins = asyncio.run(M.call_tool("list_windows", {}))
-        import json
-
-        data = json.loads(text(wins))
-        ws = data.get("windows") or []
-        if not ws:
-            self.skipTest("没有窗口")
-        hwnd = ws[0]["hwnd"]
-        g = A._geometry(hwnd)
-        px, py = g["x"] + max(3, g["w"] // 3), g["y"] + max(3, g["h"] // 3)
-        try:
-            A.learn("__unit__", "k", hwnd, px, py)
-            loc = A.locate("__unit__", "k", hwnd)
-        finally:
-            A.forget("__unit__")
+        from unittest.mock import patch
+        import tempfile
+        from pathlib import Path
+        geometry = {'x':10,'y':20,'w':600,'h':400}
+        hwnd,px,py=11,210,150
+        with tempfile.TemporaryDirectory() as folder, patch.object(A,'STORE',str(Path(folder)/'memory.json')), \
+             patch.object(A,'_geometry',return_value=geometry), \
+             patch.object(A,'layout_signature',return_value={'aspect':1.5}), \
+             patch.object(A,'_patch_hash',return_value='abcd'):
+            A.learn('__unit__','k',hwnd,px,py)
+            loc=A.locate('__unit__','k',hwnd)
         self.assertEqual(loc.get("source"), "absolute")
         self.assertLessEqual(abs(loc["x"] - px), 1)
         self.assertLessEqual(abs(loc["y"] - py), 1)

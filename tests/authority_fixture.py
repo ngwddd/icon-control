@@ -5,6 +5,17 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch,Mock
 from computer_mcp import security,permission,permission_bridge as bridge,control,panic
+from computer_mcp import agent_session,capabilities
+
+def approval():
+    return dict(agent_session=agent_session.current(),scopes=sorted(capabilities.SCOPES),applications=[])
+
+def grant_wrapper(original):
+    def write(granted, *args, **kwargs):
+        if granted and kwargs.get('event') == 'action':
+            kwargs.setdefault('authorization',approval())
+        return original(granted,*args,**kwargs)
+    return write
 
 class AuthorityFixture:
     def __init__(self,authorized=False,monitoring=False):
@@ -14,7 +25,11 @@ class AuthorityFixture:
         self.old_control=copy.deepcopy(control.STATE)
         self.patches=[patch.dict(os.environ,ICON_CONTROL_HOME=self.temp.name),
             patch.multiple(bridge,STATE_DIR=str(state),STATE_PATH=str(state/'mouse-permission.json'),
-                LOG_PATH=str(state/'bridge.log'),CLIENTS={},_last_action=None,_revision=0),
+                LOG_PATH=str(state/'bridge.log'),CLIENTS={},_last_action=None,_revision=0,_authorization={}),
+            patch.object(bridge,'write_state',side_effect=grant_wrapper(bridge.write_state)),
+            patch.object(capabilities,'check_target',return_value=None),
+            patch('computer_mcp.consent_ipc.live_valid',return_value=True),
+            patch('computer_mcp.consent_ipc.request',return_value={'granted':False}),
             patch.object(permission,'STATE_PATH',str(state/'mouse-permission.json'))]
         if self.monitoring:
             self.patches += [patch.object(control,'ensure_watcher',return_value=True),
@@ -30,6 +45,7 @@ class AuthorityFixture:
 
 def signed_state(payload):
     payload=dict(payload)
+    if payload.get('granted'): payload.setdefault('authorization',approval())
     payload['signature']=security.signature(payload,security.load_token())
     return payload
 

@@ -221,7 +221,7 @@ def _ttl_for(cached: dict) -> float:
     return NEG_TTL_S
 
 
-def status(force: bool = False) -> dict:
+def status(force: bool = False, agent_session_id=None) -> dict:
     """Only a fresh, signed bridge action is authority; OCR is diagnostic only."""
     now = time.time()
     cached = _read_state_file()
@@ -231,6 +231,15 @@ def status(force: bool = False) -> dict:
                 cached.get('source') == 'bridge' and security.authentic(cached) and
                 0 <= age < BRIDGE_TTL_S and now < float(cached.get('expires_at',now+BRIDGE_TTL_S)) and
                 not security.stopped(cached)):
+            from computer_mcp import capabilities, agent_session
+            auth = cached.get('authorization', {})
+            if cached.get('granted') and (not capabilities.validate(auth) or
+                    auth['agent_session'] != (agent_session_id or agent_session.current())):
+                return dict(granted=False, source='bridge', reason='Approval belongs to another Agent session')
+            if cached.get('granted'):
+                from computer_mcp.consent_ipc import live_valid
+                if not live_valid(cached, agent_session_id or agent_session.current()):
+                    return dict(granted=False, source='unknown', reason='Live permission authority unavailable or revoked')
             return dict(cached, age_s=round(age, 3))
     except (ValueError, TypeError, KeyError):
         pass
@@ -248,6 +257,12 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         return None
     st = status()
     if st["granted"]:
+        from computer_mcp import capabilities
+        why = capabilities.check_scope(st, spec, arguments)
+        if why:
+            return dict(success=False, blocked=True, tool=name, error=why)
+        if set(spec.effects_for(arguments)) <= {'screen_read','observe'}:
+            return None
         emergency = panic.default()
         if (emergency.triggered and isinstance(emergency.triggered_at_wall,(int,float)) and
                 (st.get('authorized_at',0) > emergency.triggered_at_wall or

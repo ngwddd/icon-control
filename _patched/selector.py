@@ -226,6 +226,8 @@ def resolve(rect: tuple[int, int, int, int], spec: dict,
                 # → 先用 numpy 读字节再 imdecode
                 tpl = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
                 with mss.mss() as sct:
+                    from computer_mcp.permission import require
+                    require('screenshot')
                     shot = sct.grab({"left": rect[0], "top": rect[1],
                                      "width": rect[2], "height": rect[3]})
                 img = np.asarray(Image.frombytes("RGB", shot.size, shot.bgra,

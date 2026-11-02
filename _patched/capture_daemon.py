@@ -133,6 +133,9 @@ class CaptureDaemon:
 
     # ---------- 生命周期 ----------
     def start(self) -> dict:
+        from computer_mcp import permission, agent_session
+        permission.require('screenshot')
+        self.owner_session = agent_session.current()
         if self._thread and self._thread.is_alive():
             return {"ok": True, "already": True, **self.status()}
         # 启动时顺手清一次（自己目录 + %TEMP% 里的旧脚本），失败不影响采集
@@ -142,7 +145,9 @@ class CaptureDaemon:
         except Exception as exc:
             self.housekeeping = {"error": f"{type(exc).__name__}: {exc}"}
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="capture-daemon", daemon=True)
+        from contextvars import copy_context
+        context = copy_context()
+        self._thread = threading.Thread(target=lambda: context.run(self._loop), name="capture-daemon", daemon=True)
         self._thread.start()
         time.sleep(0.35)                      # 等第一帧
         return {"ok": True, "already": False, **self.status()}
@@ -173,10 +178,14 @@ class CaptureDaemon:
 
     # ---------- 读取 ----------
     def latest(self) -> Frame | None:
+        from computer_mcp.permission import require
+        require('screenshot')
         with self._lock:
             return self._frames[-1] if self._frames else None
 
     def get(self, idx: int) -> Frame | None:
+        from computer_mcp.permission import require
+        require('screenshot')
         with self._lock:
             for f in reversed(self._frames):
                 if f.idx == idx:
@@ -184,6 +193,8 @@ class CaptureDaemon:
         return None
 
     def frames_between(self, since_idx: int) -> list[Frame]:
+        from computer_mcp.permission import require
+        require('screenshot')
         with self._lock:
             return [f for f in self._frames if f.idx > since_idx]
 
@@ -214,7 +225,17 @@ class CaptureDaemon:
                 self.origin = (int(mon.get('left', 0)), int(mon.get('top', 0)))
                 while not self._stop.is_set():
                     t0 = time.time()
+                    frame = None
                     try:
+                        from computer_mcp import permission
+                        permission.require('screenshot')
+                        title = _active_window_title()
+                        if _is_private(title):
+                            with self._lock: self._frames.clear()
+                            self.frames_skipped += 1
+                            prev = None
+                            self._stop.wait(.2)
+                            continue
                         shot = sct.grab(mon)
                         arr = np.asarray(shot, dtype=np.uint8)[:, :, :3]
                         if self.scale != 1.0:
@@ -248,10 +269,15 @@ class CaptureDaemon:
                         prev = arr
                     except Exception as exc:
                         self.last_error = f"{type(exc).__name__}: {exc}"
-                        time.sleep(0.2)
+                        from computer_mcp.permission import PermissionDenied
+                        if isinstance(exc, PermissionDenied):
+                            with self._lock: self._frames.clear()
+                            self._stop.set()
+                            break
+                        self._stop.wait(.2)
 
                     # 自适应帧率：刚变过就快，静止就慢
-                    changed = frame.diff > DIFF_THRESHOLD
+                    changed = frame is not None and frame.diff > DIFF_THRESHOLD
                     target = self.active_fps if changed else self.idle_fps
                     dt = time.time() - t0
                     time.sleep(max(0.0, 1.0 / target - dt))

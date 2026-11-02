@@ -67,6 +67,8 @@ def _dxcam_cam():
 
 def _grab_dxcam(region):
     """dxcam 抓一帧；失败返回 None（调用方回退 mss）。"""
+    from computer_mcp.permission import require
+    require('screenshot')
     global _DXCAM_DOWN
     if _DXCAM_DOWN:
         return None
@@ -131,6 +133,8 @@ def _sct():
 
 
 def _grab(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
+    from computer_mcp.permission import require
+    require('screenshot')
     fast = _grab_dxcam(region)
     if fast is not None:
         return fast
@@ -138,6 +142,8 @@ def _grab(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
 
 
 def _grab_mss(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
+    from computer_mcp.permission import require
+    require('screenshot')
     sct = _sct()
     shot = sct.grab(_monitor(region, sct))
     img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")

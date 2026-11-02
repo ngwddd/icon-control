@@ -58,6 +58,9 @@ def authentic(payload: dict) -> bool:
 
 def latch_stop():
     """Persist a physical emergency stop across worker process restarts."""
+    from computer_mcp import consent_ipc
+    try: consent_ipc.request('emergency')
+    except Exception: pass
     path=data_home()/'state'/'emergency-stop.json'
     path.parent.mkdir(parents=True,exist_ok=True)
     payload={'stopped_at':time.time()}

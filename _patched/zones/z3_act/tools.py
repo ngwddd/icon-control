@@ -51,7 +51,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='close_window',
-        effects=('window','process',),
+        effects=('window','window_close',),
         zone='Z3',
         description='Close a window',
         read_only=False,
@@ -83,7 +83,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='key_down',
-        effects=('input',),
+        effects=('input','text_entry',),
         zone='Z3',
         description='Press and hold a key',
         read_only=False,
@@ -91,7 +91,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='key_press',
-        effects=('input',),
+        effects=('input','text_entry',),
         zone='Z3',
         description='Press and release a key (convenience method)',
         read_only=False,
@@ -227,7 +227,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='type',
-        effects=('input','clipboard_write',),
+        effects=('input','text_entry','clipboard_write',),
         zone='Z3',
         description='Type the specified text',
         read_only=False,
@@ -251,7 +251,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='ui_set_text',
-        effects=('input',),
+        effects=('input','text_entry',),
         zone='Z3',
         description="Set a text field's value through its Value pattern, without typing keystrokes.",
         read_only=False,

@@ -306,6 +306,8 @@ def ui_invoke(name: str, hwnd: int | None = None, exact: bool = False, index: in
     try:
         from computer_mcp.execution import check
         check('ui_invoke')
+        from computer_mcp.capabilities import require_target
+        require_target(hwnd=hwnd)
         ctrl.GetInvokePattern().Invoke()
     except Exception as exc:
         return {"error": f"invoke failed: {exc}", "hint": "use ui_click instead"}
@@ -335,11 +337,14 @@ def ui_set_text(name: str, text: str, hwnd: int | None = None, exact: bool = Fal
                 try:
                     from computer_mcp.execution import check
                     check('ui_set_text')
+                    from computer_mcp.capabilities import require_target
+                    require_target(hwnd=hwnd)
                     c.GetValuePattern().SetValue(text)
                     return {"ok": True, "set": text, "target": target["name"]}
                 except Exception:
                     try:
                         check('ui_set_text')
+                        require_target(hwnd=hwnd)
                         c.GetValuePattern().SetValue(text)
                     except Exception as exc:
                         return {"error": f"value pattern failed: {exc}", "hint": "focus it and use type"}

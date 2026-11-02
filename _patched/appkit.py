@@ -92,69 +92,26 @@ def shortcut_target(lnk: str) -> tuple[str, str]:
 # 2. 启动（必须走 Explorer shell）
 # --------------------------------------------------------------------------- #
 def launch(target: str, extra_args: str | None = None, settle_ms: int = 0) -> dict:
-    """启动一个应用。
+    """Launch only the exact executable and fixed arguments approved by a human."""
+    from computer_mcp import capabilities
+    from pathlib import Path
+    record = capabilities.require_launch(target, extra_args or '')
+    before = {p.pid for p in psutil.process_iter() if _same_executable(p,record['exe'])}
+    _execution.checkpoint('run_script')
+    os.startfile(record['exe'], arguments=record['arguments'], cwd=str(Path(record['exe']).parent))
+    deadline = time.monotonic() + max(5, min(30, settle_ms/1000))
+    while time.monotonic() < deadline:
+        _execution.checkpoint('run_script')
+        found = [p for p in psutil.process_iter() if p.pid not in before and _same_executable(p,record['exe'])]
+        if found:
+            return dict(ok=True, method='shell-execute', pid=found[0].pid, verified='new-exact-executable-process')
+        _execution.sleep(.1)
+    return dict(ok=False, state='executed_unverified',
+                error='Launch requested, but no new matching process was verified')
 
-    target 可以是：应用名（"VideoClient"）、.lnk 路径、或 .exe 路径。
-
-    **一律经 explorer.exe 启动**（等同用户双击）：直接 CreateProcess 时，
-    部分 Electron 应用（如VideoClient）会静默秒退，退出码 0 且没有任何提示。
-    """
-    path = target
-    how = "path"
-    if not os.path.exists(path):
-        lnk = find_shortcut(target)
-        if lnk:
-            path, how = lnk, "shortcut"
-        else:
-            return {"ok": False, "error": f"找不到应用或快捷方式: {target!r}"}
-
-    exe, workdir = ("", "")
-    if path.lower().endswith(".lnk"):
-        exe, workdir = shortcut_target(path)
-    elif path.lower().endswith(".exe"):
-        exe, workdir = path, os.path.dirname(path)
-
-    # 启动前校验：目标 exe 的名字至少要跟请求里的一段对得上，否则拒绝启动
-    req = (target or "").strip().lower()
-    if exe and req and not path.lower().endswith(".exe"):
-        exe_base = os.path.splitext(os.path.basename(exe))[0].lower()
-        # 取请求里长度>=2 的片段（拉丁/数字部分）做交集判断
-        latin = "".join(ch for ch in req if ch.isascii() and ch.isalnum())
-        ok_names = (
-            exe_base in req or req in exe_base
-            or (latin and (latin in exe_base or exe_base in latin))
-            or exe_base == req
-        )
-        if not ok_names:
-            return {"ok": False,
-                    "error": f"快捷方式『{os.path.basename(path)}』指向 {exe}，与请求 {target!r} 不符，已中止",
-                    "target": path, "exe": exe,
-                    "hint": "换个更精确的名字，或直接传 .lnk / .exe 的完整路径"}
-
-    # Explorer shell 启动
-    try:
-        if extra_args:
-            _execution.checkpoint('run_script')
-            subprocess.run(["explorer.exe", path, extra_args], check=False)
-        else:
-            _execution.checkpoint('run_script')
-            subprocess.run(["explorer.exe", path], check=False)
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": f"explorer 启动失败: {exc}", "target": path}
-
-    if settle_ms:
-        _execution.sleep(settle_ms / 1000.0)
-
-    return {
-        "ok": True,
-        "target": path,
-        "how": how,
-        "exe": exe,
-        "workdir": workdir,
-        "method": "explorer-shell",
-        "note": "直接 Popen 会被某些 Electron 应用静默忽略，所以固定走 shell",
-    }
-
+def _same_executable(process, executable):
+    try: return os.path.normcase(process.exe()) == os.path.normcase(executable)
+    except psutil.Error: return False
 
 # --------------------------------------------------------------------------- #
 # 3. 找窗口 / 等窗口
@@ -335,6 +292,9 @@ def exit_app(process: str | None = None,
             return
         if pid in pids and win32gui.IsWindowVisible(hwnd):
             try:
+                from computer_mcp import capabilities, permission
+                permission.require('close_window')
+                capabilities.require_target(hwnd=hwnd)
                 _execution.checkpoint('run_script')
                 win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
                 windows_closed += 1
@@ -356,6 +316,10 @@ def exit_app(process: str | None = None,
     if force:
         for pid in remaining:
             try:
+                from computer_mcp import capabilities, permission
+                permission.require('close_window')
+                if capabilities.process_record(pid) not in permission.status().get('authorization',{}).get('applications',[]):
+                    continue
                 _execution.checkpoint('run_script')
                 psutil.Process(pid).terminate()
                 terminated += 1
@@ -418,6 +382,9 @@ def close_windows(process: str | None = None,
     closed = 0
     for t in targets:
         try:
+            from computer_mcp import capabilities, permission
+            permission.require('close_window')
+            capabilities.require_target(hwnd=t['hwnd'])
             _execution.checkpoint('run_script')
             win32gui.PostMessage(t["hwnd"], win32con.WM_CLOSE, 0, 0)
             closed += 1

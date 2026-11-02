@@ -47,10 +47,11 @@ class TestPermissionGate(AuthorityCase,unittest.TestCase):
         # 输入类必须在集合里
         for t in ("click", "type", "key_press", "batch", "macro_run", "ui_click", "click_template"):
             self.assertIn(t, perm.INPUT_TOOLS, f"{t} 未被纳入闸门")
-        # 只读类必须放行
-        for t in ("screenshot", "screen_state", "ocr_read", "match_template", "vision_list"):
-            self.assertIsNone(perm.check_tool(t), f"只读工具 {t} 不应被拦")
+        # Screen observations need independent privacy approval.
+        for t in ("screenshot", "screen_state", "ocr_read", "match_template"):
+            self.assertIsNotNone(perm.check_tool(t), f"屏幕读取 {t} 必须有独立授权")
             self.assertNotIn(t, perm.INPUT_TOOLS)
+        self.assertIsNone(perm.check_tool('vision_list'))
 
     @NEED
     def test_fail_closed_when_unknown(self) -> None:

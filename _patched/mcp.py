@@ -52,6 +52,8 @@ async def list_tools() -> list[Tool]:
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextContent, ImageContent]]:
     """Handle tool calls (R5: wrapped by dataset tee)."""
+    from computer_mcp import agent_session
+    agent_session.register()
     return await dataset.tee(
         name,
         arguments,

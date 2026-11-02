@@ -52,9 +52,12 @@ def operation(tool, arguments=None):
         if locked:
             _operation_lock.release()
 
-def checkpoint(default_tool):
+def checkpoint(default_tool, hwnd=None):
     """Recheck a composed operation immediately before a native side effect."""
     check(default_tool, None)
+    if hwnd is not None:
+        from computer_mcp.capabilities import require_target
+        require_target(hwnd=hwnd)
 
 def boundary(tool):
     def decorate(function):
@@ -66,6 +69,12 @@ def boundary(tool):
             policy_args = next((bound.arguments[n] for n in ('args','arguments','kwargs')
                                 if isinstance(bound.arguments.get(n),dict)), None)
             with operation(tool, policy_args):
+                from computer_mcp import capabilities, tool_registry
+                spec = tool_registry.get(tool)
+                if (spec and set(spec.effects_for(policy_args)) & {'window','window_close'}) or tool in ('ui_invoke','ui_set_text'):
+                    hwnd = bound.arguments.get('hwnd') or bound.arguments.get('window_id')
+                    if not hwnd and policy_args: hwnd = policy_args.get('hwnd')
+                    capabilities.require_target(hwnd=hwnd)
                 from computer_mcp.input_guard import MouseController, KeyboardController
                 for name, value in list(bound.arguments.items()):
                     if value is None:
@@ -109,13 +118,15 @@ def install_boundaries():
         'actions.keyboard': {n: ('type' if n.startswith('type_text') else n.replace('_to_window','')) for n in
                              ('type_text','key_down','key_up','key_press','type_text_to_window',
                               'key_down_to_window','key_up_to_window','key_press_to_window')},
-        'actions.window': {n: n for n in ('switch_to_window','move_window','resize_window','minimize_window',
+        'actions.window': {n: n for n in ('list_windows','get_window_info','screenshot_window','list_virtual_desktops','switch_to_window','move_window','resize_window','minimize_window',
                              'maximize_window','restore_window','set_window_topmost','close_window',
                              'snap_window_left','snap_window_right','snap_window_top','snap_window_bottom',
                              'switch_virtual_desktop','move_window_to_virtual_desktop')},
         'actions.config': {'set_config':'set_config'},
         'ui_ext': {'ui_tree':'ui_tree','ui_find':'ui_find','ui_click':'ui_click','ui_invoke':'ui_invoke','ui_set_text':'ui_set_text','run_batch':'batch'},
-        'ocr_ext': {'click_text':'click_text'},
+        'ocr_ext': {'ocr_read':'ocr_read','find_text':'find_text','click_text':'click_text'},
+        'actions.focused_app': {'get_focused_app':'list_windows'},
+        'actions.accessibility_tree': {'get_accessibility_tree':'ui_tree'},
         'macro_ext': {'run_macro':'macro_run','macro_save':'macro_save','_force_foreground':'switch_to_window'},
         'vision_state': {n:n for n in ('click_template','hover_probe','capture_template','set_baseline')},
         'appkit': {'launch':'run_script','activate':'switch_to_window','exit_app':'close_window','close_windows':'close_window'},

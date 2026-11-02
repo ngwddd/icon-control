@@ -38,7 +38,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='screenshot',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z1',
         description='Capture a screenshot of the display and return it as base64-encoded PNG',
         read_only=True,
@@ -46,7 +46,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='screenshot_window',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z1',
         description='Capture screenshot of a specific window',
         read_only=True,
@@ -54,7 +54,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='snapshot',
-        effects=('file_write','file_delete',),
+        effects=('screen_read','file_write','file_delete',),
         zone='Z1',
         description='Grab one image on demand and return its file path (no base64). Use only when pixels must be inspected.',
         read_only=True,

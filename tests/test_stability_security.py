@@ -13,6 +13,7 @@ from http.server import ThreadingHTTPServer
 from computer_mcp import permission as P, permission_bridge as B, security as S
 from computer_mcp import control as C, execution as E, tool_registry as R, panic
 from computer_mcp.input_guard import KeyboardController
+from authority_fixture import grant_wrapper
 
 class SecurityTests(unittest.TestCase):
     def setUp(self):
@@ -24,6 +25,14 @@ class SecurityTests(unittest.TestCase):
         self.paths = patch.multiple(B, STATE_DIR=str(state), STATE_PATH=str(state/'permission.json'),
                                     LOG_PATH=str(state/'bridge.log'), CLIENTS={}, _last_action=None, _revision=0)
         self.paths.start()
+        self.grants = patch.object(B,'write_state',side_effect=grant_wrapper(B.write_state))
+        self.grants.start(); self.addCleanup(self.grants.stop)
+        self.targets = patch('computer_mcp.capabilities.check_target',return_value=None)
+        self.targets.start(); self.addCleanup(self.targets.stop)
+        self.live = patch('computer_mcp.consent_ipc.live_valid',return_value=True)
+        self.live.start(); self.addCleanup(self.live.stop)
+        self.ipc = patch('computer_mcp.consent_ipc.request',return_value={'granted':False})
+        self.ipc.start();self.addCleanup(self.ipc.stop)
         self.pstate = patch.object(P, 'STATE_PATH', B.STATE_PATH); self.pstate.start()
         self.token = S.provision_token()
         C.STATE.update(owner='idle', since=time.time(), last_user=0, last_inject=0, takeovers=0, reason='')
@@ -76,6 +85,8 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(self.request(self.token,path='/beacon')[0],403)
 
     def test_trusted_cors_preflight_does_not_grant(self):
+        config=S.data_home()/'state'/'bridge-config.json'
+        config.write_text(json.dumps({'origins':['http://localhost:4000']}))
         self.assertEqual(self.request(origin='http://localhost:4000',method='OPTIONS',
             extra_headers={'Access-Control-Request-Headers':'authorization, content-type'})[0],204)
         self.assertFalse(P.status()['granted'])

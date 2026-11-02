@@ -74,6 +74,7 @@ CLIENTS: dict[str, dict] = {}
 _last_action = None
 _revision = 0
 _session = secrets.token_hex(16)
+_authorization = {}
 _client_sequences = {}
 _last_event_stamp = int(time.time()*1000)
 CLIENT_HB_TTL_S = 30.0          # 心跳多久内算这个窗口还活着
@@ -111,9 +112,14 @@ def effective_state() -> tuple:
 
 
 def write_state(granted: bool, origin: str = "bridge",
-                client: str = None, event: str = None, sequence=None, action_at=None) -> dict:
+                client: str = None, event: str = None, sequence=None, action_at=None,
+                authorization=None) -> dict:
     with _lock:
-        global _last_event_stamp
+        global _last_event_stamp, _authorization
+        if event == 'action' and granted:
+            from computer_mcp.capabilities import validate
+            if not validate(authorization):
+                raise ValueError('A session-bound human capability approval is required')
         if event == 'action' and sequence is not None:
             if (type(sequence) is not int or sequence <= _client_sequences.get(client,0) or
                 type(action_at) is not int or action_at < _last_event_stamp or
@@ -126,6 +132,7 @@ def write_state(granted: bool, origin: str = "bridge",
             _last_event_stamp = max(_last_event_stamp, int(time.time()*1000))
             if type(sequence) is int:
                 _client_sequences[client] = max(sequence, _client_sequences.get(client, 0))
+        if event == 'action': _authorization = authorization if granted else {}
         _write_state_locked(granted, origin, client, event)
         return read_state()
 
@@ -144,6 +151,7 @@ def _write_state_locked(granted, origin, client, event):
         'session': _session,
         "revision": _revision,
         "granted": bool(eff),
+        'authorization': _authorization if eff else {},
         'authorized_at': _last_action[0] if _last_action else 0,
         'expires_at': min(now+15,(_last_action[0]+CLIENT_ACTION_TTL_S) if _last_action else now),
         "source": "bridge",
@@ -216,11 +224,10 @@ class Handler(BaseHTTPRequestHandler):
     def _trusted_source(value):
         try:
             parsed = urlparse(value)
-            return not parsed.username and not parsed.password and (
-                parsed.scheme == 'dsh-app' or
-                (parsed.scheme == 'file' and parsed.hostname in (None, '', 'localhost')) or
-                (parsed.scheme == 'http' and parsed.hostname in ('127.0.0.1', 'localhost')))
-        except ValueError:
+            config = security.data_home()/'state'/'bridge-config.json'
+            origins = json.loads(config.read_text(encoding='utf-8')).get('origins', []) if config.exists() else []
+            return not parsed.username and not parsed.password and value in origins
+        except (ValueError, OSError, TypeError):
             return False
 
     def _authorized(self, parsed) -> bool:
@@ -248,6 +255,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/status' and not parsed.query and self._source_ok():
+            state = read_state()
+            now = time.time()
+            body = json.dumps({'granted':bool(state.get('granted') and
+                now < state.get('expires_at',0) and not security.stopped(state)),
+                'revision':state.get('revision',0),'session':state.get('session','')}).encode()
+            self.send_response(200);self._cors()
+            self.send_header('Content-Type','application/json')
+            self.send_header('Cache-Control','no-store')
+            self.send_header('Content-Length',str(len(body)));self.end_headers()
+            self.wfile.write(body);return
         if not self._authorized(parsed):
             self.send_response(403)
             self._cors()
@@ -310,25 +328,9 @@ class Handler(BaseHTTPRequestHandler):
         if type(data.get('granted')) is not bool:
             self.send_error(400, 'granted must be a boolean')
             return
-        granted = data['granted']
-        client = str(data.get("client") or "default")
-        event = str(data.get("event") or "hb")
-        if event not in ("action", "hb"):
-            event = "hb"
-        if event=='action' and (type(data.get('sequence')) is not int or type(data.get('action_at')) is not int):
-            self.send_error(400,'Action sequence and time required');return
-        state = write_state(granted, origin=str(data.get("origin") or "client"),
-                    client=client, event=event,sequence=data.get('sequence') if event=='action' else None,
-                    action_at=data.get('action_at') if event=='action' else None)
-        log(f"POST granted={granted}")
-        body = json.dumps(state).encode('utf-8')
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(body)))
-        self.send_header('Cache-Control', 'no-store')
-        self._cors()
-        self.end_headers()
-        self.wfile.write(body)
+        # Renderer and HTTP callers cannot establish or renew authority.
+        # The native, peer-verified pipe owns every authorization mutation.
+        self.send_error(410, 'Permission mutations moved to native IPC'); return
 
 
 def main() -> int:
@@ -339,8 +341,22 @@ def main() -> int:
     if not load_token():
         print('Bridge token missing; run the installer first.', file=sys.stderr)
         return 2
+    # A per-home OS lock protects state even when two ports are requested.
+    import msvcrt
+    singleton = open(os.path.join(STATE_DIR,'bridge.lock'), 'a+b')
+    singleton.seek(0);singleton.write(b'0');singleton.flush();singleton.seek(0)
+    try: msvcrt.locking(singleton.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        singleton.close(); print('Permission authority already running',file=sys.stderr); return 2
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     write_state(False, origin='startup', client='startup', event='action')
+    from computer_mcp import consent_ipc
+    ready = threading.Event()
+    thread = threading.Thread(target=consent_ipc.serve, args=(ready,), daemon=True, name='icon-consent-ipc')
+    thread.start()
+    if not ready.wait(5):
+        srv.server_close();singleton.close()
+        print('Native permission IPC failed; authority remains revoked',file=sys.stderr); return 2
     log(f"bridge listening on 127.0.0.1:{args.port}")
     print(f"permission bridge: http://127.0.0.1:{args.port}{ALLOW_ANY_PATH}", flush=True)
     try:
@@ -349,6 +365,8 @@ def main() -> int:
         pass
     finally:
         srv.server_close()
+        write_state(False, origin='shutdown', client='shutdown', event='action')
+        singleton.close()
     return 0
 
 

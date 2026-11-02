@@ -91,6 +91,9 @@ class ComputerState:
     def get_state(self, include_screenshot: bool = True) -> dict[str, Any]:
         """Get current state based on configuration."""
         state = {}
+        from computer_mcp import permission
+        if permission.check_tool('screenshot') is not None:
+            return state
         
         # Screenshot (default true)
         if include_screenshot and self.config["observe_screen"]:

@@ -167,6 +167,8 @@ def tool_snapshot(args: dict) -> dict:
         if region:
             x, y, w, h = perceive.norm_box(region)
             box = {"left": x, "top": y, "width": w, "height": h}
+        from computer_mcp.permission import require
+        require('screenshot')
         shot = sct.grab(box)
     im = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
     if scale != 1.0:
@@ -297,12 +299,16 @@ def tool_read_digits(args: dict) -> dict:
 
 def _grab_region(region) -> "np.ndarray | None":
     """按屏幕坐标抓一块**全分辨率**图（读数字/读小字时用，daemon 的缩放帧不够）。"""
+    from computer_mcp.permission import require
+    require('screenshot')
     import mss
     import numpy as np
     from PIL import Image
     x, y, w, h = perceive.norm_box(region)
     try:
         with mss.mss() as sct:
+            from computer_mcp.permission import require
+            require('screenshot')
             shot = sct.grab({"left": int(x), "top": int(y), "width": int(w), "height": int(h)})
         return np.asarray(Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX"),
                           dtype=np.uint8)
