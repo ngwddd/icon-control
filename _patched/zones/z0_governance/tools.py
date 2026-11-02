@@ -11,6 +11,9 @@ from computer_mcp.tool_spec import ToolSpec
 SPECS: list[ToolSpec] = [
     ToolSpec(
         name='housekeeping',
+        effects=('file_delete',),
+        read_actions=('status',),
+        action_default='status',
         zone='Z0',
         description="Show disk usage of this tool's own folders (_draw / recordings / vision baselines) and optionally prune them. Assets (macros, recipes, templates, _patched) are never touched. action=status (default, read-only) or sweep (with dry_run).",
         read_only=True,
@@ -18,6 +21,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='set_config',
+        effects=('config_write',),
         zone='Z0',
         description='Configure observation options',
         read_only=False,
@@ -26,6 +30,7 @@ SPECS: list[ToolSpec] = [
 
     ToolSpec(
         name='control_status',
+        effects=('observe',),
         zone='Z0',
         description='读桌面控制权归属：ai / user / idle，以及用户接管后还有多久恢复',
         read_only=True,
@@ -33,6 +38,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='control_claim',
+        effects=('control',),
         zone='Z0',
         description='申请或交还桌面控制权（action=claim|release）。用户物理动鼠标会自动夺回',
         read_only=False,

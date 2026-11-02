@@ -176,6 +176,11 @@ class Runner:
                 self.trace.append({"t": round(time.time() - self._t0, 3), "op": "turn", "px": px})
             elif kind == "move":
                 self.ms.position = (int(op.get("x", 0)), int(op.get("y", 0)))
+            elif kind == "scroll":
+                dx,dy=int(op.get('dx',0)),int(op.get('dy',0))
+                if abs(dx)>100 or abs(dy)>100:
+                    raise ValueError('Scroll is limited to 100 wheel steps per instruction')
+                self.ms.scroll(dx,dy)
             elif kind == "click":
                 self.ms.click(getattr(__import__("pynput.mouse", fromlist=["Button"]).Button,
                                       op.get("button", "left")))

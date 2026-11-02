@@ -7,9 +7,8 @@
 现在改成：GUI 上的插件把状态**直接上报**过来，Host 读状态文件即可。
 
 端点（只听 127.0.0.1）
-    GET  /beacon?k=<token>&granted=1|0   图片信标（最不容易被 CSP/CORS 拦）
-    POST /state?k=<token>                body: {"granted": true|false}
-    GET  /state?k=<token>                读当前状态（调试用）
+    POST /state   Authorization: Bearer <token>，body: {"granted": true|false}
+    GET  /state   同样需要认证请求头
 
 安全
     · 只 bind 127.0.0.1，不对外
@@ -30,12 +29,14 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 from computer_mcp import security
 
-DEFAULT_PORT = 18765
+DEFAULT_PORT = security.bridge_port()
 ALLOW_ANY_PATH = "/state"
-BEACON_PATH = "/beacon"
+EVENTS_PATH = '/events'
+STREAM_PING_SECONDS = 4.0
+_streams = threading.BoundedSemaphore(8)
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     "..", "..", "..", ".."))
@@ -176,7 +177,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', origin)
             self.send_header('Vary', 'Origin')
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        if self.headers.get('Access-Control-Request-Private-Network') == 'true':
+            self.send_header('Access-Control-Allow-Private-Network', 'true')
 
     def _source_ok(self) -> bool:
         """来源校验：Origin 或 Referer 必须指向 DSH 自己的页面。
@@ -205,7 +208,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authorized(self, parsed) -> bool:
         path = parsed.path
-        if path not in (ALLOW_ANY_PATH, BEACON_PATH):
+        if path not in (ALLOW_ANY_PATH,EVENTS_PATH) or parsed.query:
             log(f"REJECT path={path}")
             return False
         if not self._source_ok():
@@ -214,10 +217,14 @@ class Handler(BaseHTTPRequestHandler):
             return False
         # First request and every subsequent request require the installed secret.
         expected = load_token()
-        got = (parse_qs(parsed.query).get("k") or [""])[0]
-        return bool(expected and got and hmac.compare_digest(expected, got))
+        got = self.headers.get('Authorization','')
+        return bool(expected and hmac.compare_digest('Bearer '+expected, got))
 
     def do_OPTIONS(self):
+        requested={h.strip().lower() for h in self.headers.get('Access-Control-Request-Headers','').split(',') if h.strip()}
+        if (urlparse(self.path).path not in (ALLOW_ANY_PATH,EVENTS_PATH) or urlparse(self.path).query or
+                not self._source_ok() or not requested <= {'authorization','content-type'}):
+            self.send_error(403,'Preflight rejected');return
         self.send_response(204)
         self._cors()
         self.end_headers()
@@ -229,24 +236,25 @@ class Handler(BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             return
-        if parsed.path == BEACON_PATH:
-            q = parse_qs(parsed.query)
-            granted = (q.get("granted") or ["0"])[0] in ("1", "true", "True")
-            client = (q.get("client") or ["default"])[0]
-            event = (q.get("event") or ["hb"])[0]
-            if event not in ("action", "hb"):
-                event = "hb"
-            sequence=(q.get('sequence') or [''])[0]
-            stamp=(q.get('action_at') or [''])[0]
-            if event=='action' and (not sequence.isdigit() or not stamp.isdigit()):
-                self.send_error(400,'Action sequence and time required');return
-            write_state(granted, origin="beacon", client=client, event=event,
-                        sequence=int(sequence) if event=='action' else None,
-                        action_at=int(stamp) if event=='action' else None)
-            log(f"BEACON granted={granted} client={client} event={event}")
-            self.send_response(204)
-            self._cors()
-            self.end_headers()
+        if parsed.path == EVENTS_PATH:
+            if not _streams.acquire(blocking=False):
+                self.send_error(503,'Too many event streams');return
+            try:
+                self.send_response(200)
+                self.send_header('Content-Type','application/x-ndjson')
+                self.send_header('Cache-Control','no-store')
+                self.send_header('Connection','close')
+                self._cors();self.end_headers()
+                # Pings alone never refresh or grant authority. Only the
+                # authenticated renderer acknowledgements are heartbeats.
+                while True:
+                    self.wfile.write(b'{"event":"heartbeat"}\n')
+                    self.wfile.flush()
+                    time.sleep(STREAM_PING_SECONDS)
+            except (BrokenPipeError,ConnectionError,OSError):
+                pass
+            finally:
+                _streams.release()
             return
         body = json.dumps(read_state(), ensure_ascii=False).encode("utf-8")
         self.send_response(200)
@@ -271,6 +279,8 @@ class Handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(n).decode("utf-8", "replace") if n else "{}"
         except Exception:
             raw = "{}"
+        if parsed.path != ALLOW_ANY_PATH:
+            self.send_error(404);return
         try:
             data = json.loads(raw)
         except Exception:
@@ -307,10 +317,10 @@ def main() -> int:
     if not load_token():
         print('Bridge token missing; run the installer first.', file=sys.stderr)
         return 2
-    write_state(False, origin='startup', client='startup', event='action')
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    write_state(False, origin='startup', client='startup', event='action')
     log(f"bridge listening on 127.0.0.1:{args.port}")
-    print(f"permission bridge: http://127.0.0.1:{args.port}{BEACON_PATH}", flush=True)
+    print(f"permission bridge: http://127.0.0.1:{args.port}{ALLOW_ANY_PATH}", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

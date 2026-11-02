@@ -3,6 +3,7 @@ param(
     [string]$Python = 'python',
     [string]$Wheel = '',
     [string]$Constraints = (Join-Path $PSScriptRoot '..\constraints-windows-py312.txt'),
+    [int]$BridgePort = 0,
     [switch]$Rollback
 )
 $ErrorActionPreference = 'Stop'
@@ -53,7 +54,11 @@ try {
     # Activation switches a junction; it never relocates an installed venv.
     New-Item -ItemType Junction -Path $current -Target $staging | Out-Null
     $env:ICON_CONTROL_HOME = $root
-    & (Join-Path $current 'Scripts\python.exe') -m computer_mcp.launcher init
+    if ($BridgePort) {
+        & (Join-Path $current 'Scripts\python.exe') -m computer_mcp.launcher init --bridge-port $BridgePort
+    } else {
+        & (Join-Path $current 'Scripts\python.exe') -m computer_mcp.launcher init
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Provisioning failed' }
 } catch {
     if (Test-Path -LiteralPath $current) {

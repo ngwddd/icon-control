@@ -10,32 +10,38 @@ import threading
 
 _current = ContextVar('icon_execution', default=None)
 _operation_lock = threading.RLock()
+_UNSET = object()
 
-def check(tool):
+def check(tool, arguments=_UNSET):
     from computer_mcp import permission, control
-    permission.require(tool)
     task = _current.get()
+    if arguments is _UNSET:
+        arguments = task.get('arguments') if task and task['tool']==tool else None
+    permission.require(tool, arguments)
     authority = permission.status() if task else {}
     if task and (control.status()['generation'] != task['generation'] or
                  (authority.get('session'), authority.get('revision')) != task['revision']):
         raise permission.PermissionDenied('Execution cancelled by takeover or authority change')
 
 @contextmanager
-def operation(tool):
+def operation(tool, arguments=None):
     from computer_mcp import permission, control, tool_registry
     previous = _current.get()
     spec = tool_registry.get(tool)
-    locked = previous is None and spec is not None and spec.requires_authority
+    locked = previous is None and spec is not None and spec.needs_authority(arguments)
     if locked:
         _operation_lock.acquire()
     token = None
     try:
-        check(tool)
+        check(tool, arguments)
         if previous is None:
             authority = permission.status()
             token = _current.set(dict(generation=control.status()['generation'],
-                                      revision=(authority.get('session'), authority.get('revision')), tool=tool))
-        yield
+                                      revision=(authority.get('session'), authority.get('revision')),
+                                      tool=tool, arguments=arguments))
+        from computer_mcp.native_mouse import physical_coordinates
+        with physical_coordinates():
+            yield
     except BaseException:
         from computer_mcp.input_guard import release_all
         release_all()
@@ -48,8 +54,7 @@ def operation(tool):
 
 def checkpoint(default_tool):
     """Recheck a composed operation immediately before a native side effect."""
-    task = _current.get()
-    check(task['tool'] if task else default_tool)
+    check(default_tool, None)
 
 def boundary(tool):
     def decorate(function):
@@ -57,8 +62,10 @@ def boundary(tool):
             return function
         @wraps(function)
         def guarded(*args, **kwargs):
-            with operation(tool):
-                bound = inspect.signature(function).bind(*args, **kwargs)
+            bound = inspect.signature(function).bind(*args, **kwargs)
+            policy_args = next((bound.arguments[n] for n in ('args','arguments','kwargs')
+                                if isinstance(bound.arguments.get(n),dict)), None)
+            with operation(tool, policy_args):
                 from computer_mcp.input_guard import MouseController, KeyboardController
                 for name, value in list(bound.arguments.items()):
                     if value is None:
@@ -107,7 +114,7 @@ def install_boundaries():
                              'snap_window_left','snap_window_right','snap_window_top','snap_window_bottom',
                              'switch_virtual_desktop','move_window_to_virtual_desktop')},
         'actions.config': {'set_config':'set_config'},
-        'ui_ext': {'ui_click':'ui_click','ui_invoke':'ui_invoke','ui_set_text':'ui_set_text','run_batch':'batch'},
+        'ui_ext': {'ui_tree':'ui_tree','ui_find':'ui_find','ui_click':'ui_click','ui_invoke':'ui_invoke','ui_set_text':'ui_set_text','run_batch':'batch'},
         'ocr_ext': {'click_text':'click_text'},
         'macro_ext': {'run_macro':'macro_run','macro_save':'macro_save','_force_foreground':'switch_to_window'},
         'vision_state': {n:n for n in ('click_template','hover_probe','capture_template','set_baseline')},

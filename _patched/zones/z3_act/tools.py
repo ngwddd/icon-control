@@ -11,6 +11,7 @@ from computer_mcp.tool_spec import ToolSpec
 SPECS: list[ToolSpec] = [
     ToolSpec(
         name='button_down',
+        effects=('input',),
         zone='Z3',
         description='Press and hold a mouse button',
         read_only=False,
@@ -18,6 +19,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='button_up',
+        effects=('input',),
         zone='Z3',
         description='Release a mouse button',
         read_only=False,
@@ -25,6 +27,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='click',
+        effects=('input',),
         zone='Z3',
         description='Perform a mouse click at the current cursor position',
         read_only=False,
@@ -32,6 +35,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='click_template',
+        effects=('input',),
         zone='Z3',
         description='Find a template and click its centre. No coordinate guessing. Optional offset [dx,dy] nudges the click point.',
         read_only=False,
@@ -39,6 +43,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='click_text',
+        effects=('input',),
         zone='Z3',
         description='Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (WeChat, Electron, custom-rendered UIs).',
         read_only=False,
@@ -46,6 +51,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='close_window',
+        effects=('window','process',),
         zone='Z3',
         description='Close a window',
         read_only=False,
@@ -53,6 +59,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='double_click',
+        effects=('input',),
         zone='Z3',
         description='Perform a double mouse click at the current cursor position',
         read_only=False,
@@ -60,6 +67,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='drag',
+        effects=('input',),
         zone='Z3',
         description='Drag mouse from start to end position',
         read_only=False,
@@ -67,6 +75,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='hover_probe',
+        effects=('input',),
         zone='Z3',
         description='Hover a point, wait, measure whether a region changed, then move the cursor away. This detects hover-revealed menus/buttons that never show up in a plain screenshot or a click.',
         read_only=False,
@@ -74,6 +83,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='key_down',
+        effects=('input',),
         zone='Z3',
         description='Press and hold a key',
         read_only=False,
@@ -81,6 +91,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='key_press',
+        effects=('input',),
         zone='Z3',
         description='Press and release a key (convenience method)',
         read_only=False,
@@ -88,6 +99,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='key_up',
+        effects=('input',),
         zone='Z3',
         description='Release a key',
         read_only=False,
@@ -95,6 +107,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='maximize_window',
+        effects=('window',),
         zone='Z3',
         description='Maximize a window',
         read_only=False,
@@ -102,6 +115,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='minimize_window',
+        effects=('window',),
         zone='Z3',
         description='Minimize a window',
         read_only=False,
@@ -109,6 +123,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='mouse_move',
+        effects=('input',),
         zone='Z3',
         description='Move the mouse cursor to the specified coordinates',
         read_only=False,
@@ -116,6 +131,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='move_window',
+        effects=('window',),
         zone='Z3',
         description='Move and/or resize a window to specified position and size',
         read_only=False,
@@ -123,6 +139,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='move_window_to_virtual_desktop',
+        effects=('window',),
         zone='Z3',
         description='Move a window to a different virtual desktop',
         read_only=False,
@@ -130,6 +147,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='resize_window',
+        effects=('window',),
         zone='Z3',
         description='Resize a window to specified dimensions',
         read_only=False,
@@ -137,6 +155,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='restore_window',
+        effects=('window',),
         zone='Z3',
         description='Restore a minimized or maximized window to normal state',
         read_only=False,
@@ -144,6 +163,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='set_window_topmost',
+        effects=('window',),
         zone='Z3',
         description="Set or remove a window's always-on-top property",
         read_only=False,
@@ -151,6 +171,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='snap_window_bottom',
+        effects=('window',),
         zone='Z3',
         description='Snap window to fill bottom half of screen',
         read_only=False,
@@ -158,6 +179,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='snap_window_left',
+        effects=('window',),
         zone='Z3',
         description='Snap window to fill left half of screen',
         read_only=False,
@@ -165,6 +187,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='snap_window_right',
+        effects=('window',),
         zone='Z3',
         description='Snap window to fill right half of screen',
         read_only=False,
@@ -172,6 +195,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='snap_window_top',
+        effects=('window',),
         zone='Z3',
         description='Snap window to fill top half of screen',
         read_only=False,
@@ -179,6 +203,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='switch_to_window',
+        effects=('window',),
         zone='Z3',
         description='Switch focus to a window by handle or title pattern',
         read_only=False,
@@ -186,6 +211,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='switch_virtual_desktop',
+        effects=('window',),
         zone='Z3',
         description='Switch to a virtual desktop by ID or name',
         read_only=False,
@@ -193,6 +219,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='triple_click',
+        effects=('input',),
         zone='Z3',
         description='Perform a triple mouse click at the current cursor position',
         read_only=False,
@@ -200,6 +227,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='type',
+        effects=('input','clipboard_write',),
         zone='Z3',
         description='Type the specified text',
         read_only=False,
@@ -207,6 +235,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='ui_click',
+        effects=('input',),
         zone='Z3',
         description='Move the real cursor to a control found by name and click it. No coordinate guessing.',
         read_only=False,
@@ -214,6 +243,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='ui_invoke',
+        effects=('input',),
         zone='Z3',
         description='Trigger a control by name through its Invoke pattern, without moving the cursor (fastest, non-intrusive). Falls back with a hint if the control has no Invoke.',
         read_only=False,
@@ -221,6 +251,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='ui_set_text',
+        effects=('input',),
         zone='Z3',
         description="Set a text field's value through its Value pattern, without typing keystrokes.",
         read_only=False,

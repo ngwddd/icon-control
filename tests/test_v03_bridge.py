@@ -146,10 +146,11 @@ class TestClientReportsToBridge(unittest.TestCase):
         src = self._client_src()
         self.assertIn("const BRIDGE", src)
         self.assertIn("HEARTBEAT_MS", src)
-        self.assertIn("/beacon", src, "必须有图片信标通道")
-        self.assertIn("127.0.0.1:18765", src)
+        self.assertNotIn("/beacon", src, "长期凭据不得通过信标 URL 发送")
+        self.assertIn("127.0.0.1:__BRIDGE_PORT__", src)
         self.assertRegex(src, r"method:\s*'POST'")
-        self.assertIn("no-cors", src, "跨源简单请求，避免预检")
+        self.assertIn("'Authorization': 'Bearer '", src)
+        self.assertIn("mode: 'cors'", src)
 
     def test_reports_on_mount_and_click(self) -> None:
         src = self._client_src()

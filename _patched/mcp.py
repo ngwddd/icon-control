@@ -86,11 +86,10 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
                 return format_response(_gate_denial, computer_state,
                                        screenshot_data={"error": "blocked by permission gate"})
         except Exception as _gate_exc:      # 闸门自身出错时 fail closed
-            if name in getattr(__import__("computer_mcp.permission", fromlist=["x"]), "INPUT_TOOLS", ()):
-                return format_response(
-                    {"success": False, "blocked": True,
-                     "error": f"权限闸门异常，按未授权处理：{_gate_exc}", "tool": name},
-                    computer_state, screenshot_data={"error": "blocked by permission gate"})
+            return format_response(
+                {"success": False, "blocked": True,
+                 "error": f"权限闸门异常，按未授权处理：{type(_gate_exc).__name__}", "tool": name},
+                computer_state, screenshot_data={"error": "blocked by permission gate"})
 
         
         _out = _dispatch(name, arguments, computer_state=computer_state,

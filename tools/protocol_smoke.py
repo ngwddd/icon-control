@@ -17,7 +17,7 @@ from mcp.client.streamable_http import streamable_http_client
 async def verify(read,write):
     async with ClientSession(read,write) as session:
         initialized=await session.initialize()
-        if initialized.serverInfo.version != '1.3.0rc1':
+        if initialized.serverInfo.version != (Path(__file__).resolve().parents[1]/'VERSION').read_text().strip():
             raise RuntimeError('Installed server version mismatch')
         tools=await session.list_tools()
         if len(tools.tools)!=89:raise RuntimeError('Tool manifest mismatch')

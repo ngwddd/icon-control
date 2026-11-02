@@ -37,13 +37,15 @@ class SecurityTests(unittest.TestCase):
     def grant(self):
         B.write_state(True, client='human', event='action')
 
-    def request(self, token='', origin=None, body=None):
+    def request(self, token='', origin=None, body=None, path='/state', method=None, extra_headers=None):
         server = ThreadingHTTPServer(('127.0.0.1',0), B.Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         try:
             client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
             headers = {'Origin':origin} if origin else {}
-            client.request('POST' if body is not None else 'GET', '/state?k='+token,
+            if token:headers['Authorization']='Bearer '+token
+            headers.update(extra_headers or {})
+            client.request(method or ('POST' if body is not None else 'GET'), path,
                            body=json.dumps(body) if body is not None else None, headers=headers)
             response=client.getresponse(); result=(response.status,response.read()); client.close(); return result
         finally:
@@ -65,6 +67,43 @@ class SecurityTests(unittest.TestCase):
 
     def test_authenticated_read(self):
         self.assertEqual(self.request(self.token)[0],200)
+
+    def test_query_token_is_never_accepted(self):
+        self.assertEqual(self.request(path='/state?k='+self.token)[0],403)
+        self.assertEqual(self.request(self.token,path='/state?k='+self.token)[0],403)
+
+    def test_legacy_beacon_is_removed(self):
+        self.assertEqual(self.request(self.token,path='/beacon')[0],403)
+
+    def test_trusted_cors_preflight_does_not_grant(self):
+        self.assertEqual(self.request(origin='http://localhost:4000',method='OPTIONS',
+            extra_headers={'Access-Control-Request-Headers':'authorization, content-type'})[0],204)
+        self.assertFalse(P.status()['granted'])
+
+    def test_foreign_cors_preflight_is_denied(self):
+        self.assertEqual(self.request(origin='https://evil.test',method='OPTIONS')[0],403)
+
+    def test_event_stream_requires_header_authentication(self):
+        self.assertEqual(self.request(path='/events')[0],403)
+        self.assertEqual(self.request(self.token,path='/events',body={'granted':True})[0],404)
+
+    def test_server_pings_cannot_create_or_extend_authority(self):
+        server=ThreadingHTTPServer(('127.0.0.1',0),B.Handler);server.daemon_threads=True
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        client=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=3)
+        try:
+            with patch.object(B,'STREAM_PING_SECONDS',.02):
+                client.request('GET','/events',headers={'Authorization':'Bearer '+self.token})
+                response=client.getresponse()
+                self.assertEqual(response.status,200)
+                self.assertIn(b'heartbeat',response.readline())
+                self.assertFalse(P.status()['granted'])
+                self.grant();before=B.read_state()['checked_at_ts']
+                response.readline();response.readline()
+                self.assertEqual(B.read_state()['checked_at_ts'],before)
+                response.close();client.close()
+        finally:
+            client.close();server.shutdown();server.server_close();thread.join()
 
     def test_string_boolean_cannot_grant(self):
         self.assertEqual(self.request(self.token,body={'granted':'false'})[0],400)

@@ -29,6 +29,36 @@ _lock = threading.RLock()
 _watchers = {"mouse": None, "keyboard": None}
 _started = False
 _generation = 0
+MOUSE_MOVE_HOLD_S = 1.0
+MOUSE_MOVE_GAP_S = 0.35
+_mouse_motion = {'started':None,'last':None,'point':None}
+
+
+def _reset_mouse_motion_locked():
+    _mouse_motion.update(started=None,last=None,point=None)
+
+
+def note_mouse_move(x, y) -> bool:
+    """Only a continuous physical movement lasting one second takes over.
+
+    Injected events are filtered before this callback. A pause longer than
+    350 ms starts a new gesture; isolated movements never accumulate.
+    """
+    now=time.monotonic()
+    with _lock:
+        if STATE['owner']=='user':
+            take_over=True
+        elif _mouse_motion['point']==(x,y):
+            return False
+        else:
+            last=_mouse_motion['last']
+            if last is None or now-last > MOUSE_MOVE_GAP_S or now < last:
+                _mouse_motion['started']=now
+            _mouse_motion.update(last=now,point=(x,y))
+            take_over=now-_mouse_motion['started'] >= MOUSE_MOVE_HOLD_S
+    if take_over:
+        note_physical('physical mouse movement sustained for 1 second')
+    return take_over
 
 
 def enabled() -> bool:
@@ -58,9 +88,10 @@ def _in_quiet() -> bool:
 
 
 def note_physical(reason: str = "physical input") -> None:
-    """记录一次真实用户输入：若当前由 AI 持有，立刻交还。"""
+    """Confirmed takeover or non-motion physical input: release immediately."""
     global _generation
     with _lock:
+        _reset_mouse_motion_locked()
         _generation += 1
         STATE["last_user"] = _now()
         if STATE['owner'] != 'user':
@@ -94,6 +125,7 @@ def claim(reason: str = "agent") -> dict:
 def release(reason: str = "agent released") -> dict:
     global _generation
     with _lock:
+        _reset_mouse_motion_locked()
         _generation += 1
         STATE["owner"] = "user" if STATE["last_user"] else "idle"
         STATE["since"] = _now()
@@ -105,6 +137,10 @@ def release(reason: str = "agent released") -> dict:
 def status() -> dict:
     now = _now()
     with _lock:
+        motion_now=time.monotonic()
+        if _mouse_motion['last'] is not None and motion_now-_mouse_motion['last'] > MOUSE_MOVE_GAP_S:
+            _reset_mouse_motion_locked()
+        pending_s=0.0 if _mouse_motion['started'] is None else max(0.0,motion_now-_mouse_motion['started'])
         owner = STATE["owner"]
         idle_s = now - max(STATE["since"], STATE["last_user"])
         takeovers = STATE["takeovers"]
@@ -129,6 +165,9 @@ def status() -> dict:
         'watcher': bool(_watchers['mouse'] and _watchers['keyboard'] and
                         all(w.is_alive() for w in _watchers.values())),
         'generation': _generation,
+        'mouse_move_stop_after_s': MOUSE_MOVE_HOLD_S,
+        'mouse_move_pending_s': round(pending_s,3),
+        'mouse_move_gap_reset_s': MOUSE_MOVE_GAP_S,
     }
 
 
@@ -160,7 +199,7 @@ def _ensure_watcher_locked() -> bool:
         from pynput import mouse as ms
 
         def on_move(x, y):
-            note_physical("mouse move")
+            note_mouse_move(x,y)
 
         def on_click(x, y, button, pressed):
             if pressed:
@@ -212,6 +251,8 @@ def stop_watcher() -> None:
             pass
         _watchers[k] = None
     _started = False
+    with _lock:
+        _reset_mouse_motion_locked()
 
 
 def _is_takeover_combo() -> bool:

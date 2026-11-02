@@ -16,6 +16,16 @@ def data_home() -> Path:
 def token_path() -> Path:
     return data_home() / 'state' / 'bridge-token.txt'
 
+def bridge_port() -> int:
+    value=os.environ.get('ICON_CONTROL_BRIDGE_PORT') or os.environ.get('DSH_MOUSE_BRIDGE_PORT')
+    if value is None:
+        path=data_home()/'state'/'bridge-config.json'
+        value=json.loads(path.read_text(encoding='utf-8')).get('port',18765) if path.exists() else 18765
+    port=int(value)
+    if not 1024 <= port <= 65535:
+        raise ValueError('Bridge port must be between 1024 and 65535')
+    return port
+
 def load_token() -> str:
     try:
         token = token_path().read_text(encoding='utf-8').strip()

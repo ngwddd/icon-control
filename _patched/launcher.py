@@ -8,10 +8,13 @@ from pathlib import Path
 import secrets
 import shutil
 import sys
-from computer_mcp import security
+from computer_mcp import security, __version__
 
-def initialize():
+def initialize(bridge_port=None):
     token=security.provision_token()
+    if bridge_port is not None:
+        if not 1024 <= bridge_port <= 65535:raise ValueError('Invalid bridge port')
+        (security.data_home()/'state'/'bridge-config.json').write_text(json.dumps({'port':bridge_port}),encoding='utf-8')
     path=security.data_home()/'state'/'mcp-token.txt'
     if not path.exists():
         fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
@@ -21,7 +24,7 @@ def initialize():
     template=next((p for p in candidates if p.is_file()),None)
     if template is None:raise RuntimeError('Packaged permission client template missing')
     output=security.data_home()/'plugin'/'client.js';output.parent.mkdir(parents=True,exist_ok=True)
-    content=template.read_text(encoding='utf-8').replace('__BRIDGE_TOKEN__',token)
+    content=template.read_text(encoding='utf-8').replace('__BRIDGE_TOKEN__',token).replace('__BRIDGE_PORT__',str(security.bridge_port()))
     output.write_text(content,encoding='utf-8')
     for name in ('macros','recipes','templates'):
         bundled=Path(sys.prefix)/'share'/'icon-control'/name
@@ -36,14 +39,15 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('command',choices=['stdio','http','bridge','init','check'],nargs='?',default='stdio')
     parser.add_argument('--host',default='127.0.0.1');parser.add_argument('--port',type=int,default=8000)
+    parser.add_argument('--bridge-port',type=int)
     args=parser.parse_args()
-    if args.command=='init':print(json.dumps(initialize()));return 0
+    if args.command=='init':print(json.dumps(initialize(args.bridge_port)));return 0
     if args.command=='check':
         from computer_mcp import tool_registry,permission
-        print(json.dumps(dict(version='1.3.0rc1',tools=tool_registry.summary(),permission=permission.status())));return 0
+        print(json.dumps(dict(version=__version__,tools=tool_registry.summary(),permission=permission.status())));return 0
     if args.command=='bridge':
         from computer_mcp.permission_bridge import main as bridge_main
-        sys.argv=[sys.argv[0],'--port',str(18765 if args.port==8000 else args.port)]
+        sys.argv=[sys.argv[0],'--port',str(args.bridge_port or (security.bridge_port() if args.port==8000 else args.port))]
         return bridge_main()
     from computer_mcp import mcp
     if args.command=='http':asyncio.run(mcp.run_http(args.host,args.port))

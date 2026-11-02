@@ -11,6 +11,7 @@ from computer_mcp.tool_spec import ToolSpec
 SPECS: list[ToolSpec] = [
     ToolSpec(
         name='act_until',
+        effects=('compose',),
         zone='Z4',
         description='Repeat one action until a condition holds (walk until a prompt appears). Shorthand for one until-loop.',
         read_only=False,
@@ -18,6 +19,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='batch',
+        effects=('compose',),
         zone='Z4',
         description="Run a whole gesture sequence in ONE call. Each step: {action:'move'|'click'|'double_click'|'right_click'|'type'|'key'|'sleep'|'wait_change'|'screen_state'|'ui_click', ...}. Use this instead of many separate calls (each separate call costs a model round trip).",
         read_only=False,
@@ -25,6 +27,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='macro_run',
+        effects=('compose','input','clipboard_write','process','file_write',),
         zone='Z4',
         description="Replay a saved macro in ONE call. Coordinates are re-based onto the target window's current position. Use dry_run=true to see resolved absolute coordinates without clicking.",
         read_only=False,
@@ -32,6 +35,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='navigate',
+        effects=('compose',),
         zone='Z4',
         description='M3: run a plan locally at 20+ Hz and come back only on success or stall. plan=[{kind:goto,cell:[c,r]}|{kind:search}|{kind:face,cell}|{kind:wait,ms}|{kind:key,key}]. Returns a short state page, so one call can cover a whole objective.',
         read_only=False,
@@ -39,6 +43,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='run_script',
+        effects=('compose','input','clipboard_write','process',),
         zone='Z4',
         description='Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.',
         read_only=False,
@@ -46,6 +51,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='servo',
+        effects=('compose',),
         zone='Z4',
         description='M2: closed-loop servo toward a map cell. op=calibrate (estimate heading by stepping and watching the minimap displacement) | face | approach | forward | turn. Recomputes bearing every step instead of walking blind.',
         read_only=False,
@@ -53,6 +59,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='trace',
+        effects=('observe',),
         zone='Z4',
         description='Return the trace of the last run_script, or the run history.',
         read_only=True,
@@ -60,6 +67,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='verify_flow',
+        effects=('file_write',),
         zone='Z4',
         description='Run staged verification and return per-stage evidence. Each stage may wait, then run assertions: kind=text|template|baseline|stable|file. Stages stop at the first failure (stop_on_fail) and the report can be written to a JSON file. Verification only - it performs no input actions.',
         read_only=False,

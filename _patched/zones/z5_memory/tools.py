@@ -11,6 +11,9 @@ from computer_mcp.tool_spec import ToolSpec
 SPECS: list[ToolSpec] = [
     ToolSpec(
         name='anchor_mem',
+        effects=('file_write',),
+        read_actions=('list','stats'),
+        action_default='list',
         zone='Z5',
         description='Learned anchor memory for UI elements: list / learn / verify / forget / stats. Stores normalised position + a 64-bit visual fingerprint + usage counters, so a click can be verified instead of guessed.',
         read_only=True,
@@ -18,6 +21,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='capture_template',
+        effects=('file_write',),
         zone='Z5',
         description="Save a screen region as a reusable template (grayscale PNG) under the tool's vision store. Use this for self-drawn UIs where UI Automation is blind: capture the button/icon once, then match_template finds it later. Give a tight region around the visual itself.",
         read_only=False,
@@ -25,6 +29,9 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='glyph',
+        effects=('file_write',),
+        read_actions=('list','status'),
+        action_default='list',
         zone='Z5',
         description='Manage learned digit glyphs for pixel fonts. action=list|learn|clear; learn needs label and box.',
         read_only=False,
@@ -32,6 +39,8 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='layout_mem',
+        effects=('file_write',),
+        read_actions=('list','resolve'),
         zone='Z5',
         description='Layout calibration memory (generic): save normalized regions once per app, then resolve to pixels at any window size. action=save needs hwnd+regions{name:[x,y,w,h] rel 0..1}; action=resolve returns pixel boxes; list/delete manage profiles.',
         read_only=True,
@@ -39,6 +48,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='macro_list',
+        effects=('observe',),
         zone='Z5',
         description='List saved macros (name, description, target window, step count).',
         read_only=True,
@@ -46,6 +56,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='macro_save',
+        effects=('file_write',),
         zone='Z5',
         description="Save a macro. Steps use window-relative 'rel':[dx,dy] coordinates and can carry 'expect':{'changed':true,'timeout_ms':1200} to verify the step actually did something.",
         read_only=False,
@@ -53,6 +64,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='set_baseline',
+        effects=('file_write',),
         zone='Z5',
         description='Remember what a screen region normally looks like. diff_baseline later reports how far the current pixels deviate - precise and cheap, and scoped to just that region.',
         read_only=False,
@@ -60,6 +72,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='vision_list',
+        effects=('observe',),
         zone='Z5',
         description='List stored templates and baselines (name, source region, size, creation time), plus live run statistics: calls, failures, retries, failure_rate. Use stats to spot a long automation that silently stopped working.',
         read_only=True,

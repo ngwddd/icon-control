@@ -7,16 +7,8 @@ window.__ModuleLoader__.load({
     const KEY = 'dsh.mousePermission';
     const EVENT = 'dsh:mouse-permission';
 
-    // ── 程序层通道 ───────────────────────────────────────────────────────
-    // Host 侧不要再靠 OCR 看这个胶囊是不是绿的（窗口一挪/一滚就判不出来，
-    // 还可能读到聊天正文里的「鼠标·已授权」而误判）。这里由插件主动上报。
-    //
-    // 通道优先级：
-    //   ① 图片信标 GET /beacon  —— 不受 CORS 预检限制，最不容易被拦
-    //   ② fetch POST /state     —— 若 CSP 允许则同时用
-    // 两个都试；都不通也不影响按钮本身（Host 会退回 OCR）。
-    const BRIDGE = 'http://127.0.0.1:18765';
-    // 本机 token：由桥在自己的 state 目录生成，仓库里替换成 __BRIDGE_TOKEN__
+    // Authenticated CORS requests only; credentials never enter a URL.
+    const BRIDGE = 'http://127.0.0.1:__BRIDGE_PORT__';
     const BRIDGE_TOKEN = '__BRIDGE_TOKEN__';
     const HEARTBEAT_MS = 5000;
     const CLIENT = (window.crypto && window.crypto.randomUUID)
@@ -24,35 +16,80 @@ window.__ModuleLoader__.load({
     let lastMode = 'unknown';
     let actionSequence = 0;
 
-    function sendBeacon(granted, event, sequence, actionAt) {
-      try {
-        const img = new Image();
-        // 不带 no-referrer：桥要靠 Referer 判断来源
-        if (!BRIDGE_TOKEN || BRIDGE_TOKEN.startsWith('__')) return false;
-        img.src = BRIDGE + '/beacon?k=' + encodeURIComponent(BRIDGE_TOKEN) + '&granted=' + (granted ? '1' : '0') + '&client=' + encodeURIComponent(CLIENT) + '&event=' + event + '&sequence=' + sequence + '&action_at=' + actionAt + '&t=' + Date.now();
-        lastMode = 'beacon';
-        return true;
-      } catch (err) {
-        return false;
-      }
+    function headers() {
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + BRIDGE_TOKEN };
+    }
+
+    function syncFromBridge(sequence) {
+      return window.fetch(BRIDGE + '/state', {
+        method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        referrerPolicy: 'no-referrer', headers: headers(),
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Bridge state unavailable');
+        return response.json();
+      }).then(function (state) {
+        if (sequence !== actionSequence || typeof state.granted !== 'boolean') return;
+        if (readGranted() !== state.granted) {
+          writeGranted(state.granted);
+          window.dispatchEvent(new CustomEvent(EVENT));
+        }
+      });
     }
 
     function pushToBridge(granted, event = 'hb') {
+      if (!BRIDGE_TOKEN || BRIDGE_TOKEN.startsWith('__')) return;
       const sequence = event === 'action' ? ++actionSequence : 0;
+      const currentSequence = actionSequence;
       const actionAt = event === 'action' ? Date.now() : 0;
-      sendBeacon(granted, event, sequence, actionAt);
-      try {
-        if (!BRIDGE_TOKEN || BRIDGE_TOKEN.startsWith('__')) return;
-        window.fetch(BRIDGE + '/state?k=' + encodeURIComponent(BRIDGE_TOKEN), {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill', client: CLIENT, event, sequence, action_at: actionAt }),
-        }).catch(function () { /* 桥没起来就算了 */ });
-      } catch (err) {
-        /* 没有 fetch 也不影响信标 */
-      }
+      window.fetch(BRIDGE + '/state', {
+        method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        referrerPolicy: 'no-referrer', headers: headers(),
+        body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill',
+                              client: CLIENT, event, sequence, action_at: actionAt }),
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Bridge request rejected');
+        lastMode = 'authenticated';
+        return syncFromBridge(currentSequence);
+      }).catch(function () { lastMode = 'unavailable'; });
     }
+
+    function ensureHeartbeat() {
+      if (window.__DSH_MOUSE_BRIDGE_OWNER__ === CLIENT) return;
+      if (window.__DSH_MOUSE_BRIDGE_TIMER__) window.clearInterval(window.__DSH_MOUSE_BRIDGE_TIMER__);
+      if (window.__DSH_MOUSE_BRIDGE_STREAM__) window.__DSH_MOUSE_BRIDGE_STREAM__.abort();
+      if (window.__DSH_MOUSE_BRIDGE_BUMP__) {
+        document.removeEventListener('visibilitychange', window.__DSH_MOUSE_BRIDGE_BUMP__);
+        window.removeEventListener('focus', window.__DSH_MOUSE_BRIDGE_BUMP__);
+      }
+      window.__DSH_MOUSE_BRIDGE_OWNER__ = CLIENT;
+      const bump = function () { pushToBridge(readGranted()); };
+      window.__DSH_MOUSE_BRIDGE_BUMP__ = bump;
+      window.__DSH_MOUSE_BRIDGE_TIMER__ = window.setInterval(bump, HEARTBEAT_MS);
+      document.addEventListener('visibilitychange', bump);
+      window.addEventListener('focus', bump);
+      bump();
+      // Background Chromium windows throttle timers to a minute. Network
+      // arrivals remain event driven; an unresponsive renderer still expires.
+      const stream = new AbortController();
+      window.__DSH_MOUSE_BRIDGE_STREAM__ = stream;
+      window.fetch(BRIDGE + '/events', {
+        method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        referrerPolicy: 'no-referrer', headers: headers(), signal: stream.signal,
+      }).then(async function (response) {
+        if (!response.ok || !response.body) throw new Error('Bridge events unavailable');
+        const reader = response.body.getReader();
+        try {
+          while (!stream.signal.aborted) {
+            const chunk = await reader.read();
+            if (stream.signal.aborted || chunk.done) break;
+            if (chunk.value && chunk.value.length) bump();
+          }
+        } finally { await reader.cancel(); }
+      }).catch(function () { /* fallback never grants or extends authority itself */ });
+    }
+
+    // Some hosts reload the factory without rerunning apply().
+    ensureHeartbeat();
 
     // ── 状态读写 ─────────────────────────────────────────────────────────
     function readGranted() {
@@ -92,6 +129,7 @@ window.__ModuleLoader__.load({
       }, []);
 
       React.useEffect(function reportOnMount() {
+        ensureHeartbeat();
         pushToBridge(readGranted());
       }, []);
 
@@ -156,17 +194,7 @@ window.__ModuleLoader__.load({
         // 心跳放在插件级别（不是组件 effect）：组件热重载/重挂时 effect 的清理
         // 会把定时器清掉，心跳就断了 —— 实测过一次：胶囊还在，Host 收不到上报，
         // 只能退回 OCR。放在这里，重挂也不会断。
-        if (!window.__DSH_MOUSE_BRIDGE_TIMER__) {
-          pushToBridge(readGranted());
-          window.__DSH_MOUSE_BRIDGE_TIMER__ = window.setInterval(function () {
-            pushToBridge(readGranted());
-          }, HEARTBEAT_MS);
-
-          // Electron 会节流后台窗口的定时器；回到前台/聚焦时立刻补一次
-          const bump = function bump() { pushToBridge(readGranted()); };
-          document.addEventListener('visibilitychange', bump);
-          window.addEventListener('focus', bump);
-        }
+        ensureHeartbeat();
 
         ctx.slots.inject('conversation.input.right', function register() {
           return ctx.slots.register(

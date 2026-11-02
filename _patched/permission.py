@@ -166,10 +166,7 @@ _bridge_started = False
 
 
 def _bridge_port() -> int:
-    try:
-        return int(os.environ.get("DSH_MOUSE_BRIDGE_PORT", "18765"))
-    except Exception:
-        return 18765
+    return security.bridge_port()
 
 
 def _port_open(port: int) -> bool:
@@ -247,7 +244,7 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
     spec = tool_registry.get(name)
     if spec is None or not tool_registry.allowed(name):
         return dict(success=False, blocked=True, tool=name, error='Tool disabled or unknown')
-    if not spec.requires_authority:
+    if not spec.needs_authority(arguments):
         return None
     st = status()
     if st["granted"]:
@@ -271,7 +268,7 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
                     "tool": name,
                     "permission": st,
                     "control": _ctl.status(),
-                    "hint": "用户动了鼠标/键盘即视为接管；闲置到期或 control_claim 后恢复。",
+                    "hint": "真人鼠标持续移动满 1 秒才接管；键盘、点击和滚轮立即接管。闲置后可重新申请，原任务不会恢复。",
                 }
         except Exception as exc:
             return dict(success=False, blocked=True, tool=name, error=f'Control guard unavailable: {exc}')
@@ -286,9 +283,9 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
     }
 
 
-def require(tool: str = "unknown") -> None:
+def require(tool: str = "unknown", arguments: dict | None = None) -> None:
     """非 MCP 路径（脚本、宏、测试）用这个：未授权就抛异常。"""
-    denial = check_tool(tool)
+    denial = check_tool(tool, arguments)
     if denial is not None:
         raise PermissionDenied(denial['error'])
 

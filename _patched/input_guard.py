@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import threading
 import weakref
+import sys
 from pynput.mouse import Controller as RawMouse, Button
 from pynput.keyboard import Controller as RawKeyboard, Key, KeyCode
 from computer_mcp.execution import check
@@ -11,6 +12,20 @@ _controllers = weakref.WeakSet()
 _held_controllers = set()
 _lock = threading.RLock()
 _monitor_thread = None
+
+class InjectedMouse(RawMouse):
+    def _position_get(self):
+        if sys.platform == 'win32':
+            from computer_mcp.native_mouse import cursor_position
+            return cursor_position()
+        return super()._position_get()
+
+    def _position_set(self, point):
+        if sys.platform == 'win32':
+            from computer_mcp.native_mouse import move_absolute
+            move_absolute(*point)
+        else:
+            super()._position_set(point)
 
 def _watch_held():
     import time
@@ -83,7 +98,9 @@ class _Held:
 class MouseController(_Held):
     up_tool = 'button_up'
     def __init__(self, raw=None):
-        self._init(raw if raw is not None else RawMouse())
+        # Replace the exact legacy pynput implementation as well as the default
+        # factory. Fake/custom test controllers remain isolated.
+        self._init(InjectedMouse() if raw is None or type(raw) is RawMouse else raw)
 
     @property
     def position(self):

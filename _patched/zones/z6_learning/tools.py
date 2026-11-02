@@ -11,6 +11,7 @@ from computer_mcp.tool_spec import ToolSpec
 SPECS: list[ToolSpec] = [
     ToolSpec(
         name='dataset_status',
+        effects=('observe',),
         zone='Z6',
         description='训练数据分区状态：是否开启、今日/累计样本数、占用体积、最近一条样本',
         read_only=True,
@@ -18,6 +19,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='dataset_query',
+        effects=('observe',),
         zone='Z6',
         description='按工具/分区/结果/天数筛训练样本（只读，默认返回最新 20 条）',
         read_only=True,
@@ -35,6 +37,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='dataset_promote',
+        effects=('file_write',),
         zone='Z6',
         description='把某条样本提升为回归用例（写 dataset/cases/，供反复验证）',
         read_only=False,
@@ -49,6 +52,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='dataset_export',
+        effects=('file_write',),
         zone='Z6',
         description='把最近 N 天的样本打包成 zip（离线回流/微调用），默认 7 天',
         read_only=False,
@@ -63,6 +67,7 @@ SPECS: list[ToolSpec] = [
 
     ToolSpec(
         name='dataset_triage',
+        effects=('file_write',),
         zone='Z6',
         description='分拣失败样本：同类失败达到阈值就自动生成回归用例（默认 1 天 / 3 次）',
         read_only=False,
@@ -78,6 +83,7 @@ SPECS: list[ToolSpec] = [
 
     ToolSpec(
         name='dataset_explore',
+        effects=('compose','file_write',),
         zone='Z6',
         description='随机游走采集弱语义轨迹（只调用只读工具，不点击不输入），样本打 explore 标签',
         read_only=False,
