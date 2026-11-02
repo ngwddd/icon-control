@@ -1,19 +1,101 @@
 {
-  "version": "1.3.0rc1",
+  "version": "1.3.0rc2",
   "status": "blocked",
   "p0_review": "pending",
   "clean_windows_install": "pending",
   "known_false_success_paths": null,
   "unit_failures": 0,
   "unit_errors": 0,
+  "mouse_move_policy": {
+    "continuous_seconds": 1.0,
+    "pause_reset_seconds": 0.35,
+    "click_keyboard_wheel_emergency": "immediate"
+  },
+  "reported_rc1_passes": [
+    "B03",
+    "B06",
+    "B07",
+    "B08",
+    "B09",
+    "B10",
+    "B12",
+    "B13",
+    "B18",
+    "B19",
+    "B20",
+    "B21",
+    "B22",
+    "B23",
+    "B26",
+    "B27",
+    "B28",
+    "B29",
+    "B30",
+    "B32"
+  ],
+  "reported_rc1_conflicts": {
+    "B10": "Narrative says corrected probe passed; retained raw b10-result.json still has ok=false. Do not promote without rerun."
+  },
   "desktop_tasks": [
     {
       "id": "B01",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": 23.474,
+      "timing_scope": "single_case_report_wall_time",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": null,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "before": {
+          "Confirm1": 0,
+          "Confirm2": 0,
+          "Counter": 0
+        },
+        "after": {
+          "Confirm1": 0,
+          "Confirm2": 0,
+          "Counter": 0
+        },
+        "blocked": true
+      },
+      "evidence": {
+        "path": "evidence/rc2/B01.json",
+        "sha256": "7bceb60399d3d2aefe8cc93ddab044aee22769b24692f6549c38477f881fc764"
+      }
     },
     {
       "id": "B02",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": null,
+      "timing_scope": "not_recorded",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "before": {
+          "Confirm1": 1,
+          "Confirm2": 1,
+          "Counter": 5
+        },
+        "after": {
+          "Confirm1": 1,
+          "Confirm2": 1,
+          "Counter": 6
+        },
+        "takeovers": 0
+      },
+      "evidence": {
+        "path": "evidence/rc2/baseline-delay-rc2.json",
+        "sha256": "2af759a8e3919d75288aeae35d153031c8ed5202be7b673b76db49c98000d8c3"
+      }
     },
     {
       "id": "B03",
@@ -25,7 +107,56 @@
     },
     {
       "id": "B05",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": 21744.943,
+      "timing_scope": "case_wall_time",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "stopped": true,
+        "drag_seen": true,
+        "moves": 251,
+        "elapsed_s": 9.125,
+        "control": {
+          "ok": true,
+          "owner": "user",
+          "takeover": true,
+          "idle_s": 0.0,
+          "takeovers": 1,
+          "idle_resume_s": 10.0,
+          "enabled": true,
+          "reason": "physical mouse movement sustained for 1 second",
+          "watcher": true,
+          "generation": 163,
+          "mouse_move_stop_after_s": 1.0,
+          "mouse_move_pending_s": 0.0,
+          "mouse_move_gap_reset_s": 0.35
+        },
+        "mouse_button_held": false,
+        "fixture": {
+          "client_width": 778,
+          "client_height": 594,
+          "dragging": false,
+          "counts": {
+            "Confirm1": 2,
+            "Confirm2": 2,
+            "Counter": 8
+          },
+          "scroll": 30,
+          "dpi": 96,
+          "text": "S5-B11 hello 123",
+          "drag_moves": 1350
+        }
+      },
+      "evidence": {
+        "path": "evidence/rc2/B05-delay-rc2-final.json",
+        "sha256": "da4fbd21a333fc5797b256837e731ced33d2b3d8e992d37f74abd36b576e5c37"
+      }
     },
     {
       "id": "B06",
@@ -49,7 +180,24 @@
     },
     {
       "id": "B11",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": null,
+      "timing_scope": "not_recorded",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "target": "S5-B11 hello 123",
+        "actual": "S5-B11 hello 123"
+      },
+      "evidence": {
+        "path": "evidence/rc2/baseline-delay-rc2.json",
+        "sha256": "2af759a8e3919d75288aeae35d153031c8ed5202be7b673b76db49c98000d8c3"
+      }
     },
     {
       "id": "B12",
@@ -61,19 +209,104 @@
     },
     {
       "id": "B14",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": null,
+      "timing_scope": "not_recorded",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "before": 15,
+        "after": 30,
+        "execution": "executed_unverified"
+      },
+      "evidence": {
+        "path": "evidence/rc2/baseline-delay-rc2.json",
+        "sha256": "2af759a8e3919d75288aeae35d153031c8ed5202be7b673b76db49c98000d8c3"
+      }
     },
     {
       "id": "B15",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": null,
+      "timing_scope": "not_recorded",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "before": {
+          "Confirm1": 1,
+          "Confirm2": 1,
+          "Counter": 6
+        },
+        "after": {
+          "Confirm1": 2,
+          "Confirm2": 1,
+          "Counter": 6
+        }
+      },
+      "evidence": {
+        "path": "evidence/rc2/baseline-delay-rc2.json",
+        "sha256": "2af759a8e3919d75288aeae35d153031c8ed5202be7b673b76db49c98000d8c3"
+      }
     },
     {
       "id": "B16",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": null,
+      "timing_scope": "not_recorded",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "before": {
+          "Confirm1": 2,
+          "Confirm2": 1,
+          "Counter": 6
+        },
+        "after": {
+          "Confirm1": 2,
+          "Confirm2": 2,
+          "Counter": 6
+        }
+      },
+      "evidence": {
+        "path": "evidence/rc2/baseline-delay-rc2.json",
+        "sha256": "2af759a8e3919d75288aeae35d153031c8ed5202be7b673b76db49c98000d8c3"
+      }
     },
     {
       "id": "B17",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": null,
+      "timing_scope": "not_recorded",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "before": 6,
+        "after": 7
+      },
+      "evidence": {
+        "path": "evidence/rc2/baseline-delay-rc2.json",
+        "sha256": "2af759a8e3919d75288aeae35d153031c8ed5202be7b673b76db49c98000d8c3"
+      }
     },
     {
       "id": "B18",
@@ -101,7 +334,25 @@
     },
     {
       "id": "B24",
-      "status": "not_run"
+      "status": "passed",
+      "elapsed_ms": null,
+      "timing_scope": "not_recorded",
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "candidate": "1.3.0rc2",
+        "fixture": "dedicated WinForms desktop app",
+        "monitor_dpi": 144,
+        "fixture_dpi": 96
+      },
+      "application_state": {
+        "dpi": 144,
+        "before": 7,
+        "after": 8
+      },
+      "evidence": {
+        "path": "evidence/rc2/baseline-delay-rc2.json",
+        "sha256": "2af759a8e3919d75288aeae35d153031c8ed5202be7b673b76db49c98000d8c3"
+      }
     },
     {
       "id": "B25",

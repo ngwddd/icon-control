@@ -1,0 +1,26 @@
+{
+  "case": "blocked",
+  "version": "1.3.0rc2",
+  "started": 1793633525.5139995,
+  "dpi": 96,
+  "results": [
+    {
+      "id": "B01",
+      "status": "passed",
+      "evidence": {
+        "before": {
+          "Confirm1": 0,
+          "Confirm2": 0,
+          "Counter": 0
+        },
+        "after": {
+          "Confirm1": 0,
+          "Confirm2": 0,
+          "Counter": 0
+        },
+        "blocked": true
+      }
+    }
+  ],
+  "finished": 1793633525.537473
+}

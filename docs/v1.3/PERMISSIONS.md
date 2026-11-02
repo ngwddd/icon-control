@@ -1,6 +1,7 @@
 # 工具权限矩阵
 
 89 个现有工具；效果声明参与执行检查，旧 read_only 标记仅用于兼容。
+每项 effects 显式声明；read_actions/read_when_absent 的参数规则见 tool-permissions.json。
 ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝。
 
 | 工具 | 分区 | 声明副作用 | 需要用户授权 |
@@ -19,7 +20,7 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | close_window | Z3 | window, process | 是 |
 | control_claim | Z0 | control | 是 |
 | control_status | Z0 | observe | 否 |
-| dataset_explore | Z6 | file_write | 是 |
+| dataset_explore | Z6 | compose, file_write | 是 |
 | dataset_export | Z6 | file_write | 是 |
 | dataset_promote | Z6 | file_write | 是 |
 | dataset_query | Z6 | observe | 否 |
@@ -31,7 +32,7 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | find_element | Z2 | observe | 否 |
 | find_text | Z2 | observe | 否 |
 | frame_diff | Z2 | observe | 否 |
-| frame_mark | Z2 | file_write | 是 |
+| frame_mark | Z2 | config_write | 是 |
 | get_window_info | Z2 | observe | 否 |
 | glyph | Z5 | file_write | 是 |
 | housekeeping | Z0 | file_delete | 是 |
@@ -54,7 +55,7 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | move_window_to_virtual_desktop | Z3 | window | 是 |
 | navigate | Z4 | compose | 是 |
 | ocr_read | Z2 | observe | 否 |
-| probe | Z2 | file_write | 是 |
+| probe | Z2 | observe | 否 |
 | read_digits | Z2 | observe | 否 |
 | record | Z1 | file_write | 是 |
 | resize_window | Z3 | window | 是 |

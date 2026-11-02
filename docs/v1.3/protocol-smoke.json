@@ -2,13 +2,13 @@
   "stdio": {
     "protocol": "2025-11-25",
     "tools": 89,
-    "server_version": "1.3.0rc1"
+    "server_version": "1.3.0rc2"
   },
   "http": {
     "protocol": "2025-11-25",
     "tools": 89,
-    "server_version": "1.3.0rc1"
+    "server_version": "1.3.0rc2"
   },
   "http_unauthenticated_status": 401,
-  "elapsed_s": 1.953
+  "elapsed_s": 2.422
 }

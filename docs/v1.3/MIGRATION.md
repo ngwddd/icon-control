@@ -8,6 +8,8 @@
 - 安装时生成本机 Token，渲染客户端模板；源码中的 __BRIDGE_TOKEN__ 不能运行。不要提交生成的客户端或 Token。
 - 重启桥后需用户重新点击授权。心跳只保活，不能授权；撤销后旧任务不自动恢复。
 - 控制权监听失败、用户接管、急停都停止任务；claim 不能覆盖用户接管。
+- 2026-11-03 用户修订：真人鼠标持续移动满 1 秒才接管；停顿超过 350ms 重新计时，
+  多次短暂挪动不累加。键盘、点击、滚轮、撤销授权和双 ESC 仍立即生效；助手注入的移动不计入。
 - program 结果包含 state、verified、steps、artifacts。普通动作无后置验证返回 executed_unverified，ok=false；
   提供 expect 或最终 assert 才能得到已验证完成。branch 实际执行选中分支；photo 生成可读取证据文件。
 - 批处理等待超时不再报成功；安全中断不受 stop_on_error=false / on_fail=continue 覆盖。

@@ -7,7 +7,7 @@
 ```powershell
 python -m pip install build
 python -m build
-powershell -File tools/install.ps1 -Wheel dist/icon_control-1.3.0rc1-py3-none-any.whl
+powershell -File tools/install.ps1 -Wheel dist/icon_control-1.3.0rc2-py3-none-any.whl
 ```
 
 安装目录默认为 `%LOCALAPPDATA%\IconControl`。每版用独立 venv，验证后切换 current 目录联接；
@@ -23,6 +23,9 @@ args 设为 `-m computer_mcp.launcher stdio`。自定义 InstallRoot 时，客�
 
 `init` 只生成凭据、复制默认资产和渲染授权客户端，不授予控制权。
 按宿主的插件加载机制装入 `<安装目录>\plugin\client.js`，由用户手动点击授权。
+已有候选版可用 -BridgePort 18766，端口会保存并同时渲染进客户端；不再需要手改 URL。
+升级授权协议后完整刷新 DSH 页面。旧图片信标不再被接受，密钥仅经认证请求头发送。
+后台保活依赖认证事件流触发客户端确认，连接断开或客户端冻结仍会超时拒绝。
 不要提交 state/、生成的客户端或凭据。用户已有宏／模板可备份后复制进新目录；不会自动覆盖旧宿主或真实授权。
 
 HTTP 模式使用官方 SDK Streamable HTTP 的 `/mcp`，仅监听 loopback，要求
