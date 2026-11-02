@@ -477,6 +477,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "ui_click":
         result = ui_ext.ui_click(
+            ref=arguments.get('ref'),
             name=str(arguments.get("name", "")),
             element_id=arguments.get("element_id"),
             hwnd=arguments.get("hwnd"),

@@ -85,7 +85,16 @@ def find_element(query: str, hwnd=None, region=None, limit: int = 5,
             errors.append(f"{src}: {type(exc).__name__}: {exc}")
             continue
         if cands:
+            snapshot = {}
+            if hwnd:
+                try:
+                    from computer_mcp import snapshots
+                    snapshot = snapshots.attach(hwnd,cands[:limit])
+                    cands = snapshot.pop('candidates')
+                except Exception as exc:
+                    errors.append('snapshot: '+str(exc))
             return {"ok": True, "query": query, "source": src,
+                    **snapshot,
                     "candidates": cands[:limit], "tried": tried,
                     "errors": errors,
                     "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}

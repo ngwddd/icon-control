@@ -227,3 +227,10 @@ SPECS: list[ToolSpec] = [
         schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'text': {'type': 'string'}, 'hwnd': {'type': 'integer'}, 'exact': {'type': 'boolean', 'default': False}, 'index': {'type': 'integer', 'default': 0}}, 'required': ['name', 'text']},
     ),
 ]
+
+# Additive v1.3 input: legacy name-based callers remain valid.
+for _spec in SPECS:
+    if _spec.name == 'ui_click':
+        _spec.schema['properties']['ref'] = {'type':'string','description':'Fresh ui_tree/find_element snapshot reference'}
+        _spec.schema.pop('required',None)
+        _spec.schema['anyOf'] = [{'required':['name']},{'required':['ref']}]

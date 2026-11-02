@@ -140,7 +140,17 @@ def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60, only_n
         proc = _proc_name(hwnd)
     out: list[dict[str, Any]] = []
     _walk(root, max(0, int(depth)), out, max(1, int(max_nodes)), bool(only_named))
+    snapshot = {}
+    try:
+        import win32gui
+        from computer_mcp import snapshots
+        hwnd = hwnd or win32gui.GetForegroundWindow()
+        snapshot = snapshots.attach(hwnd, out)
+        out = snapshot.pop('candidates')
+    except Exception as exc:
+        snapshot = {'snapshot_error': str(exc)}
     return {
+        **snapshot,
         "ok": True,
         "hwnd": hwnd,
         "process": proc,
@@ -203,6 +213,8 @@ def find_by_element_id(element_id: str, hwnd: int | None = None,
 
 
 def _resolve(hwnd, name, exact, index):
+    if int(index) < 0:
+        return None, {'error': 'Negative candidate indexes are not allowed'}
     res = ui_find(name=name, hwnd=hwnd, exact=exact, index=index)
     if not res.get("ok"):
         return None, res
@@ -221,12 +233,18 @@ def ui_click(
     mouse=None,
     settle_ms: int = 250,
     element_id: str | None = None,
+    ref: str | None = None,
 ) -> dict[str, Any]:
     """Move the real cursor to a control's centre and click it.
 
     P0-3：给了 element_id 就按 id 定位（优先），不再靠名字匹配。
     """
-    if element_id:
+    if ref:
+        from computer_mcp.snapshots import resolve
+        target = resolve(ref, hwnd)
+        hwnd = target['hwnd']
+        res = {}
+    elif element_id:
         target, res = find_by_element_id(str(element_id), hwnd=hwnd)
     else:
         target, res = _resolve(hwnd, name, exact, index)
@@ -234,6 +252,10 @@ def ui_click(
         return res
     if mouse is None:
         return {"error": "mouse controller not provided"}
+    if hwnd:
+        from computer_mcp.winutil import point_owner
+        if point_owner(target['cx'], target['cy']) != hwnd:
+            return {'ok': False, 'error': 'Target window is obscured; observe it again'}
     t0 = time.perf_counter()
     mouse.position = (target["cx"], target["cy"])
     _execution.sleep(0.06)
@@ -270,7 +292,10 @@ def ui_invoke(name: str, hwnd: int | None = None, exact: bool = False, index: in
             c = queue.pop(0)
             try:
                 n = (c.Name or "").strip().casefold()
-                if ((n == needle) if exact else (needle in n)) and n:
+                box = c.BoundingRectangle
+                identity = _element_id(c.ControlTypeName, (c.Name or '').strip(),
+                    (int(box.left),int(box.top),int(box.width()),int(box.height())))
+                if identity == target.get('element_id'):
                     ctrl = c
                     break
                 queue.extend(c.GetChildren())
@@ -303,7 +328,10 @@ def ui_set_text(name: str, text: str, hwnd: int | None = None, exact: bool = Fal
         c = queue.pop(0)
         try:
             n = (c.Name or "").strip().casefold()
-            if ((n == needle) if exact else (needle in n)) and n:
+            box = c.BoundingRectangle
+            identity = _element_id(c.ControlTypeName, (c.Name or '').strip(),
+                (int(box.left),int(box.top),int(box.width()),int(box.height())))
+            if identity == target.get('element_id'):
                 try:
                     from computer_mcp.execution import check
                     check('ui_set_text')

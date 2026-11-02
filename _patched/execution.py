@@ -96,7 +96,7 @@ def install_boundaries():
         'actions.config': {'set_config':'set_config'},
         'ui_ext': {'ui_click':'ui_click','ui_invoke':'ui_invoke','ui_set_text':'ui_set_text','run_batch':'batch'},
         'ocr_ext': {'click_text':'click_text'},
-        'macro_ext': {'macro_run':'macro_run','macro_save':'macro_save','_force_foreground':'switch_to_window'},
+        'macro_ext': {'run_macro':'macro_run','macro_save':'macro_save','_force_foreground':'switch_to_window'},
         'vision_state': {n:n for n in ('click_template','hover_probe','capture_template','set_baseline')},
         'appkit': {'launch':'run_script','activate':'switch_to_window','exit_app':'close_window','close_windows':'close_window'},
         'winutil': {'activate':'switch_to_window','ensure_front':'switch_to_window'},
