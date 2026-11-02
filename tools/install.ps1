@@ -19,8 +19,17 @@ function Assert-Managed([string]$Candidate) {
     return $absolute
 }
 $current = Assert-Managed (Join-Path $root 'current')
+$env:ICON_CONTROL_HOME = $root
+function Revoke-CurrentAuthority {
+    $currentPython = Join-Path $current 'Scripts\python.exe'
+    if (Test-Path -LiteralPath $currentPython) {
+        & $currentPython -c "from computer_mcp import security,permission_bridge; security.latch_stop(); permission_bridge.write_state(False,client='installer',event='action')"
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot confirm revoked authority; activation/rollback refused' }
+    }
+}
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-ffff'
 if ($Rollback) {
+    Revoke-CurrentAuthority
     $backup = Get-ChildItem -LiteralPath $root -Directory -Filter 'backup-*' | Sort-Object Name -Descending | Select-Object -First 1
     if (-not $backup) { throw 'No rollback version exists' }
     $previous = Assert-Managed $backup.FullName
@@ -48,6 +57,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Installation failed; current version preserved
 & $interpreter -c "import computer_mcp; from computer_mcp import tool_registry; assert len(tool_registry.TOOLS)==89"
 if ($LASTEXITCODE -ne 0) { throw 'Import validation failed; current version preserved' }
 $backupTarget = Assert-Managed (Join-Path $root ('backup-' + $stamp))
+Revoke-CurrentAuthority
 $moved = $false
 try {
     if (Test-Path -LiteralPath $current) { Move-Item -LiteralPath $current -Destination $backupTarget; $moved=$true }
