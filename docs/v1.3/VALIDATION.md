@@ -1,5 +1,7 @@
 # v1.3.0rc2 验证与剩余验收
 
+> 下表为 3a0b8dab 的历史验收。安全协议已重构，当前整改及验证范围见 [SECURITY-REMEDIATION.md](SECURITY-REMEDIATION.md)；旧通过项不自动算作新构建的通过项。
+
 2026-11-03（Asia/Shanghai）。基线 v1.2.0 / 98b38b4；本轮延续 PR #1。
 当前为受控候选版，正式发布仍被阻止。上一候选版历史结果保留在 Git 历史和原 CI 运行中。
 

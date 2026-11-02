@@ -1,14 +1,16 @@
 param([Parameter(Mandatory=$true)][string]$StatePath)
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-Add-Type 'public static class FixtureDpi { [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr value); }'
+Add-Type 'public static class FixtureDpi { [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr value); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr value); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr hwnd); }'
 [void][FixtureDpi]::SetProcessDpiAwarenessContext([IntPtr](-4))
-$script:counts = @{Confirm1=0;Confirm2=0;Counter=0}
+[void][FixtureDpi]::SetThreadDpiAwarenessContext([IntPtr](-4))
+$script:fixtureHash=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$script:counts = @{Confirm1=0;Confirm2=0;Counter=0;OcrTarget=0;IconTarget=0}
 $script:dragging=$false
 $script:dragMoves=0
 $form=New-Object System.Windows.Forms.Form
 $form.Text='Icon Control rc2 acceptance'
-$form.Size=New-Object System.Drawing.Size(800,650)
+$form.ClientSize=New-Object System.Drawing.Size(800,650)
 $form.StartPosition='Manual'
 $form.Location=New-Object System.Drawing.Point(80,80)
 $form.AutoScaleMode='Dpi'
@@ -48,7 +50,26 @@ $pad.Add_MouseDown({$script:dragging=$true;$pad.Capture=$true})
 $pad.Add_MouseMove({if($script:dragging){$script:dragMoves++}})
 $pad.Add_MouseUp({$script:dragging=$false;$pad.Capture=$false})
 $form.Controls.Add($pad)
-Add-Button 'Reset' 'Reset' 490 {$script:counts=@{Confirm1=0;Confirm2=0;Counter=0};$script:input.Clear();$script:list.TopIndex=0;$script:dragMoves=0}
+Add-Button 'Reset' 'Reset' 490 {$script:counts=@{Confirm1=0;Confirm2=0;Counter=0;OcrTarget=0;IconTarget=0};$script:input.Clear();$script:list.TopIndex=0;$script:dragMoves=0}
+$canvas=New-Object System.Windows.Forms.Panel
+$canvas.Name='CanvasProbe';$canvas.AccessibleName='CanvasProbe'
+$canvas.Location=New-Object System.Drawing.Point(20,540)
+$canvas.Size=New-Object System.Drawing.Size(720,58)
+$canvas.BackColor=[System.Drawing.Color]::DarkSlateBlue
+$canvas.Add_Paint({
+  param($sender,$event)
+  $height=$sender.ClientSize.Height;$width=$sender.ClientSize.Width
+  $font=New-Object System.Drawing.Font('Segoe UI',([Math]::Max(12,$height*0.28)),[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+  try {$event.Graphics.DrawString('CANITY TEST TARGET',$font,[System.Drawing.Brushes]::White,10,8)} finally {$font.Dispose()}
+  $event.Graphics.FillEllipse([System.Drawing.Brushes]::LimeGreen,([int]($width*0.86)),([int]($height*0.15)),([int]($height*0.7)),([int]($height*0.7)))
+})
+$canvas.Add_MouseClick({
+  param($sender,$event)
+  if($event.X -lt $sender.ClientSize.Width*0.75){$script:counts.OcrTarget++}
+  elseif($event.X -ge $sender.ClientSize.Width*0.86 -and $event.X -le ($sender.ClientSize.Width*0.86+$sender.ClientSize.Height*0.7)){$script:counts.IconTarget++}
+})
+$form.Controls.Add($canvas)
+$script:lastCommand=''
 $timer=New-Object System.Windows.Forms.Timer
 $timer.Interval=100
 $timer.Add_Tick({
@@ -57,10 +78,24 @@ $timer.Add_Tick({
   $form.Visible=$true
   foreach($child in $form.Controls) {$child.Visible=$true}
   $commandPath=$StatePath+'.command'
-  if(Test-Path -LiteralPath $commandPath) {$status.Text=[IO.File]::ReadAllText($commandPath)}
+  if(Test-Path -LiteralPath $commandPath) {
+    $raw=[IO.File]::ReadAllText($commandPath)
+    if($raw -ne $script:lastCommand){
+      $script:lastCommand=$raw
+      try {
+        $command=$raw|ConvertFrom-Json -ErrorAction Stop
+        $status.Text=[string]$command.message
+        if($command.action -eq 'recreate'){
+          $method=$form.GetType().GetMethod('RecreateHandle',[Reflection.BindingFlags]'NonPublic,Instance')
+          [void]$method.Invoke($form,$null)
+        }
+      } catch {$status.Text=$raw}
+    }
+  }
   $data=@{counts=$script:counts;text=$script:input.Text;scroll=$script:list.TopIndex;
     dragging=$script:dragging;drag_moves=$script:dragMoves;dpi=$form.DeviceDpi;
-    client_width=$form.ClientSize.Width;client_height=$form.ClientSize.Height}
+    client_width=$form.ClientSize.Width;client_height=$form.ClientSize.Height;
+    pid=$PID;hwnd=$form.Handle.ToInt64();window_dpi=[FixtureDpi]::GetDpiForWindow($form.Handle);fixture_source_sha256=$script:fixtureHash}
   [IO.File]::WriteAllText($StatePath,($data|ConvertTo-Json -Depth 5),(New-Object Text.UTF8Encoding($false)))
 })
 $timer.Start()

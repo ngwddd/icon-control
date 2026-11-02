@@ -3,7 +3,8 @@
 > **Icon Control v1.3 稳定性重构计划 · 1.3.0rc2 候选版**
 >
 > 当前保留 89 个工具，优先修复权限执行、控制权、假成功与安装问题。
-> S0–S4 的源码和自动化验证已提交；S5 的 32 项真机验收及独立 P0 复审仍待完成，不能作为正式稳定版发布。
+> 本轮修复 RC2 安全审计及独立复审问题，授权迁移至按 Agent、能力和应用隔离的原生控制中心。
+> 完整真机验收和最终独立复审尚未签收，不能作为正式稳定版发布。修复与证据状态见 [安全整改](docs/v1.3/SECURITY-REMEDIATION.md)。
 > 安装与回滚见 [INSTALL](docs/v1.3/INSTALL.md)，迁移见 [MIGRATION](docs/v1.3/MIGRATION.md)，
 > 阶段要求见 [PLAN](docs/v1.3/PLAN.md)，验收见 [DESKTOP-BENCHMARKS](docs/v1.3/DESKTOP-BENCHMARKS.md)。
 > 下文历史性能数据来自 v1.2，尚未在 v1.3 真机环境复测。
@@ -75,7 +76,7 @@
 └────────────────────────────────────────────────────────────────┘
 
 安全线 A：连按两下 ESC = 立刻松手（脚本内 panic + 进程外 panic_watch 看守）
-安全线 B：GUI 上的「鼠标·已授权 / 未授权」胶囊（灰=无权限，绿=可接管，agent 只读）
+安全线 B：原生控制中心按会话、能力和应用授权；DSH 胶囊仅显示后端确认状态
 ```
 
 ---
@@ -92,7 +93,7 @@
 | 验证 | `verify_flow` | text / template / baseline / stable / file 五种断言，遇错即停 |
 | 视觉状态 | `capture_template` `match_template` `wait_template` `click_template` `set_baseline` `diff_baseline` `wait_baseline_change` `sample_stable` `hover_probe` `vision_list` | 模板自学、基线差异、稳定采样、悬停探针、运行统计 |
 | 列车 | `track` | 三步帧环 + 看门狗（`budget_ms` 超 3× 出拼图，连续 2 次停） |
-| 应用生命周期 | （`appkit`） | `launch`（走 ShellExecuteW）/ `wait_window` / `exit_app` / `activate` |
+| 应用生命周期 | （`appkit`） | `launch`（ShellExecuteEx 验证具体进程）/ `wait_window` / `exit_app` / `activate` |
 | 原有 | 30 个鼠标/键盘/窗口/虚拟桌面工具 | computer-mcp 原生 |
 
 ---
@@ -232,7 +233,7 @@ python tools\verify.py --pattern "test_*.py"
 & "$env:LOCALAPPDATA\IconControl\current\Scripts\python.exe" -m computer_mcp.launcher stdio
 ~~~
 
-加载安装目录的授权客户端后，必须由用户点击授权。源码中的占位 Token 不可使用。
+加载安装目录的客户端后，由用户在原生控制中心选择会话、能力和应用并批准。前端不保存授权密钥。
 HTTP 使用官方 Streamable HTTP、独立 Bearer Token 和 loopback 绑定；旧自制 SSE 接口不再提供。
 
 ---

@@ -1,36 +1,33 @@
 # 候选版安装与回滚
 
-需要 Windows 10/11 x64、Python 3.12+。源码包和 wheel 包均由 pyproject.toml 构建，不再覆盖第三方 site-packages。
-当前验证环境为 CPython 3.12.14；安装器默认使用 constraints-windows-py312.txt 锁定验证过的依赖。
-其他 Python／Windows 组合须重新验收，不能直接沿用本机通过结论。
+使用 Windows 10/11 x64、标准 CPython 3.12（含 Tk 和 pythonw.exe）。constraints-windows-py312.txt 锁定已验证依赖。其他 Python 或 Windows 组合需要单独验收。
 
 ```powershell
 python -m pip install build
 python -m build
-powershell -File tools/install.ps1 -Wheel dist/icon_control-1.3.0rc2-py3-none-any.whl
+powershell -File tools/install.ps1 -Wheel dist/icon_control-1.3.0rc2-py3-none-any.whl -BridgePort 18766 -RegisterUi
 ```
 
-安装目录默认为 `%LOCALAPPDATA%\IconControl`。每版用独立 venv，验证后切换 current 目录联接；
-失败保留现有环境，旧版本以 backup-* 联接保留。回滚：
+默认安装到 %LOCALAPPDATA%\IconControl。每版使用独立 venv；验证导入、89 个工具和原生界面依赖后，切换 current 目录联接。切换及回滚前先撤销旧许可。已有环境、宏和模板保留，安装器不移动已创建的 venv。
 
 ```powershell
 powershell -File tools/install.ps1 -Rollback
 ```
 
-在 MCP 客户端配置中，将 command 指向 `current\Scripts\python.exe`，
-args 设为 `-m computer_mcp.launcher stdio`。自定义 InstallRoot 时，客户端也需设置同值的 ICON_CONTROL_HOME。
-协议自检：`python tools/protocol_smoke.py --home <安装目录>`（仅连接与列工具，不输入）。
+回滚后重启助手工作进程及授权桥，再由人重新批准所需会话。回滚只恢复软件环境，不恢复旧授权。
 
-`init` 只生成凭据、复制默认资产和渲染授权客户端，不授予控制权。
-按宿主的插件加载机制装入 `<安装目录>\plugin\client.js`，由用户手动点击授权。
-已有候选版可用 -BridgePort 18766，端口会保存并同时渲染进客户端；不再需要手改 URL。
-升级授权协议后完整刷新 DSH 页面。旧图片信标不再被接受，密钥仅经认证请求头发送。
-后台保活依赖认证事件流触发客户端确认，连接断开或客户端冻结仍会超时拒绝。
-不要提交 state/、生成的客户端或凭据。用户已有宏／模板可备份后复制进新目录；不会自动覆盖旧宿主或真实授权。
+MCP 客户端的 command 使用 current\Scripts\python.exe，args 为 -m computer_mcp.launcher stdio。自定义 InstallRoot 时同时设置 ICON_CONTROL_HOME。升级后需要重启已运行的 MCP 工作进程，目录联接切换不会替换已加载的 Python 模块。
 
-HTTP 模式使用官方 SDK Streamable HTTP 的 `/mcp`，仅监听 loopback，要求
-`Authorization: Bearer <state/mcp-token.txt>`。原简化 `/sse` 端点停用；旧客户端请改用 stdio 或支持 Streamable HTTP 的客户端。
+-RegisterUi 注册当前用户的 icon-control://permissions 协议。DSH 按其插件机制加载安装目录 plugin/client.js；胶囊只显示已确认状态，点击打开原生控制中心。界面内由人选择具体 Agent、能力及应用，点击授权后才会生效。关闭控制中心会撤销，断线显示状态未知。
 
-数据、模板和记录位于统一数据目录。训练采集默认关闭；显式开启且用户授权有效时才记录。
-v1.2 的 `_patched/reapply.py` 原地覆盖流程已废弃；完整新接口差异见 MIGRATION.md。
-正式 v1.3.0 发布前必须完成 DESKTOP-BENCHMARKS.md 的真机验收与 release_gate.py 校验。
+浏览器来源必须精确配置在 state/bridge-config.json 的 origins。DSH 打包宿主使用 dsh-app://app；自定义浏览器宿主应登记其准确来源。不要将 file://、任意 localhost 端口或整个自定义协议当作白名单。
+
+init 只生成本机凭据、默认资产与无凭据的前端，不会授予权限。不要将 state/ 或生成的本机配置加入仓库。首次迁移会废弃旧前端中曾保存的密钥。
+
+HTTP 使用官方 Streamable HTTP /mcp、loopback 监听和 Bearer 认证。每个 MCP 客户端应有独立凭据，可运行：
+```text
+python -m computer_mcp.launcher client-add --client-name my-agent
+```
+命令只返回本机凭据文件路径，不输出密钥；它不授予任何桌面权限。不要让不同 Agent 共用同一凭据。旧 /sse 接口不再提供。
+
+协议自检使用安装环境的 Python 运行 tools/protocol_smoke.py --home <安装目录>，只连接 SDK 并列出工具。实际输入验证使用专用夹具、由人授权；完整步骤见 DESKTOP-BENCHMARKS.md。正式发布仍受 release_gate.py 控制。

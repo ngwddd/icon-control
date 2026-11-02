@@ -1,5 +1,7 @@
 # v1.3.0rc2 补充修复与发布判断
 
+> 历史报告：对应 3a0b8dab 的早期 RC2，不代表本轮原生授权协议或当前源码的验收结果。最新整改见 [SECURITY-REMEDIATION.md](SECURITY-REMEDIATION.md)。原始记录保留，旧心跳和 Token 方案已被替换。
+
 日期：2026-11-03（Asia/Shanghai）。本轮延续 PR #1，不把候选版直接改标为正式版。
 
 ## 本轮修复

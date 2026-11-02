@@ -8,7 +8,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "anchor_mem",
@@ -22,7 +23,8 @@
       "stats"
     ],
     "action_default": "list",
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "batch",
@@ -33,7 +35,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "button_down",
@@ -44,7 +47,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "button_up",
@@ -55,7 +59,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "capture_config",
@@ -72,7 +77,8 @@
       "format",
       "diff_threshold",
       "mask_bottom"
-    ]
+    ],
+    "parameter_effects": []
   },
   {
     "name": "capture_daemon",
@@ -85,7 +91,8 @@
       "status"
     ],
     "action_default": "status",
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "capture_template",
@@ -96,7 +103,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "click",
@@ -107,7 +115,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "click_template",
@@ -118,7 +127,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "click_text",
@@ -129,19 +139,21 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "close_window",
     "zone": "Z3",
     "effects": [
       "window",
-      "process"
+      "window_close"
     ],
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "control_claim",
@@ -152,7 +164,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "control_status",
@@ -163,7 +176,8 @@
     "requires_authority": false,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "dataset_explore",
@@ -175,7 +189,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "dataset_export",
@@ -186,7 +201,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "dataset_promote",
@@ -197,7 +213,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "dataset_query",
@@ -208,7 +225,8 @@
     "requires_authority": false,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "dataset_status",
@@ -219,7 +237,8 @@
     "requires_authority": false,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "dataset_triage",
@@ -230,18 +249,20 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "diff_baseline",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "double_click",
@@ -252,7 +273,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "drag",
@@ -263,40 +285,44 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "find_element",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "find_text",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "frame_diff",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "frame_mark",
@@ -307,18 +333,20 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "get_window_info",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "glyph",
@@ -332,7 +360,8 @@
       "status"
     ],
     "action_default": "list",
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "housekeeping",
@@ -345,7 +374,8 @@
       "status"
     ],
     "action_default": "status",
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "hover_probe",
@@ -356,40 +386,46 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "hud",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "key_down",
     "zone": "Z3",
     "effects": [
-      "input"
+      "input",
+      "text_entry"
     ],
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "key_press",
     "zone": "Z3",
     "effects": [
-      "input"
+      "input",
+      "text_entry"
     ],
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "key_up",
@@ -400,7 +436,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "layout_mem",
@@ -414,29 +451,32 @@
       "resolve"
     ],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "list_virtual_desktops",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "list_windows",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "macro_list",
@@ -447,7 +487,8 @@
     "requires_authority": false,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "macro_run",
@@ -462,7 +503,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "macro_save",
@@ -473,18 +515,20 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "match_template",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "maximize_window",
@@ -495,7 +539,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "minimize_window",
@@ -506,7 +551,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "mouse_move",
@@ -517,7 +563,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "move_window",
@@ -528,7 +575,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "move_window_to_virtual_desktop",
@@ -539,7 +587,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "navigate",
@@ -550,51 +599,58 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "ocr_read",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "probe",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "read_digits",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "record",
     "zone": "Z1",
     "effects": [
-      "file_write"
+      "screen_read",
+      "file_write",
+      "file_delete"
     ],
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "resize_window",
@@ -605,7 +661,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "restore_window",
@@ -616,7 +673,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "run_script",
@@ -630,73 +688,80 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "sample_stable",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "screen_layout",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "screen_state",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "screenshot",
     "zone": "Z1",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "screenshot_window",
     "zone": "Z1",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "sense",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "servo",
@@ -707,7 +772,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "set_baseline",
@@ -718,7 +784,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "set_config",
@@ -729,7 +796,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "set_window_topmost",
@@ -740,7 +808,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "snap_window_bottom",
@@ -751,7 +820,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "snap_window_left",
@@ -762,7 +832,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "snap_window_right",
@@ -773,7 +844,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "snap_window_top",
@@ -784,19 +856,22 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "snapshot",
     "zone": "Z1",
     "effects": [
+      "screen_read",
       "file_write",
       "file_delete"
     ],
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "switch_to_window",
@@ -807,7 +882,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "switch_virtual_desktop",
@@ -818,18 +894,20 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "trace",
     "zone": "Z4",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "track",
@@ -844,7 +922,8 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "triple_click",
@@ -855,19 +934,22 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "type",
     "zone": "Z3",
     "effects": [
       "input",
+      "text_entry",
       "clipboard_write"
     ],
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "ui_click",
@@ -878,18 +960,20 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "ui_find",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "ui_invoke",
@@ -900,29 +984,33 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "ui_set_text",
     "zone": "Z3",
     "effects": [
-      "input"
+      "input",
+      "text_entry"
     ],
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "ui_tree",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "verify_flow",
@@ -933,83 +1021,105 @@
     "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "vision_list",
     "zone": "Z5",
     "effects": [
-      "observe"
+      "file_delete",
+      "config_write"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": [
+      {
+        "parameter": "delete",
+        "effects": [
+          "file_delete"
+        ]
+      },
+      {
+        "parameter": "reset_stats",
+        "effects": [
+          "config_write"
+        ]
+      }
+    ]
   },
   {
     "name": "wait_baseline_change",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "wait_for",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "wait_for_change",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "wait_template",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "watch",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   },
   {
     "name": "world_state",
     "zone": "Z2",
     "effects": [
-      "observe"
+      "screen_read"
     ],
-    "requires_authority": false,
+    "requires_authority": true,
     "read_actions": [],
     "action_default": null,
-    "read_when_absent": []
+    "read_when_absent": [],
+    "parameter_effects": []
   }
 ]
