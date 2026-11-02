@@ -7,7 +7,7 @@
 
 | 范围 | 实际结果 | 可复核材料 |
 |---|---|---|
-| 完整自动化回归 | 375 项运行，367 通过、8 跳过、0 失败、0 错误 | test-results.json；tools/verify.py |
+| 完整自动化回归 | 375 项运行，370 通过、5 跳过、0 失败、0 错误 | test-results.json；tools/verify.py |
 | 新稳定性回归 | 77 项安全／任务／快照／传输／原生调用与发布闸门用例，全部通过 | tests/test_stability*.py |
 | 标准构建 | wheel 与 sdist 成功；完整包不依赖宿主补丁目录 | pyproject.toml；dist/ 构建产物 |
 | 独立安装 | Windows x64 / CPython 3.12.14 新建 venv，pip 自动安装声明依赖；pip check 通过 | tools/install.ps1；constraints-windows-py312.txt |
@@ -28,12 +28,13 @@ HTTP 认证与官方传输、中文及 UTF-16 输入、只读截图和 OCR 不�
 
 - 3 项旧 E2E：未启用 DSH_E2E，涉及真实窗口和输入。
 - 1 项专项 bot 扫描：本仓库没有对应专项自动运行脚本。
-- 1 项旧宏文件检查：旧测试寻找 wechat_send，仓库现有文件名不同。
-- 1 项旧 venv 副本同步检查：本轮使用独立完整包，仓库没有旧 venv 安装布局。
-- 1 项旧根目录 CLI 检查：入口已位于 tools/，旧测试路径不存在。
 - 1 项应用案例回归：未启用 DSH_RUN_CASES，不能视为真实应用通过。
 
 完整 ID 和原始跳过理由保留于 test-results.json。没有删除这些测试或把 skip 改计为 pass。
+
+首次 GitHub Windows CI 发现旧客户端测试读取个人 Desktop 路径，本机命中已安装副本而云端报错。
+现已固定为验证仓库 plugin/client.js，并修正旧宏、CLI、安装副本三项检查的路径；这三项已实际运行通过。
+CI 继续运行完整测试，并保存失败时的回归日志；协议互通增加服务端版本校验。
 
 ## 尚未满足的发布条件
 

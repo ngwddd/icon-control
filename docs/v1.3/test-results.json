@@ -21,18 +21,6 @@
       "reason": "项目里没有自动跑脚本（专项脚本已移出，符合预期）"
     },
     {
-      "test": "test_patch_invariants.TestMacros.test_send_macro_uses_enter_not_send_button",
-      "reason": "没有 wechat_send 宏"
-    },
-    {
-      "test": "test_v02_features.TestWiring.test_patched_in_sync",
-      "reason": "没有 venv 安装副本"
-    },
-    {
-      "test": "test_v03_bridge.TestCliUsesGate.test_mouse_permission_delegates_to_status",
-      "reason": "没有 mouse_permission.py"
-    },
-    {
       "test": "test_v07_cases.TestPromotedCases.test_all_cases_still_behave",
       "reason": "需要 DSH_RUN_CASES=1 且能导入 computer_mcp"
     }

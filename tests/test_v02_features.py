@@ -197,14 +197,11 @@ class TestWiring(unittest.TestCase):
         self.assertGreaterEqual(len(names), 58, f"工具总数异常：{len(names)}")
 
     def test_patched_in_sync(self) -> None:
-        pkg = os.path.join(HERE, "venv", "Lib", "site-packages", "computer_mcp")
-        if not os.path.isdir(pkg):
-            self.skipTest("没有 venv 安装副本")
+        pkg = os.path.dirname(perm.__file__)
         for f in ("permission.py", "verify_flow.py", "mcp.py"):
             a = os.path.join(pkg, f)
             b = os.path.join(HERE, "_patched", f)
-            if not (os.path.isfile(a) and os.path.isfile(b)):
-                self.skipTest(f"{f} 缺少一侧")
+            self.assertTrue(os.path.isfile(a) and os.path.isfile(b), f'{f} 缺少一侧')
             self.assertEqual(open(a, "rb").read(), open(b, "rb").read(), f"{f} 漂移了")
 
 

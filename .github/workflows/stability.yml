@@ -16,6 +16,23 @@ jobs:
           python -m pip install -c constraints-windows-py312.txt $wheel
           if ($LASTEXITCODE -ne 0) { throw 'Package installation failed' }
       - run: python tools/verify.py --pattern "test_*.py"
+      - name: Official MCP SDK interoperability
+        shell: pwsh
+        run: |
+          $env:ICON_CONTROL_HOME = Join-Path $pwd '.runtime/protocol'
+          $env:DSH_MOUSE_BRIDGE = 'off'
+          python -m computer_mcp.launcher init
+          if ($LASTEXITCODE -ne 0) { throw 'Protocol fixture initialization failed' }
+          python tools/protocol_smoke.py --home $env:ICON_CONTROL_HOME
+          if ($LASTEXITCODE -ne 0) { throw 'Official SDK round trip failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-evidence
+          path: |
+            .runtime/test-results.json
+            .runtime/tests.log
+            .runtime/protocol/protocol-smoke.json
       - uses: actions/upload-artifact@v4
         with:
           name: icon-control-candidate

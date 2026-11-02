@@ -1,4 +1,4 @@
-"""MCP server adapter - supports stdio and HTTP/SSE transport modes."""
+"""MCP adapter for stdio and authenticated Streamable HTTP."""
 
 import asyncio
 import json
@@ -38,7 +38,8 @@ mouse_controller = MouseController()
 keyboard_controller = KeyboardController()
 
 # Initialize MCP server
-server = Server("computer-mcp")
+from computer_mcp import __version__
+server = Server("computer-mcp", version=__version__)
 
 
 

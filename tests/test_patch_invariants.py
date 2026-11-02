@@ -209,9 +209,8 @@ class TestMacros(unittest.TestCase):
 
     def test_send_macro_uses_enter_not_send_button(self):
         """实测：点「发送」按钮无效，必须用回车。"""
-        spec = self._macros().get("wechat_send.json")
-        if not spec:
-            self.skipTest("没有 wechat_send 宏")
+        spec = self._macros().get("wechat_send_frac.json")
+        self.assertIsNotNone(spec, 'Bundled send macro is required')
         actions = [s.get("action") for s in spec["steps"]]
         self.assertIn("key", actions, "发送宏应当用 key=enter，而不是点发送按钮")
         keys = [s.get("key") for s in spec["steps"] if s.get("action") == "key"]

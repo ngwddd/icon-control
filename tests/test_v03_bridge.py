@@ -138,16 +138,9 @@ class TestGatePrefersBridge(AuthorityCase,unittest.TestCase):
 
 class TestClientReportsToBridge(unittest.TestCase):
     def _client_src(self) -> str:
-        cands = [
-            os.path.join(os.environ.get("DSH_DEV_HOME", os.path.expanduser("~")), "Desktop", "deepseek development", "dsh-mouse-permission", "client.js"),
-            os.path.join(os.path.expanduser("~"), ".dsh", "profiles", "desktop", "node_modules",
-                         "@local", "dsh-mouse-permission", "client.js"),
-        ]
-        for c in cands:
-            if os.path.isfile(c):
-                import pathlib
-            return pathlib.Path(c).read_text(encoding="utf-8")
-        self.skipTest("找不到 client.js")
+        path = pathlib.Path(HERE) / 'plugin' / 'client.js'
+        self.assertTrue(path.is_file(), 'Repository permission client is required')
+        return path.read_text(encoding='utf-8')
 
     def test_has_bridge_url_and_heartbeat(self) -> None:
         src = self._client_src()
@@ -166,9 +159,8 @@ class TestClientReportsToBridge(unittest.TestCase):
 
 class TestCliUsesGate(unittest.TestCase):
     def test_mouse_permission_delegates_to_status(self) -> None:
-        path = os.path.join(HERE, "mouse_permission.py")
-        if not os.path.isfile(path):
-            self.skipTest("没有 mouse_permission.py")
+        path = os.path.join(HERE, "tools", "mouse_permission.py")
+        self.assertTrue(os.path.isfile(path), 'Permission CLI is required')
         src = __import__("pathlib").Path(path).read_text(encoding="utf-8")
         self.assertIn("_perm.status()", src, "CLI 必须走 status()")
         self.assertNotIn("_perm._read_pill()", src, "CLI 不许自己 OCR（会读到聊天正文）")

@@ -3,10 +3,9 @@
 This module provides a stateless API for computer control.
 """
 
-__version__ = "0.0.3"
+__version__ = "1.3.0rc1"
 
-from pynput.keyboard import Controller as KeyboardController
-from pynput.mouse import Controller as MouseController
+from computer_mcp.input_guard import KeyboardController, MouseController
 
 from computer_mcp.actions import (
     keyboard as keyboard_actions,
