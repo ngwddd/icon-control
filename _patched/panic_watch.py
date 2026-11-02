@@ -56,7 +56,10 @@ def main() -> int:
 
     print("[watchdog] ✋ 收到急停，开始清理自动化进程", flush=True)
     # Cooperative cancellation releases owned held inputs before forced exit.
-    security.latch_stop()
+    try:
+        security.latch_stop()
+    except Exception as exc:
+        print('[watchdog] Durable stop failed; owned-process cleanup continues: '+type(exc).__name__,flush=True)
     time.sleep(.25)
     victims = [p for p in process_registry.registered() if p.pid != os.getpid()]
     if not victims:

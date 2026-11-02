@@ -21,6 +21,7 @@ class ToolSpec:
     read_actions: tuple = ()
     action_default: str | None = None
     read_when_absent: tuple = ()
+    parameter_effects: tuple = ()
 
     def __post_init__(self):
         supported={'observe','input','compose','window','process','control','capture',
@@ -28,12 +29,19 @@ class ToolSpec:
                    'screen_read','text_entry','window_close'}
         if not isinstance(self.effects,tuple) or not self.effects or not set(self.effects)<=supported:
             raise ValueError(f'{self.name}: explicit nonempty supported effects are required')
+        for key,effects in self.parameter_effects:
+            if not isinstance(key,str) or not effects or not set(effects)<=set(self.effects):
+                raise ValueError(f'{self.name}: invalid parameter-dependent effect declaration')
 
     def effects_for(self, arguments=None):
         if arguments is None:
             return self.effects
         if not isinstance(arguments,dict):
             raise ValueError('Tool arguments must be an object')
+        if self.parameter_effects:
+            chosen = tuple(dict.fromkeys(effect for key,effects in self.parameter_effects
+                if arguments.get(key) for effect in effects))
+            return chosen or ('observe',)
         if self.read_when_absent and not any(k in arguments for k in self.read_when_absent):
             return ('observe',)
         if arguments.get('action',self.action_default) in self.read_actions:

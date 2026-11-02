@@ -6,7 +6,8 @@ from computer_mcp import tool_registry
 
 root=Path(__file__).resolve().parents[1];out=root/'docs'/'v1.3';out.mkdir(parents=True,exist_ok=True)
 tools=[dict(name=s.name,zone=s.zone,effects=list(s.effects),requires_authority=s.requires_authority,
-            read_actions=list(s.read_actions),action_default=s.action_default,read_when_absent=list(s.read_when_absent))
+            read_actions=list(s.read_actions),action_default=s.action_default,read_when_absent=list(s.read_when_absent),
+            parameter_effects=[dict(parameter=key,effects=list(effects)) for key,effects in s.parameter_effects])
        for s in tool_registry.iter_specs()]
 (out/'tool-permissions.json').write_text(json.dumps(tools,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 table=['# 工具权限矩阵','','89 个现有工具；效果声明参与执行检查，旧 read_only 标记仅用于兼容。',

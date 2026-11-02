@@ -120,7 +120,7 @@ class ReleaseGateTests(unittest.TestCase):
             data=json.dumps(dict(source_commit=sha,kind='real_desktop',simulated=False,
                                  note='Validator unit fixture, not release evidence')).encode()
             (root/'fixture').write_bytes(data)
-            unit=json.dumps(dict(source_commit=sha,run=1,failures=[],errors=[],skipped=[])).encode()
+            unit=json.dumps(dict(source_commit=sha,source_dirty=False,run=1,failures=[],errors=[],skipped=[])).encode()
             (root/'unit.json').write_bytes(unit)
             cases=[dict(id=f'B{i:02}',status='passed',elapsed_ms=1,environment='unit fixture',
                         application_state='fixture',evidence={'path':'fixture','sha256':hashlib.sha256(data).hexdigest()}) for i in range(1,33)]

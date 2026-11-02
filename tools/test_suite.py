@@ -14,6 +14,9 @@ with (directory/'tests.log').open('w',encoding='utf-8') as stream:
     suite=unittest.defaultTestLoader.discover(str(root/'tests'),pattern=args.pattern)
     result=unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
 report=dict(source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),
+            source_dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=all','--',
+                '_patched','plugin','tools','tests','.github','pyproject.toml','VERSION','constraints-windows-py312.txt',
+                'MANIFEST.in','panic_watch.py','macros','recipes','programs'],cwd=root,text=True).strip()),
             pattern=args.pattern,run=result.testsRun,failures=[dict(test=t.id(),trace=trace) for t,trace in result.failures],
             errors=[dict(test=t.id(),trace=trace) for t,trace in result.errors],
             skipped=[dict(test=t.id(),reason=reason) for t,reason in result.skipped])

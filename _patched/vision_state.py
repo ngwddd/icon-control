@@ -87,6 +87,8 @@ def stats(reset: bool = False) -> dict:
         "failure_rate": round(_STATS["failures"] / max(1, _STATS["calls"]), 3),
     }
     if reset:
+        from computer_mcp.permission import require
+        require('vision_list',{'reset_stats':True})
         _STATS.update({"started": time.time(), "calls": 0, "failures": 0, "retries": 0, "by_op": {}})
     return out
 
@@ -310,6 +312,8 @@ def delete_template(name: str) -> dict:
     removed = []
     for p in (os.path.join(TPL_DIR, f"{nm}.png"), os.path.join(TPL_DIR, f"{nm}.json")):
         if os.path.isfile(p):
+            from computer_mcp.permission import require
+            require('vision_list',{'delete':name})
             os.remove(p); removed.append(os.path.basename(p))
     return {"success": bool(removed), "removed": removed}
 

@@ -1,5 +1,6 @@
 include VERSION CHANGELOG.md THIRD_PARTY_NOTICES.md
 include constraints-windows-py312.txt
+include panic_watch.py
 recursive-include licenses *
 recursive-include docs *.md *.json
 recursive-include tools *.py *.ps1

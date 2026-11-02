@@ -6,13 +6,22 @@ from computer_mcp import consent_ipc, capabilities
 
 LABELS = {'screen_read':'读取屏幕、OCR 和窗口信息', 'input':'鼠标、切换窗口',
           'input_observe':'读取物理鼠标及按键状态（可选）',
-          'text_entry':'键盘输入及文本填写', 'window_close':'关闭所选应用窗口',
+          'text_entry':'在所选应用中输入文本（可能修改或保存文档）', 'window_close':'关闭所选应用窗口',
           'file_write':'写入 Icon Control 专用目录', 'file_delete':'清理专用目录文件',
           'config_write':'修改助手运行设置', 'process':'启动已批准的应用'}
 
 def main():
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--broker-session')
+    args=parser.parse_args()
     from computer_mcp import permission
     permission._ensure_bridge()
+    if not args.broker_session:
+        consent_ipc.request('open')
+        return
+    def ipc(command,**fields):
+        return consent_ipc.request(command,ui_nonce=args.broker_session,**fields)
     root = tk.Tk(); root.title('Icon Control — Permissions')
     scale=max(1.0,root.winfo_fpixels('1i')/96.0)
     width=min(int(650*scale),root.winfo_screenwidth()-80)
@@ -38,7 +47,7 @@ def main():
 
     def refresh():
         try:
-            result = consent_ipc.request('status')
+            result = ipc('status')
             previous = agents.get()
             agent_ids[:] = [a['id'] for a in result['agents']]
             agents['values'] = [a['label']+' · '+a['id'][:10] for a in result['agents']]
@@ -70,7 +79,7 @@ def main():
             if index < 0: raise ValueError('请先启动 MCP 客户端并刷新会话列表')
             selected = [scope for scope,var in options.items() if var.get()]
             if not selected: raise ValueError('请至少选择一种能力')
-            result = consent_ipc.request('grant', agent_session=agent_ids[index], scopes=selected,
+            result = ipc('grant', agent_session=agent_ids[index], scopes=selected,
                                         applications=[records[i] for i in applications.curselection()], launches=launches)
             desired[0] = result.get('granted') is True
             status.set('后端已确认：已授权。30 分钟后到期；关闭本窗口将撤销。')
@@ -81,7 +90,7 @@ def main():
         desired[0] = False
         status.set('正在等待后端确认撤销…')
         try:
-            result = consent_ipc.request('revoke')
+            result = ipc('revoke')
             if result.get('granted'): raise RuntimeError('后端尚未撤销')
             status.set('后端已确认：未授权')
         except Exception:
@@ -89,7 +98,7 @@ def main():
 
     def heartbeat():
         try:
-            result = consent_ipc.request('heartbeat', granted=desired[0])
+            result = ipc('heartbeat', granted=desired[0])
             if not result.get('granted'):
                 desired[0] = False
                 status.set('后端已确认：未授权')

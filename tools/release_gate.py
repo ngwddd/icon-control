@@ -35,7 +35,7 @@ def evaluate(report,root,expected_commit=None):
     if unit_path:
         try:
             unit=json.loads(unit_path.read_text(encoding='utf-8'))
-            if (unit.get('source_commit')!=expected_commit or unit.get('run',0)<1 or
+            if (unit.get('source_commit')!=expected_commit or unit.get('source_dirty') is not False or unit.get('run',0)<1 or
                     unit.get('failures')!=[] or unit.get('errors')!=[] or unit.get('skipped')!=[]):
                 errors.append('Raw automated regression does not support the release claim')
         except (ValueError,TypeError):errors.append('Raw automated regression is invalid')
@@ -64,7 +64,9 @@ def main():
     parser.add_argument('--expected-commit')
     args=parser.parse_args()
     if not args.report.is_file():print('BLOCKED: acceptance report missing');return 2
-    expected=args.expected_commit or subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+    expected=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+    if args.expected_commit and args.expected_commit!=expected:
+        print('BLOCKED: requested source commit is not the checked-out commit');return 2
     errors=evaluate(json.loads(args.report.read_text(encoding='utf-8')),args.report.parent,expected)
     for error in errors:print('BLOCKED: '+error)
     if errors:return 2

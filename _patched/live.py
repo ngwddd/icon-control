@@ -23,8 +23,15 @@ _DRAW = str(data_home() / '_draw')
 _RECORD_ROOT = str(data_home() / 'recordings')
 
 # 最近一次 run_script 的 trace（给 trace 工具用）
-_LAST_RUN: dict = {}
-_RUN_HISTORY: list[dict] = []
+_SESSION_RUNS: dict = {}
+
+def _session_runs():
+    from computer_mcp.agent_session import current
+    identity=current()
+    if identity not in _SESSION_RUNS:
+        if len(_SESSION_RUNS)>=32: _SESSION_RUNS.pop(next(iter(_SESSION_RUNS)))
+        _SESSION_RUNS[identity]={'last':{},'history':[]}
+    return _SESSION_RUNS[identity]
 
 
 def _daemon() -> CaptureDaemon:
@@ -189,7 +196,6 @@ def tool_snapshot(args: dict) -> dict:
 # ══════════════════════════ P1：闭环执行 ══════════════════════════
 def tool_run_script(args: dict) -> dict:
     """端上跑一段微脚本（40 步循环 → 1 次调用）。"""
-    global _LAST_RUN
     a = args or {}
     ops = a.get("ops") or a.get("steps") or []
     if not isinstance(ops, list) or not ops:
@@ -208,8 +214,13 @@ def tool_run_script(args: dict) -> dict:
     res["success"] = False
     res["status"] = 'cancelled' if res.get('stopped') else 'executed_unverified'
     res["verified"] = False
-    _LAST_RUN = res
-    _RUN_HISTORY.append({k: res[k] for k in ("steps", "seconds", "stopped", "stop_reason")})
+    from computer_mcp.dataset.redact import redact_args
+    cache=_session_runs()
+    cache['last']=redact_args(res)[0]
+    cache['last']['status']=res['status']
+    cache['last']['redacted']=True
+    cache['history'].append(redact_args({k:res[k] for k in ('steps','seconds','stopped','stop_reason')})[0])
+    cache['history'][:]=cache['history'][-20:]
     return res
 
 
@@ -250,8 +261,8 @@ def tool_frame_diff(args: dict) -> dict:
 def tool_trace(args: dict) -> dict:
     a = args or {}
     if a.get("history"):
-        return {"success": True, "history": _RUN_HISTORY[-20:]}
-    return {"success": True, "last": _LAST_RUN}
+        return {"success": True, "history": _session_runs()['history'][-20:]}
+    return {"success": True, "last": _session_runs()['last']}
 
 
 # ══════════════════════════ P2：数字 / 录制 ══════════════════════════
@@ -359,15 +370,16 @@ def tool_record(args: dict) -> dict:
         return {"success": True, "recording": True, "note": "开始录制（帧写入缓冲，stop 时落盘）"}
     if action == "stop":
         d._recording = False
-        frames = list(d._frames)
+        frames = [frame for frame in list(d._frames) if not frame.skipped]
         if not frames:
             return {"success": False, "error": "缓冲里没有帧"}
         stamp = time.strftime("%Y%m%d-%H%M%S")
         out = os.path.join(_RECORD_ROOT, stamp)
         os.makedirs(out, exist_ok=True)
         from PIL import Image
-        manifest = {"started": frames[0].ts, "frames": [], "trace": _LAST_RUN.get("trace", [])}
+        manifest = {"started": frames[0].ts, "frames": [], "trace": _session_runs()['last'].get("trace", [])}
         for fr in frames[-120:]:
+            if fr.skipped: continue
             # JPEG 而不是 PNG：同样的帧，体积小一个数量级（实测 17 帧 PNG 9.4 MB → JPEG 约 0.3 MB）
             name = f"f{fr.idx:05d}.jpg"
             try:
@@ -649,7 +661,8 @@ def tool_track(args: dict) -> dict:
 
     if action == "status":
         tid = int(a.get("id") or 0)
-        if tid not in _TRAINS:
+        from computer_mcp.agent_session import current
+        if tid not in _TRAINS or _TRAINS[tid].get('owner')!=current():
             return {"success": False, "error": "没有正在跑的列车"}
         r = _TRAINS[tid]["runner"]
         return {"success": True, "id": tid, "alive": _TRAINS[tid]["thread"].is_alive(),
@@ -658,7 +671,8 @@ def tool_track(args: dict) -> dict:
 
     if action == "stop":
         tid = int(a.get("id") or 0)
-        if tid not in _TRAINS:
+        from computer_mcp.agent_session import current
+        if tid not in _TRAINS or _TRAINS[tid].get('owner')!=current():
             return {"success": False, "error": "没有正在跑的列车"}
         r = _TRAINS[tid]["runner"]
         r.stop()
@@ -728,7 +742,8 @@ def tool_track(args: dict) -> dict:
     context = copy_context()
     th = threading.Thread(target=lambda: context.run(_go), daemon=True)
     th.start()
-    _TRAINS[tid] = {"runner": runner, "thread": th, "track": track.name}
+    from computer_mcp.agent_session import current
+    _TRAINS[tid] = {"runner": runner, "thread": th, "track": track.name,'owner':current()}
     import sys
     print(f"[train] #{tid} 轨道 {track.name!r} 启动，窗口 {hwnd} {rect}", file=sys.stderr)
 
@@ -737,8 +752,10 @@ def tool_track(args: dict) -> dict:
         th.join(timeout=wait_s)
         alive = th.is_alive()
         engine_status = 'running' if alive else runner.result.get('status','executed_unverified')
-        verified = engine_status == 'done' and bool(track.steps) and all(
-            step.expect for step in track.steps)
+        verified = (engine_status=='done' and bool(track.steps) and
+            runner.result.get('steps_done')==len(track.steps) and
+            runner.result.get('steps_verified')==len(track.steps) and
+            not runner.result.get('failed_steps'))
         status = 'succeeded' if verified else ('executed_unverified' if engine_status == 'done' else engine_status)
         return {"success": verified or alive,
                 "id": tid, "alive": alive, **runner.result, "status": status,

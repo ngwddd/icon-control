@@ -73,10 +73,7 @@ def check_target(state, hwnd=None, point=None):
         record = process_record(pid)
         auth = state.get('authorization', {})
         if record not in auth.get('applications', []):
-            launches = auth.get('launches', [])
-            permitted = any(item.get('exe') == record['exe'] and
-                launch_record(record['exe'], item.get('arguments','')) == item for item in launches)
-            if not permitted: return 'Target application is outside the human-approved application list'
+            return 'Target application is outside the human-approved application list'
     except (OSError, ValueError, psutil.Error):
         return 'Target application identity unavailable'
     return None

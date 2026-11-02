@@ -94,20 +94,30 @@ def shortcut_target(lnk: str) -> tuple[str, str]:
 def launch(target: str, extra_args: str | None = None, settle_ms: int = 0) -> dict:
     """Launch only the exact executable and fixed arguments approved by a human."""
     from computer_mcp import capabilities
-    from pathlib import Path
     record = capabilities.require_launch(target, extra_args or '')
-    before = {p.pid for p in psutil.process_iter() if _same_executable(p,record['exe'])}
     _execution.checkpoint('run_script')
-    os.startfile(record['exe'], arguments=record['arguments'], cwd=str(Path(record['exe']).parent))
-    deadline = time.monotonic() + max(5, min(30, settle_ms/1000))
-    while time.monotonic() < deadline:
-        _execution.checkpoint('run_script')
-        found = [p for p in psutil.process_iter() if p.pid not in before and _same_executable(p,record['exe'])]
-        if found:
-            return dict(ok=True, method='shell-execute', pid=found[0].pid, verified='new-exact-executable-process')
-        _execution.sleep(.1)
-    return dict(ok=False, state='executed_unverified',
-                error='Launch requested, but no new matching process was verified')
+    identity = _shell_launch(record)
+    if identity is None:
+        return dict(ok=False,state='executed_unverified',error='Shell did not provide a verifiable process handle')
+    return dict(ok=True,method='shell-execute',**identity,verified='OS process handle',
+                input_authorized=False,note='Approve this specific PID in the native control center before input')
+
+def _shell_launch(record):
+    from pathlib import Path
+    from ctypes import wintypes
+    from win32com.shell import shell,shellcon
+    from computer_mcp.capabilities import process_record
+    result=shell.ShellExecuteEx(fMask=shellcon.SEE_MASK_NOCLOSEPROCESS,lpFile=record['exe'],
+        lpParameters=record['arguments'],lpDirectory=str(Path(record['exe']).parent),nShow=1)
+    handle=result.get('hProcess')
+    if not handle:return None
+    try:
+        get_pid=ctypes.windll.kernel32.GetProcessId
+        get_pid.argtypes=[wintypes.HANDLE];get_pid.restype=wintypes.DWORD
+        identity=process_record(get_pid(int(handle)))
+        if os.path.normcase(identity['exe'])!=os.path.normcase(record['exe']):return None
+        return identity
+    finally: handle.Close()
 
 def _same_executable(process, executable):
     try: return os.path.normcase(process.exe()) == os.path.normcase(executable)

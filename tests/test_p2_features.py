@@ -48,7 +48,7 @@ class TestAppKit(unittest.TestCase):
 
     def test_launch_uses_explorer_shell(self) -> None:
         src = _read("appkit.py")
-        self.assertIn('os.startfile(',src,'Launch must use Windows ShellExecute')
+        self.assertIn('shell.ShellExecuteEx(',src,'Launch must use Windows ShellExecute with an OS process handle')
         self.assertIn('require_launch(',src,'Launch requires exact native approval')
 
     def test_exit_documents_tray_residue(self) -> None:

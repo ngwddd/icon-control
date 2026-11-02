@@ -72,10 +72,11 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='vision_list',
-        effects=('observe',),
+        effects=('file_delete','config_write',),
+        parameter_effects=(('delete',('file_delete',)),('reset_stats',('config_write',))),
         zone='Z5',
         description='List stored templates and baselines (name, source region, size, creation time), plus live run statistics: calls, failures, retries, failure_rate. Use stats to spot a long automation that silently stopped working.',
-        read_only=True,
+        read_only=False,
         schema={'type': 'object', 'properties': {'reset_stats': {'type': 'boolean', 'default': False}, 'delete': {'type': 'string', 'description': 'Optional template name to delete'}}},
     ),
 ]

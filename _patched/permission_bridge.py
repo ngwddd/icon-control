@@ -79,6 +79,17 @@ _client_sequences = {}
 _last_event_stamp = int(time.time()*1000)
 CLIENT_HB_TTL_S = 30.0          # 心跳多久内算这个窗口还活着
 CLIENT_ACTION_TTL_S = 1800.0    # 用户动作的有效期（30 分钟）
+STATE_LEASE_S = 15.0
+
+def _expire(now):
+    global _last_action, _revision, _authorization
+    if _last_action and _last_action[1]:
+        timestamp, _, owner = _last_action
+        if (now-timestamp >= CLIENT_ACTION_TTL_S or
+                now-CLIENTS.get(owner,{}).get('ts',0) >= min(CLIENT_HB_TTL_S,STATE_LEASE_S)):
+            _revision += 1
+            _last_action = (now,False,owner)
+            _authorization = {}
 
 
 def note_client(client: str, granted: bool, event: str) -> None:
@@ -100,8 +111,13 @@ def note_client(client: str, granted: bool, event: str) -> None:
 
 
 def effective_state() -> tuple:
+    with _lock:
+        return _effective_state_locked()
+
+def _effective_state_locked() -> tuple:
     """Only the latest explicit user action may grant; heartbeats only keep it live."""
     now = time.time()
+    _expire(now)
     if _last_action is None:
         return False, 'no-user-action'
     ts, granted, client = _last_action
@@ -116,6 +132,7 @@ def write_state(granted: bool, origin: str = "bridge",
                 authorization=None) -> dict:
     with _lock:
         global _last_event_stamp, _authorization
+        _expire(time.time())
         if event == 'action' and granted:
             from computer_mcp.capabilities import validate
             if not validate(authorization):
@@ -189,6 +206,16 @@ def read_state() -> dict:
     except Exception:
         return {"granted": False, "source": "unknown"}
 
+def current_state():
+    """Authoritative UI view, including in-memory revocation on disk failures."""
+    with _lock:
+        state=read_state()
+        granted,reason=effective_state()
+        state.update(granted=granted,revision=_revision,session=_session,
+                     authorization=_authorization if granted else {},effective_from=reason)
+        state.pop('signature',None)
+        return state
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "dsh-permission-bridge/1.1"
@@ -256,7 +283,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == '/status' and not parsed.query and self._source_ok():
-            state = read_state()
+            state = current_state()
             now = time.time()
             body = json.dumps({'granted':bool(state.get('granted') and
                 now < state.get('expires_at',0) and not security.stopped(state)),

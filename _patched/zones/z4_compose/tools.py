@@ -59,7 +59,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='trace',
-        effects=('observe',),
+        effects=('screen_read',),
         zone='Z4',
         description='Return the trace of the last run_script, or the run history.',
         read_only=True,

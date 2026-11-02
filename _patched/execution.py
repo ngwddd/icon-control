@@ -138,7 +138,7 @@ def install_boundaries():
                  'tool_frame_mark':'frame_mark', 'tool_glyph':'glyph',
                  'tool_record':'record', 'tool_housekeeping':'housekeeping',
                  'tool_servo':'servo', 'tool_navigate':'navigate',
-                 'tool_layout_mem':'layout_mem', 'tool_track':'track'},
+                 'tool_layout_mem':'layout_mem', 'tool_track':'track','tool_trace':'trace'},
     }
     for path, names in tables.items():
         module = importlib.import_module('computer_mcp.' + path)

@@ -51,7 +51,7 @@ class TestPermissionGate(AuthorityCase,unittest.TestCase):
         for t in ("screenshot", "screen_state", "ocr_read", "match_template"):
             self.assertIsNotNone(perm.check_tool(t), f"屏幕读取 {t} 必须有独立授权")
             self.assertNotIn(t, perm.INPUT_TOOLS)
-        self.assertIsNone(perm.check_tool('vision_list'))
+        self.assertIsNone(perm.check_tool('vision_list',{}))
 
     @NEED
     def test_fail_closed_when_unknown(self) -> None:

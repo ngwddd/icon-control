@@ -9,6 +9,7 @@ from pathlib import Path
 import secrets
 import sys
 import threading
+import subprocess
 import psutil
 from computer_mcp import security, agent_session, capabilities
 
@@ -16,18 +17,42 @@ def pipe_name():
     digest = hashlib.sha256(str(security.data_home().resolve()).lower().encode()).hexdigest()[:24]
     return r'\\.\pipe\IconControl-Consent-' + digest
 
-def _native_client(pid):
+_native_instances = {}
+
+def _native_instance(pid):
     try:
         process = psutil.Process(pid)
         command = process.cmdline()
-        executable = Path(process.exe()).resolve()
-        expected = Path(getattr(sys,'_base_executable',sys.executable)).resolve()
-        module = len(command)>=3 and command[1:3] == ['-m','computer_mcp.consent']
-        bootstrap = (len(command)==2 and Path(command[1]).resolve() ==
-                     (security.data_home()/'plugin'/'open-permissions.py').resolve())
-        return (executable.parent == expected.parent and executable.name in ('python.exe','pythonw.exe') and
-                (module or bootstrap))
-    except (psutil.Error, OSError): return False
+        for nonce, record in list(_native_instances.items()):
+            root = record['process']
+            if not root.is_running():
+                _native_instances.pop(nonce,None);continue
+            # A Windows venv launcher may have exactly one interpreter child.
+            if process.pid != root.pid and process.ppid() != root.pid: continue
+            if command[1:] != ['-I','-m','computer_mcp.consent','--broker-session',nonce]: continue
+            allowed = {Path(sys.executable).with_name('pythonw.exe').resolve(),
+                       Path(getattr(sys,'_base_executable',sys.executable)).with_name('pythonw.exe').resolve()}
+            if Path(process.exe()).resolve() in allowed: return nonce
+    except (psutil.Error, OSError): pass
+    return None
+
+def _native_client(pid,nonce=None):
+    actual = _native_instance(pid)
+    return bool(actual and isinstance(nonce,str) and __import__('hmac').compare_digest(actual,nonce))
+
+def open_native():
+    for nonce, record in list(_native_instances.items()):
+        if record['process'].is_running(): return {'opened':True}
+        _native_instances.pop(nonce,None)
+    nonce=secrets.token_urlsafe(32)
+    interpreter=Path(sys.executable).with_name('pythonw.exe')
+    env=dict(os.environ,ICON_CONTROL_HOME=str(security.data_home()))
+    env.pop('PYTHONPATH',None)
+    process=subprocess.Popen([str(interpreter),'-I','-m','computer_mcp.consent','--broker-session',nonce],
+        env=env,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+        creationflags=subprocess.CREATE_NO_WINDOW,cwd=str(interpreter.parent))
+    _native_instances[nonce]={'process':psutil.Process(process.pid)}
+    return {'opened':True}
 
 def _io(pipe, payload=None, timeout_ms=200):
     import pywintypes, win32event, win32file
@@ -52,6 +77,7 @@ def _io(pipe, payload=None, timeout_ms=200):
 def dispatch(message, pid):
     from computer_mcp import permission_bridge as bridge
     command = message.get('command')
+    if command == 'open': return open_native()
     if command == 'authority':
         with bridge._lock:
             granted, _ = bridge.effective_state()
@@ -65,10 +91,11 @@ def dispatch(message, pid):
         # Any current-user caller may downgrade; no credentials can upgrade here.
         try: return bridge.write_state(False, client='emergency', event='action')
         except OSError: return dict(granted=False)
-    if not _native_client(pid): raise PermissionError('Native consent application required')
+    if not _native_client(pid,message.get('ui_nonce')):
+        raise PermissionError('Broker-launched native consent instance required')
     owner = 'native-'+str(pid)+'-'+str(psutil.Process(pid).create_time())
     if command == 'status':
-        return dict(state=bridge.read_state(), agents=list(agent_session.active()))
+        return dict(state=bridge.current_state(), agents=list(agent_session.active()))
     if command == 'grant':
         session = message.get('agent_session')
         if not any(a['id'] == session for a in agent_session.active()):
@@ -86,7 +113,7 @@ def dispatch(message, pid):
         for app in applications:
             if capabilities.process_record(app['pid']) != app:
                 raise ValueError('Application identity changed; select it again')
-            if _native_client(app['pid']): raise ValueError('Permission UI is never a target')
+            if _native_instance(app['pid']): raise ValueError('Permission UI is never a target')
         return bridge.write_state(True, client=owner, event='action', authorization=auth)
     if command == 'revoke': return bridge.write_state(False, client=owner, event='action')
     if command == 'heartbeat':
@@ -134,7 +161,7 @@ def serve(ready=None, failures=None):
                 # DisconnectNamedPipe discards unread replies. A bounded ACK
                 # establishes delivery without FlushFileBuffers blocking forever.
                 if _io(pipe) != b'ACK': raise ValueError('Missing delivery acknowledgement')
-            except (pywintypes.error, TimeoutError) as exc:
+            except (pywintypes.error, TimeoutError, ValueError) as exc:
                 from computer_mcp.permission_bridge import log
                 log('IPC response failure '+type(exc).__name__+' '+str(getattr(exc,'winerror','')))
             finally:

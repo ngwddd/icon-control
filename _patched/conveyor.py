@@ -30,6 +30,7 @@ import os
 import threading
 import time
 from computer_mcp import execution as _execution
+from computer_mcp.permission import PermissionDenied
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -356,6 +357,8 @@ class FrameWheel(threading.Thread):
     def __init__(self, rect: tuple[int, int, int, int], ring: ThumbRing,
                  events: EventLog, fps: int = 30, down: int = 4, jpeg_quality: int = 70):
         super().__init__(daemon=True)
+        from contextvars import copy_context
+        self._context = copy_context()
         self.rect = rect
         self.ring = ring
         self.events = events
@@ -382,6 +385,9 @@ class FrameWheel(threading.Thread):
         self._stop_evt.set()
 
     def run(self) -> None:                            # pragma: no cover（需要真实屏幕）
+        self._context.run(self._run)
+
+    def _run(self) -> None:
         try:
             import mss
             left, top, w, h = self.rect
@@ -901,6 +907,7 @@ class Runner:
                                 jpeg_quality=int(track.capture.get("jpeg_quality", 70)))
         self.result: dict[str, Any] = {"status": STOP_STOPPED, "step": "", "steps_done": 0,
                                        "elapsed_s": 0.0, "events": [], "montage": ""}
+        self.step_results = []
         self._stop_evt = threading.Event()
         self._t0 = time.time()
         self._pred_cache: dict[str, tuple[float, bool | None]] = {}
@@ -946,7 +953,7 @@ class Runner:
                 pass
 
     # ---- 出包（轮子3）----
-    def bundle(self, status: str, step: str = "", reason: str = "") -> dict:
+    def bundle(self, status: str, step: str = "", reason: str = "", write_artifact=False) -> dict:
         tiles: list[np.ndarray] = []
         last = self.ring.last()
         if last is not None:
@@ -957,12 +964,17 @@ class Runner:
         jpg = encode_jpeg(img, 75)
         path = ""
         try:
-            draw = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                "_draw")
-            os.makedirs(draw, exist_ok=True)
-            path = os.path.join(draw, f"track_{int(time.time()*1000)%100000}.jpg")
-            with open(path, "wb") as fh:
-                fh.write(jpg)
+            if write_artifact:
+                _execution.checkpoint('track')
+                from computer_mcp import security,workspace
+                import uuid
+                draw=security.data_home()/'_draw'
+                target=workspace.owned_path(draw,'track_'+uuid.uuid4().hex+'.jpg')
+                target.parent.mkdir(parents=True,exist_ok=True)
+                with target.open('xb') as fh:fh.write(jpg)
+                path=str(target)
+        except PermissionDenied:
+            raise
         except Exception:
             path = ""
         fps_ok = self.wheel.fps_actual
@@ -978,6 +990,9 @@ class Runner:
             "reason": reason,
             "step": step,
             "steps_done": self.result.get("steps_done", 0),
+            'steps_verified':sum(row.get('verified') is True for row in self.step_results),
+            'failed_steps':[row['index'] for row in self.step_results if row['state']=='failed'],
+            'step_results':[dict(row) for row in self.step_results],
             "elapsed_s": round(time.time() - self._t0, 1),
             "state": self.wheel.state,
             "fps": round(fps_ok, 1),
@@ -1039,6 +1054,8 @@ class Runner:
         self.events.add("STEP", f"轨道开始：{self.track.name}")
         try:
             for idx, step in enumerate(self.track.steps):
+                row={'index':idx+1,'state':'running','verified':False}
+                self.step_results.append(row)
                 if self._stop_evt.is_set():
                     return self._finish(STOP_STOPPED, step.name, "用户停止")
                 if time.time() - self._t0 > max_total_s:
@@ -1057,7 +1074,9 @@ class Runner:
                     try:
                         if check_expect(step.skip_if, self.wheel, self.rect, self.hwnd) is True:
                             self.events.add("STEP", f"跳过（已是目标状态）：{step.name}", step.name)
-                            self.result["steps_done"] = idx + 1
+                            row.update(state='skipped',verified=bool(step.expect and
+                                check_expect(step.expect,self.wheel,self.rect,self.hwnd) is True))
+                            self.result['steps_done']=sum(r['state'] in ('succeeded','executed_unverified','skipped') for r in self.step_results)
                             continue
                     except Exception:
                         pass
@@ -1096,7 +1115,8 @@ class Runner:
                     pred = self._pred(step, step_mark)
                     if pred is True:
                         self.events.add("STEP", f"达成：{step.name}", step.name)
-                        self.result["steps_done"] = idx + 1
+                        row.update(state='succeeded' if step.expect else 'executed_unverified',verified=bool(step.expect))
+                        self.result['steps_done']=sum(r['state'] in ('succeeded','executed_unverified','skipped') for r in self.step_results)
                         break
 
                     if pred is False:
@@ -1127,20 +1147,24 @@ class Runner:
                         res = do_action(step.action, self.rect, self.hwnd)
                         acted = True
                         self.events.add("STEP", f"动作：{res.get('detail')}", step.name)
-                        if not res.get("ok") and step.on_fail == "stop":
-                            return self._finish(STOP_TIMEOUT, step.name, str(res.get("detail")))
+                        if not res.get('ok'):
+                            row.update(state='failed',verified=False)
+                            if step.on_fail=='stop':
+                                return self._finish(STOP_TIMEOUT,step.name,str(res.get('detail')))
+                            break
                         # 只带动作、没有 expect 的步骤：动作成功就算这步完成。
                         # 否则判据永远是 None → 6 次后误判"判不了"（实测踩过）
                         if step.expect is None and res.get("ok"):
                             self.events.add("STEP", f"达成（动作成功）：{step.name}", step.name)
-                            self.result["steps_done"] = idx + 1
+                            row.update(state='executed_unverified',verified=False)
+                            self.result['steps_done']=sum(r['state'] in ('succeeded','executed_unverified','skipped') for r in self.step_results)
                             break
                         pred_since = time.time()
 
                     bad, msg = self.budget.check()
                     if bad:
                         self.events.add("ANOMALY", msg, step.name)
-                        snap = self.bundle("anomaly", step.name, msg)
+                        snap = self.bundle("anomaly", step.name, msg,write_artifact=True)
                         self.events.add("ANOMALY", f"已出拼图：{snap.get('montage')}", step.name)
                         if self.budget.should_stop():
                             return self._finish(STOP_STALL, step.name, f"连续 {self.budget.anomalies} 次异常")
@@ -1148,17 +1172,23 @@ class Runner:
                     _execution.sleep(0.02)
                 else:
                     # timeout
+                    if self._stop_evt.is_set():
+                        row.update(state='cancelled',verified=False)
+                        return self._finish(STOP_STOPPED,step.name,'User stopped the task')
+                    row.update(state='failed',verified=False)
                     if step.on_fail == "continue":
                         self.events.add("STALL", f"跳过：{step.name}", step.name)
                         continue
                     return self._finish(STOP_TIMEOUT, step.name, f"超时 {step.timeout_ms}ms")
 
+            if any(row['state']=='failed' for row in self.step_results):
+                return self._finish('failed','','One or more steps failed, including continued timeouts')
             return self._finish(STOP_DONE, "", "轨道跑完")
         finally:
             self.stop()
 
     def _finish(self, status: str, step: str, reason: str) -> dict:
-        self.result = self.bundle(status, step, reason)
+        self.result = self.bundle(status, step, reason,write_artifact=True)
         self.events.add("STOP", f"{status}：{reason}", step)
         self.result["events"] = self.events.tail(12)
         return self.result

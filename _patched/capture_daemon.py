@@ -135,6 +135,8 @@ class CaptureDaemon:
     def start(self) -> dict:
         from computer_mcp import permission, agent_session
         permission.require('screenshot')
+        if getattr(self,'owner_session',agent_session.current())!=agent_session.current():
+            self.stop()
         self.owner_session = agent_session.current()
         if self._thread and self._thread.is_alive():
             return {"ok": True, "already": True, **self.status()}
@@ -181,23 +183,29 @@ class CaptureDaemon:
     def latest(self) -> Frame | None:
         from computer_mcp.permission import require
         require('screenshot')
+        from computer_mcp.agent_session import current
+        if getattr(self,'owner_session',current())!=current():
+            from computer_mcp.permission import PermissionDenied
+            raise PermissionDenied('Capture buffer belongs to another Agent session')
         with self._lock:
-            return self._frames[-1] if self._frames else None
+            return next((frame for frame in reversed(self._frames) if not frame.skipped),None)
 
     def get(self, idx: int) -> Frame | None:
         from computer_mcp.permission import require
         require('screenshot')
+        self.latest()  # Also verify that this buffer belongs to the caller.
         with self._lock:
             for f in reversed(self._frames):
                 if f.idx == idx:
-                    return f
+                    return None if f.skipped else f
         return None
 
     def frames_between(self, since_idx: int) -> list[Frame]:
         from computer_mcp.permission import require
         require('screenshot')
+        self.latest()
         with self._lock:
-            return [f for f in self._frames if f.idx > since_idx]
+            return [f for f in self._frames if f.idx > since_idx and not f.skipped]
 
     def wait(self, predicate, timeout_ms: int = 2000) -> tuple[bool, Frame | None]:
         """阻塞到 predicate(frame) 为真，或超时。返回 (hit, frame)。"""
@@ -254,6 +262,13 @@ class CaptureDaemon:
                         self._last_shape = arr.shape[:2]
                         title = _active_window_title()
                         private = _is_private(title)
+                        if private:
+                            with self._lock: self._frames.clear()
+                            self.frames_skipped += 1
+                            prev = None
+                            arr = None
+                            self._stop.wait(.2)
+                            continue
                         frame = Frame(idx=self._idx, ts=t0, img=arr,
                                       active_window=title, skipped=private)
                         if prev is not None and prev.shape == arr.shape and not private:
