@@ -29,6 +29,7 @@ import io
 import os
 import threading
 import time
+from computer_mcp import execution as _execution
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -401,7 +402,7 @@ class FrameWheel(threading.Thread):
                         self.last_small = small
                         self.last_mask = None
                         self.ring.push(time.time(), encode_jpeg(small, self.q), small)
-                        time.sleep(max(0.0, interval - (time.perf_counter() - t0)))
+                        _execution.sleep(max(0.0, interval - (time.perf_counter() - t0)))
                         continue
                     n, frac, mask = change_blocks(self._prev, small)
                     now = time.time()
@@ -427,7 +428,7 @@ class FrameWheel(threading.Thread):
                     self.ring.push(now, encode_jpeg(small, self.q), small)
                     dt = time.perf_counter() - t0
                     if dt < interval:
-                        time.sleep(interval - dt)
+                        _execution.sleep(interval - dt)
         except Exception as e:                       # 线程内异常不要静默
             self.error = f"{type(e).__name__}: {e}"
             self.events.add("ANOMALY", f"抓帧线程异常：{self.error}")
@@ -576,11 +577,11 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             tries = 0
             for tries in range(1, max(1, retries) + 1):
                 ms.position = pt
-                time.sleep(settle + (0.25 * (tries - 1)))   # 自绘 UI 丢包：重试时放慢
+                _execution.sleep(settle + (0.25 * (tries - 1)))   # 自绘 UI 丢包：重试时放慢
                 ms.click(btn, clicks)
                 if not verify:
                     break
-                time.sleep(float(action.get("verify_wait_ms", 180)) / 1000.0)
+                _execution.sleep(float(action.get("verify_wait_ms", 180)) / 1000.0)
                 after = _probe_region(rect, action.get("verify_region"))
                 if before is None or after is None:
                     break
@@ -611,7 +612,7 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                     win32clipboard.CloseClipboard()
                     break
                 except Exception:
-                    time.sleep(0.15)
+                    _execution.sleep(0.15)
             kb = KB()
             with kb.pressed(Key.ctrl):
                 kb.press("v")
@@ -674,14 +675,14 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                     tmin = float(action.get("title_min_lcs", 0.55))
                     for attempt in range(int(action.get("open_attempts", 2))):
                         MS().position = _resolve_point(rect, row_rel)
-                        time.sleep(0.2)
+                        _execution.sleep(0.2)
                         MS().click(Button.left, 1 if attempt == 0 else 2)
-                        time.sleep(float(action.get("open_wait_ms", 1500)) / 1000.0)
+                        _execution.sleep(float(action.get("open_wait_ms", 1500)) / 1000.0)
                         for _ in range(3):
                             pane_ok = text_landed(title_txt, _ocr(title_reg), tmin)
                             if pane_ok:
                                 break
-                            time.sleep(0.5)
+                            _execution.sleep(0.5)
                         if pane_ok:
                             break
             if not pane_ok:
@@ -694,9 +695,9 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
 
             # ── ③ 点输入框 → 粘贴 → 验文字 ──
             MS().position = _resolve_point(rect, urel)
-            time.sleep(0.2)
+            _execution.sleep(0.2)
             MS().click(Button.left)
-            time.sleep(float(action.get("after_click_ms", 500)) / 1000.0)
+            _execution.sleep(float(action.get("after_click_ms", 500)) / 1000.0)
 
             for _ in range(3):
                 try:
@@ -706,7 +707,7 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                     win32clipboard.CloseClipboard()
                     break
                 except Exception:
-                    time.sleep(0.15)
+                    _execution.sleep(0.15)
 
             ok_text, got = False, ""
             for _ in range(int(action.get("paste_retries", 3))):
@@ -714,7 +715,7 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 with kb2.pressed(Key.ctrl):
                     kb2.press("v")
                     kb2.release("v")
-                time.sleep(float(action.get("after_paste_ms", 700)) / 1000.0)
+                _execution.sleep(float(action.get("after_paste_ms", 700)) / 1000.0)
                 got = _ocr(inreg)
                 ok_text = text_landed(text, got, lcs_need)
                 if ok_text:
@@ -728,7 +729,7 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             kb3 = KB()
             kb3.press(Key.enter)
             kb3.release(Key.enter)
-            time.sleep(float(action.get("after_send_ms", 800)) / 1000.0)
+            _execution.sleep(float(action.get("after_send_ms", 800)) / 1000.0)
             delta = float(np.abs(_grab(creg) - conv_before).mean())
 
             # **会话带**才是可靠证据（实测它稳定读到 三段验证1/2/3；
@@ -739,7 +740,7 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 if text_landed(text, conv_after, float(action.get("conv_min_lcs", 0.5))):
                     conv_seen = True
                     break
-                time.sleep(0.7)
+                _execution.sleep(0.7)
             preview_after = _ocr(row_reg, pv_up)      # 仅作诊断输出，不参与判定
 
             still_there = text_landed(text, _ocr(inreg), lcs_need)
@@ -761,16 +762,16 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             at = action.get("at_rel_frac") or [0.6, 0.5]
             pt = _resolve_point(rect, at)
             MS().position = pt
-            time.sleep(0.15)
+            _execution.sleep(0.15)
             k = int(action.get("dy", -360))
             for _ in range(int(action.get("times", 1))):
                 check('mouse_move')
                 ctypes.windll.user32.mouse_event(0x0800, 0, 0, k, 0)
-                time.sleep(float(action.get("gap_ms", 300)) / 1000.0)
+                _execution.sleep(float(action.get("gap_ms", 300)) / 1000.0)
             return {"ok": True, "detail": f"scroll {k}×{action.get('times', 1)} at {pt}"}
 
         if kind == "wait":
-            time.sleep(float(action.get("ms", 500)) / 1000.0)
+            _execution.sleep(float(action.get("ms", 500)) / 1000.0)
             return {"ok": True, "detail": "waited"}
 
         if kind == "macro":
@@ -997,7 +998,7 @@ class Runner:
             from computer_mcp import appkit
 
             appkit.activate(self.hwnd)
-            time.sleep(0.25)
+            _execution.sleep(0.25)
             ok = win32gui.GetForegroundWindow() == self.hwnd
             self.events.add("STEP", "目标失焦 → 已置顶+置前" if ok else "目标失焦，拉不回前台",
                             step_name)
@@ -1070,12 +1071,12 @@ class Runner:
                         fh, fr = hit
                         self.retarget(fh, (fr[0], fr[1], fr[2] - fr[0], fr[3] - fr[1]),
                                       str(step.focus.get("title")))
-                        time.sleep(0.4)
+                        _execution.sleep(0.4)
 
                 while time.time() < deadline and not self._stop_evt.is_set():
                     if step.wait_before_action_ms and not acted:
                         if (time.time() - self.budget.step_start) * 1000 < step.wait_before_action_ms:
-                            time.sleep(0.02)
+                            _execution.sleep(0.02)
                             continue
 
                     pred = self._pred(step, step_mark)
@@ -1130,7 +1131,7 @@ class Runner:
                         if self.budget.should_stop():
                             return self._finish(STOP_STALL, step.name, f"连续 {self.budget.anomalies} 次异常")
 
-                    time.sleep(0.02)
+                    _execution.sleep(0.02)
                 else:
                     # timeout
                     if step.on_fail == "continue":
@@ -1172,7 +1173,7 @@ def selfcheck(seconds: float = 3.0, fps: int = 30, down: int = 4) -> dict:
         rect = (0, 0, 1280, 720)
     wheel = FrameWheel(rect, ring, events, fps=fps, down=down)
     wheel.start()
-    time.sleep(seconds)
+    _execution.sleep(seconds)
     wheel.stop()
     wheel.join(timeout=1.5)
     rss1 = proc.memory_info().rss / 1048576

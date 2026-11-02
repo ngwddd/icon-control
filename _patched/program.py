@@ -31,6 +31,7 @@ import json
 import os
 import re
 import time
+from computer_mcp import execution as _execution
 from typing import Any
 
 from computer_mcp import train
@@ -134,104 +135,15 @@ def _as_action(ins: dict) -> dict:
 def _run_with_wheel(instructions: list[dict], facts: dict, hwnd: int = 0,
                     rect: tuple[int, int, int, int] | None = None,
                     stop_on_fail: bool = True, wheel=None) -> dict:
-    """按顺序执行指令流，返回 {"ok","done","failed","log"}。
-
-    约定：
-        · 每条指令都可带 `expect`（后置条件）与 `on_fail`（stop|continue）
-        · `assert` 只判不动作
-        · `branch` 的条件成立就跑 then，否则 else（都是指令列表）
-    """
+    from computer_mcp.tasks import Task
     if rect is None:
         if not hwnd:
-            return {"ok": False, "done": 0, "failed": "既没有 hwnd 也没有 rect",
-                    "log": []}
+            return dict(ok=False, state="failed", verified=False, done=0,
+                        failed="A target window or rectangle is required", log=[])
         import win32gui
-
         l, t, r, b = win32gui.GetWindowRect(hwnd)
-        rect = (l, t, r - l, b - t)
-
-    log: list[str] = []
-    ok_all = True
-    done = 0
-
-    for ins in instructions:
-        op = ins.get("op")
-        line = ins.get("_line", "?")
-        try:
-            exp = expand({k: v for k, v in ins.items() if k != "op"}, facts)
-        except KeyError as e:
-            return {"ok": False, "done": done,
-                    "failed": f"第 {line} 行引用了未定义的名字：{e}", "log": log}
-
-        expect = exp.pop("expect", None)
-        on_fail = exp.pop("on_fail", "stop")
-
-        if op == "focus":
-            hit = train._find_window(str(exp.get("title", "")), same_pid=None)
-            if hit:
-                fh, fr = hit
-                rect = (fr[0], fr[1], fr[2] - fr[0], fr[3] - fr[1])
-                hwnd = fh
-                log.append(f"L{line} focus → {fh} {exp.get('title')}")
-            else:
-                log.append(f"L{line} focus 未找到 {exp.get('title')}（沿用当前）")
-            done += 1
-            continue
-
-        if op == "assert":
-            cond = exp.get("expect") or expect
-            # 断言也轮询：OCR 对小字要 1-2 次才读准（"流"曾被读成"氵夼"）
-            deadline = time.time() + float(ins.get("timeout_ms", 3000)) / 1000.0
-            v = None
-            while time.time() < deadline:
-                v = train.check_expect(cond, wheel, rect, hwnd)
-                if v is True:
-                    break
-                time.sleep(0.25)
-            log.append(f"L{line} assert {exp.get('expect') or expect} → {v}")
-            if v is not True:
-                ok_all = False
-                if stop_on_fail:
-                    return {"ok": False, "done": done,
-                            "failed": f"第 {line} 行断言不成立", "log": log}
-            else:
-                done += 1
-            continue
-
-        if op in ("branch", "photo"):
-            # branch 里可以放子指令；photo 交给 train 的 bundle（这里只记日志）
-            log.append(f"L{line} {op}（暂未实现子流程，先记录）")
-            done += 1
-            continue
-
-        action = _as_action(dict(exp, op=op))
-        mark = time.time()          # ★ 动作时刻：后置条件的"自那时起"基准，不能每轮重置
-        res = train.do_action(action, rect, hwnd)
-        log.append(f"L{line} {op}: {res.get('detail')}")
-        if not res.get("ok"):
-            ok_all = False
-            if on_fail == "stop" and stop_on_fail:
-                return {"ok": False, "done": done,
-                        "failed": f"第 {line} 行动作失败：{res.get('detail')}",
-                        "log": log}
-        if expect:
-            # **轮询**直到超时（一次性检查会漏：朋友圈要 1-2 秒才加载出来）
-            deadline = time.time() + float(ins.get("timeout_ms", 8000)) / 1000.0
-            v = None
-            while time.time() < deadline:
-                v = train.check_expect(expect, wheel, rect, hwnd, mark)
-                if v is True:
-                    break
-                time.sleep(0.12)
-            log.append(f"L{line} expect {expect} → {v}")
-            if v is not True:
-                ok_all = False
-                if on_fail == "stop" and stop_on_fail:
-                    return {"ok": False, "done": done,
-                            "failed": f"第 {line} 行后置条件不成立", "log": log}
-        done += 1
-
-    return {"ok": ok_all, "done": done, "failed": "", "log": log}
+        rect = (l, t, r-l, b-t)
+    return Task(instructions, facts, hwnd, rect, stop_on_fail, wheel).run()
 
 
 def run(instructions: list[dict], facts: dict, hwnd: int = 0,
@@ -251,7 +163,7 @@ def run(instructions: list[dict], facts: dict, hwnd: int = 0,
         wheel = train.FrameWheel(rect, ring, train.EventLog())
         wheel.start()
         own = True
-        time.sleep(0.3)
+        _execution.sleep(0.3)
     try:
         return _run_with_wheel(instructions, facts, hwnd, rect, stop_on_fail, wheel)
     finally:

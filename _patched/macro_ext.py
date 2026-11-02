@@ -30,6 +30,7 @@ import json
 import os
 import re
 import time
+from computer_mcp import execution as _execution
 from typing import Any
 
 MACRO_DIR = os.environ.get(
@@ -610,10 +611,10 @@ def run_macro(
                         tries.append({"attempt": attempt, "ok": False, "error": "没有可用的输入框坐标"})
                         break
                     mouse.position = target
-                    time.sleep(0.06 + 0.06 * attempt)
+                    _execution.sleep(0.06 + 0.06 * attempt)
                     from pynput.mouse import Button as _B
                     mouse.click(_B.left, 1)
-                    time.sleep(float(step.get("focus_wait_ms", 260) + 80 * attempt) / 1000.0)
+                    _execution.sleep(float(step.get("focus_wait_ms", 260) + 80 * attempt) / 1000.0)
                     # 每次尝试前都先清空，避免残留拼接（Ctrl+A / Delete）
                     if True:
                         # 重试前先 Ctrl+A / Delete 清掉上一次可能残留的文本
@@ -621,11 +622,11 @@ def run_macro(
                         _a = ui_ext.resolve_key("a")
                         keyboard.press(_ctrl); keyboard.press(_a)
                         keyboard.release(_a); keyboard.release(_ctrl)
-                        time.sleep(0.08)
+                        _execution.sleep(0.08)
                         _del = ui_ext.resolve_key("delete")
                         keyboard.press(_del); keyboard.release(_del)
                     keyboard.type(text)
-                    time.sleep(float(step.get("settle_ms", 180)) / 1000.0)
+                    _execution.sleep(float(step.get("settle_ms", 180)) / 1000.0)
                     fp = _fingerprint(win, [text], region=region, hwnd=None if region else (win["hwnd"] if win else None),
                                       min_lcs_share=float(step.get("min_lcs_share", 0.6)))
                     tries.append({"attempt": attempt, "ok": fp.get("ok"), "missing": fp.get("missing")})
@@ -680,7 +681,7 @@ def run_macro(
                     sub = {"ok": False}
                 else:
                     mouse.position = point
-                    time.sleep(0.05)   # hover 稳定余量
+                    _execution.sleep(0.05)   # hover 稳定余量
                     from pynput.mouse import Button as _Btn
                     mouse.click(_Btn.left, 1)
                     entry["ok"] = True
@@ -725,7 +726,7 @@ def run_macro(
                         if restore:
                             ui_ext.run_batch(restore, mouse, keyboard,
                                              stop_on_error=True, default_sleep_ms=120)
-                        time.sleep(float(step.get("settle_ms", 1200)) / 1000.0)
+                        _execution.sleep(float(step.get("settle_ms", 1200)) / 1000.0)
                         again = _fingerprint(
                             win,
                             step.get("fingerprint") or step.get("expect_text") or [],
@@ -786,9 +787,9 @@ def run_macro(
                             # the row toggles in WeChat: retry until the title shows up
                             dx = (-40, 40, 0)[attempt % 3]
                             mouse.position = (t["cx"] + dx, t["cy"])
-                            time.sleep(0.10)
+                            _execution.sleep(0.10)
                             mouse.click(Button.left, 1)
-                            time.sleep(settle)
+                            _execution.sleep(settle)
                             again = ocr_ext.find_text(
                                 query=title_q, region=t_region,
                                 hwnd=(win["hwnd"] if win else None),
@@ -834,7 +835,7 @@ def run_macro(
                     else:
                         t = matches[idx]
                         mouse.position = (t["cx"], t["cy"])
-                        time.sleep(0.08)
+                        _execution.sleep(0.08)
                         from pynput.mouse import Button
 
                         mouse.click(Button.left, 1)
@@ -999,10 +1000,10 @@ def run_macro(
                 resolved = [ui_ext.resolve_key(str(k)) for k in keys]
                 for k in resolved:
                     keyboard.press(k)
-                time.sleep(float(step.get("hold_ms", 40)) / 1000.0)
+                _execution.sleep(float(step.get("hold_ms", 40)) / 1000.0)
                 for k in reversed(resolved):
                     keyboard.release(k)
-                time.sleep(float(step.get("settle_ms", 120)) / 1000.0)
+                _execution.sleep(float(step.get("settle_ms", 120)) / 1000.0)
                 entry["keys"] = keys
                 sub = {"ok": bool(resolved)}
 
@@ -1037,12 +1038,12 @@ def run_macro(
                     if txt:
                         _wcb.OpenClipboard(); _wcb.EmptyClipboard()
                         _wcb.SetClipboardText(txt); _wcb.CloseClipboard()
-                        time.sleep(0.15)
+                        _execution.sleep(0.15)
                     _ctrl = ui_ext.resolve_key("ctrl")
                     _v = ui_ext.resolve_key("v")
                     keyboard.press(_ctrl); keyboard.press(_v)
                     keyboard.release(_v); keyboard.release(_ctrl)
-                    time.sleep(float(step.get("settle_ms", 700)) / 1000.0)
+                    _execution.sleep(float(step.get("settle_ms", 700)) / 1000.0)
                     entry["chars"] = len(txt)
                     sub = {"ok": True}
 
@@ -1150,14 +1151,14 @@ def run_macro(
                 queue.insert(0, (i, step))
                 rgap = int(step.get("retry_gap_ms", 400))
                 if rgap > 0:
-                    time.sleep(rgap / 1000.0)
+                    _execution.sleep(rgap / 1000.0)
                 continue
             failed += 1
             break
 
         gap = int(step.get("gap_ms", default_gap_ms))
         if action not in ("sleep", "wait_change") and gap > 0:
-            time.sleep(gap / 1000.0)
+            _execution.sleep(gap / 1000.0)
 
     return {
         "ok": failed == 0,

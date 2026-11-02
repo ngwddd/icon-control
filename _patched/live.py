@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from computer_mcp import execution as _execution
 
 from computer_mcp import perceive
 from computer_mcp.capture_daemon import CaptureDaemon
@@ -47,7 +48,7 @@ def _ensure_frame():
     f = d.latest()
     if f is None or not d.status().get("running"):
         d.start()
-        time.sleep(0.25)
+        _execution.sleep(0.25)
         f = d.latest()
     return f
 

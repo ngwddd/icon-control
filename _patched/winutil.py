@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import time
+from computer_mcp import execution as _execution
 
 import win32con
 import win32gui
@@ -116,7 +117,7 @@ def activate(hwnd: int) -> bool:
             from computer_mcp import appkit
 
             appkit.activate(hwnd)
-        time.sleep(0.25)
+        _execution.sleep(0.25)
         return win32gui.GetForegroundWindow() == hwnd
     except Exception:
         return False

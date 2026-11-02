@@ -25,6 +25,7 @@ import os
 import subprocess
 import sys
 import time
+from computer_mcp import execution as _execution
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -140,7 +141,7 @@ def launch(target: str, extra_args: str | None = None, settle_ms: int = 0) -> di
         return {"ok": False, "error": f"explorer 启动失败: {exc}", "target": path}
 
     if settle_ms:
-        time.sleep(settle_ms / 1000.0)
+        _execution.sleep(settle_ms / 1000.0)
 
     return {
         "ok": True,
@@ -230,7 +231,7 @@ def wait_window(timeout_ms: int = 20000, poll_ms: int = 300, **criteria) -> dict
                     "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1),
                     "error": f"等待窗口超时（{timeout_ms} ms）",
                     "criteria": criteria}
-        time.sleep(poll_ms / 1000.0)
+        _execution.sleep(poll_ms / 1000.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -269,7 +270,7 @@ def activate(hwnd: int, tries: int = 3) -> dict:
     def _restore_force() -> None:
         if win32gui.IsIconic(hwnd):
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            time.sleep(0.3)
+            _execution.sleep(0.3)
         win32gui.SetForegroundWindow(hwnd)
 
     methods = (("attach_input", _attach_force),
@@ -281,7 +282,7 @@ def activate(hwnd: int, tries: int = 3) -> dict:
                 fn()
             except Exception:
                 pass
-            time.sleep(0.35)
+            _execution.sleep(0.35)
             if _is_fg():
                 return {"ok": True, "method": name,
                         "foreground": win32gui.GetWindowText(win32gui.GetForegroundWindow())}
@@ -340,7 +341,7 @@ def exit_app(process: str | None = None,
             return {"ok": True, "pids_before": before, "windows_closed": windows_closed,
                     "method": "wm_close",
                     "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}
-        time.sleep(0.3)
+        _execution.sleep(0.3)
 
     remaining = _pids_matching(process, exe_contains)
     terminated = 0
@@ -354,7 +355,7 @@ def exit_app(process: str | None = None,
         for _ in range(20):
             if not _pids_matching(process, exe_contains):
                 break
-            time.sleep(0.2)
+            _execution.sleep(0.2)
 
     left = len(_pids_matching(process, exe_contains))
     return {
@@ -414,7 +415,7 @@ def close_windows(process: str | None = None,
             pass
 
     if wait_ms:
-        time.sleep(wait_ms / 1000.0)
+        _execution.sleep(wait_ms / 1000.0)
 
     still = 0
     for t in targets:

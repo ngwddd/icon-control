@@ -27,6 +27,7 @@
 from __future__ import annotations
 
 import time
+from computer_mcp import execution as _execution
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -240,7 +241,7 @@ class Servo:
     # ---------- 基础动作 ----------
     def _press(self, key: str, ms: float) -> None:
         self.kb.press(key)
-        time.sleep(max(0.01, ms / 1000.0))
+        _execution.sleep(max(0.01, ms / 1000.0))
         self.kb.release(key)
 
     def forward(self, ms: float | None = None) -> None:
@@ -252,7 +253,7 @@ class Servo:
     def face_deg(self, deg: float) -> None:
         """转身指定角度（正=右）。用标定好的 px/deg。"""
         self.turn_px(int(round(deg * self.px_per_deg)))
-        time.sleep(0.03)
+        _execution.sleep(0.03)
 
     # ---------- 朝向自校准 ----------
     def estimate_heading(self, ttl: float = 6.0) -> float | None:
@@ -263,7 +264,7 @@ class Servo:
         if not before.player:
             return None
         self.forward(self.tap_ms)
-        time.sleep(0.12)
+        _execution.sleep(0.12)
         after = self.ws.snapshot()
         if not after.player or after.player == before.player:
             return None                      # 被挡住，测不出来
@@ -298,7 +299,7 @@ class Servo:
         # 约定不一致：鼠标右移 = 视角顺时针 = 数学角**减小**。
         # 所以要把 diff 取负再交给 face_deg（正数=右转）。这个 bug 是单测抓出来的。
         self.face_deg(-diff)
-        time.sleep(0.05)
+        _execution.sleep(0.05)
         return {"ok": abs(diff) <= tol, "turned_deg": round(-diff, 1),
                 "want": round(want, 1), "had": round(have, 1)}
 
@@ -327,7 +328,7 @@ class Servo:
                 if not r2.get("ok"):
                     stuck += 1
             self.forward(step_ms or self.tap_ms)
-            time.sleep(0.05)
+            _execution.sleep(0.05)
             # 只统计「连续两次读到的玩家格完全相同」。早先写成 history[-1] == history[-3]，
             # 结果「转向 + 前进」交替时会被误判成卡住（单测抓出来的）。
             if len(history) >= 2 and history[-1]["player"] == history[-2]["player"]:
@@ -409,7 +410,7 @@ class Supervisor:
                 r = self.servo.face_toward(tuple(step["cell"]))
                 done.append({"kind": "face", "result": r})
             elif kind == "wait":
-                time.sleep(float(step.get("ms", 300)) / 1000.0)
+                _execution.sleep(float(step.get("ms", 300)) / 1000.0)
                 done.append({"kind": "wait", "result": "ok"})
             elif kind == "key":
                 self.servo._press(step.get("key", "e"), float(step.get("hold_ms", 200)))

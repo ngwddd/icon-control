@@ -86,6 +86,8 @@ def note_physical(reason: str = "physical input") -> None:
             STATE["owner"] = "user"
             STATE["since"] = _now()
             STATE["reason"] = reason
+    from computer_mcp.input_guard import release_all
+    release_all()
 
 
 def claim(reason: str = "agent") -> dict:

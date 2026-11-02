@@ -36,6 +36,7 @@ box 用**屏幕坐标**；解释器会按采集缩放自动换算（这点最容
 from __future__ import annotations
 
 import time
+from computer_mcp import execution as _execution
 
 from computer_mcp import perceive
 
@@ -144,7 +145,7 @@ class Runner:
         keys = keys if isinstance(keys, list) else [keys]
         for k in keys:
             self.kb.press(k)
-        time.sleep(max(0.0, hold_ms / 1000.0))
+        _execution.sleep(max(0.0, hold_ms / 1000.0))
         for k in reversed(keys):
             self.kb.release(k)
 
@@ -180,7 +181,7 @@ class Runner:
             elif kind == "walk_or_turn":
                 self._walk_or_turn(op)
             elif kind == "sleep":
-                time.sleep(max(0, int(op.get("ms", 100))) / 1000.0)
+                _execution.sleep(max(0, int(op.get("ms", 100))) / 1000.0)
             elif kind == "log":
                 self.log(str(op.get("text", "")))
             elif kind == "loop":
@@ -207,7 +208,7 @@ class Runner:
             box = to_frame_box(op["diff_box"], self.scale, self.origin)
         before = self.frame()
         self._press(key, hold)
-        time.sleep(float(op.get("settle_ms", 60)) / 1000.0)
+        _execution.sleep(float(op.get("settle_ms", 60)) / 1000.0)
         after = self.frame()
         d = perceive.diff_region(before, after, box) if before is not None else {"mean": 0.0}
         blocked = float(d.get("mean", 0.0)) < float(op.get("min_diff", 1.0))
@@ -238,7 +239,7 @@ class Runner:
             if body:
                 self.run(body, depth + 1)
             else:
-                time.sleep(poll)
+                _execution.sleep(poll)
         self.log(f"until 超时（{iters} 次）", cond=cond)
 
     # ---------- 结果 ----------

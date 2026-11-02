@@ -12,6 +12,7 @@ All mouse movement still goes through pynput, i.e. it really moves the cursor.
 from __future__ import annotations
 
 import time
+from computer_mcp import execution as _execution
 from typing import Any
 
 try:
@@ -235,11 +236,11 @@ def ui_click(
         return {"error": "mouse controller not provided"}
     t0 = time.perf_counter()
     mouse.position = (target["cx"], target["cy"])
-    time.sleep(0.06)
+    _execution.sleep(0.06)
     mouse.click(
         {"left": mouse_button_left(), "right": None, "middle": None}.get(button) or mouse_button_left()
     )
-    time.sleep(max(0, settle_ms) / 1000.0)
+    _execution.sleep(max(0, settle_ms) / 1000.0)
     return {
         "ok": True,
         "clicked": {"name": target["name"], "type": target["type"], "x": target["cx"], "y": target["cy"]},
@@ -378,6 +379,8 @@ def run_batch(
     failures = 0
 
     for i, raw in enumerate(steps[: max(1, int(max_steps))]):
+        from computer_mcp.execution import check
+        check('batch')
         step = dict(raw or {})
         action = str(step.get("action", "")).strip().lower()
         t0 = time.perf_counter()
@@ -406,7 +409,7 @@ def run_batch(
                 entry["ok"] = True
             elif action == "sleep":
                 ms = int(step.get("ms", default_sleep_ms))
-                time.sleep(ms / 1000.0)
+                _execution.sleep(ms / 1000.0)
                 entry["ok"] = True
                 entry["slept_ms"] = ms
             elif action == "wait_change":
@@ -414,8 +417,10 @@ def run_batch(
                     timeout_ms=int(step.get("timeout_ms", 3000)),
                     poll_ms=int(step.get("poll_ms", 120)),
                 )
-                entry["ok"] = True
+                entry["ok"] = bool(res.get('changed')) and not res.get('error')
                 entry["result"] = res
+                if not entry['ok']:
+                    failures += 1
             elif action == "screen_state":
                 entry["ok"] = True
                 entry["result"] = capture_core.screen_state()
@@ -447,7 +452,7 @@ def run_batch(
         if not entry.get("ok") and stop_on_error:
             break
         if action not in ("sleep", "wait_change") and int(step.get("gap_ms", default_sleep_ms)) > 0:
-            time.sleep(int(step.get("gap_ms", default_sleep_ms)) / 1000.0)
+            _execution.sleep(int(step.get("gap_ms", default_sleep_ms)) / 1000.0)
 
     return {
         "ok": failures == 0,

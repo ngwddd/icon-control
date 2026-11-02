@@ -30,6 +30,7 @@ import hashlib
 import json
 import os
 import time
+from computer_mcp import execution as _execution
 from typing import Any
 
 import cv2
@@ -251,7 +252,7 @@ def wait_template(name: str, timeout_ms: int = 5000, poll_ms: int = 120,
                 return {"success": True, "action": op, "matched": True,
                         "elapsed_ms": int((time.time() - t0) * 1000), "tries": tries,
                         "score": last, "target_appear": appear, "where": r}
-        time.sleep(max(30, poll_ms) / 1000.0)
+        _execution.sleep(max(30, poll_ms) / 1000.0)
     _bump(op, False)
     return {"success": True, "action": op, "matched": False,
             "elapsed_ms": int((time.time() - t0) * 1000), "tries": tries,
@@ -278,12 +279,12 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
         from pynput.mouse import Button as MB
         _btn = {"left": MB.left, "right": MB.right, "middle": MB.middle}.get(button, MB.left)
     mouse.position = (int(cx), int(cy))
-    time.sleep(0.04)
+    _execution.sleep(0.04)
     mouse.press(_btn)
-    time.sleep(0.06)
+    _execution.sleep(0.06)
     mouse.release(_btn)
     if settle_ms:
-        time.sleep(settle_ms / 1000.0)
+        _execution.sleep(settle_ms / 1000.0)
     _bump(op, True)
     return {"success": True, "action": op, "name": name, "clicked": [int(cx), int(cy)],
             "score": r.get("score")}
@@ -384,7 +385,7 @@ def wait_baseline_change(name: str, threshold: float = 8.0, timeout_ms: int = 50
                 _bump(op, True)
                 return {"success": True, "action": op, "changed": True, "diff": last,
                         "elapsed_ms": int((time.time() - t0) * 1000)}
-        time.sleep(max(30, poll_ms) / 1000.0)
+        _execution.sleep(max(30, poll_ms) / 1000.0)
     _bump(op, False)
     return {"success": True, "action": op, "changed": False, "diff": last,
             "elapsed_ms": int((time.time() - t0) * 1000)}
@@ -404,7 +405,7 @@ def sample_stable(region: Any = None, hwnd: int | None = None,
             hashes.append(hashlib.md5(g.tobytes()).hexdigest()[:12])
             means.append(round(float(g.mean()), 1))
             if i < times - 1:
-                time.sleep(max(20, gap_ms) / 1000.0)
+                _execution.sleep(max(20, gap_ms) / 1000.0)
         stable = len(set(hashes)) == 1
         _bump(op, True)
         return {"success": True, "action": op, "stable": stable, "hash": hashes[-1],
@@ -434,14 +435,14 @@ def hover_probe(x: int, y: int, region: Any = None, hwnd: int | None = None,
         before = _gray(reg, hwnd)
         orig = tuple(mouse.position)
         mouse.position = (int(x), int(y))
-        time.sleep(max(30, dwell_ms) / 1000.0)
+        _execution.sleep(max(30, dwell_ms) / 1000.0)
         after = _gray(reg, hwnd)
         d = float(np.abs(after.astype(np.int16) - before.astype(np.int16)).mean())
         if away:
             mouse.position = (int(away[0]), int(away[1]))
         else:
             mouse.position = orig
-        time.sleep(0.05)
+        _execution.sleep(0.05)
         changed = d >= float(threshold)
         _bump(op, True)
         return {"success": True, "action": op, "hovered": [int(x), int(y)],

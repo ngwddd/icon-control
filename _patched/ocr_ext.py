@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import time
+from computer_mcp import execution as _execution
 from typing import Any
 
 import mss
@@ -124,12 +125,12 @@ def _region_for(region: dict[str, int] | None, hwnd: int | None) -> dict[str, in
     try:
         if win32gui.IsIconic(hwnd):
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            time.sleep(0.30)
+            _execution.sleep(0.30)
     except Exception:
         pass
     try:
         win32gui.SetForegroundWindow(hwnd)
-        time.sleep(0.15)
+        _execution.sleep(0.15)
     except Exception:
         pass  # not allowed to steal focus - rendering below still works
     try:
@@ -404,11 +405,11 @@ def click_text(
     target = matches[index]
     t0 = time.perf_counter()
     mouse.position = (target["cx"], target["cy"])
-    time.sleep(0.08)
+    _execution.sleep(0.08)
     from pynput.mouse import Button
 
     mouse.click(Button.left, 1)
-    time.sleep(max(0, settle_ms) / 1000.0)
+    _execution.sleep(max(0, settle_ms) / 1000.0)
     return {
         "ok": True,
         "clicked_text": target["text"],
