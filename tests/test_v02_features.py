@@ -148,7 +148,8 @@ class TestVerifyFlow(unittest.TestCase):
     @NEED
     def test_continue_on_fail_and_report_file(self) -> None:
         d = tempfile.mkdtemp()
-        rep_path = os.path.join(d, "report.json")
+        from computer_mcp.workspace import report_path
+        rep_path = str(report_path('test-' + os.path.basename(d) + '.json'))
         rep = vf.run([
             {"name": "bad", "assert": [{"kind": "file", "path": os.path.join(d, "nope")}]},
             {"name": "alsobad", "assert": [{"kind": "file", "path": os.path.join(d, "nope2")}]},

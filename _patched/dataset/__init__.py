@@ -75,7 +75,7 @@ async def tee(name: str, arguments, call, zone_lookup) -> object:
         ok = schema.ok_of(text)
         return out
     except BaseException as exc:                        # noqa: BLE001
-        err = f"{type(exc).__name__}: {exc}"
+        err = type(exc).__name__
         raise
     finally:
         try:

@@ -155,7 +155,7 @@ KINDS = {
 def run(stages: list, stop_on_fail: bool = True, report_path: str | None = None) -> dict:
     """按顺序跑分级验证。返回结构化报告（含每级证据）。"""
     t_all = time.time()
-    report: dict = {"ok": True, "stages": [], "failed_stage": None,
+    report: dict = {"ok": bool(stages), "stages": [], "failed_stage": None,
                     "failed_stages": [], "elapsed_ms": 0}
     stages = stages or []
 
@@ -167,7 +167,7 @@ def run(stages: list, stop_on_fail: bool = True, report_path: str | None = None)
 
         t0 = time.time()
         checks = []
-        stage_ok = True
+        stage_ok = bool(stage.get('assert') or stage.get('checks'))
         for spec in (stage.get("assert") or stage.get("checks") or []):
             kind = str(spec.get("kind") or spec.get("type") or "").lower()
             fn = KINDS.get(kind)
@@ -206,12 +206,12 @@ def run(stages: list, stop_on_fail: bool = True, report_path: str | None = None)
     if report_path:
         try:
             import json
-            p = os.path.expanduser(report_path)
-            os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
-            with open(p, "w", encoding="utf-8") as fh:
-                json.dump(report, fh, ensure_ascii=False, indent=2)
-            report["report_path"] = p
+            from computer_mcp.workspace import report_path as safe_report_path, create_text
+            p = safe_report_path(report_path)
+            create_text(p, json.dumps(report, ensure_ascii=False, indent=2))
+            report["report_path"] = str(p)
         except Exception as exc:
+            report['ok'] = False
             report["report_error"] = str(exc)
 
     return report

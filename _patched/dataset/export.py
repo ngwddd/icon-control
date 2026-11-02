@@ -5,22 +5,25 @@ from __future__ import annotations
 import json
 import time
 import zipfile
+import secrets
 from pathlib import Path
 
 from . import writer
+from computer_mcp.workspace import component, owned_path
 
 
 def export(days: int = 7, tag: str | None = None) -> dict:
     """把最近 N 天的 raw 打成一个 zip，返回路径与清单。"""
     days = max(1, min(int(days), 90))
     tag = tag or time.strftime("%Y-W%V")
-    outdir = writer.ROOT / "exports" / tag
+    component(tag)
+    outdir = owned_path(writer.ROOT / 'exports', tag)
     outdir.mkdir(parents=True, exist_ok=True)
-    dst = outdir / f"episodes-{days}d-{time.strftime('%Y%m%d-%H%M%S')}.zip"
+    dst = outdir / f"episodes-{days}d-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(6)}.zip"
 
     cutoff = time.strftime("%Y-%m-%d", time.localtime(time.time() - days * 86400))
     files, count = [], 0
-    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(dst, "x", zipfile.ZIP_DEFLATED) as zf:
         if writer.DATA.is_dir():
             for f in sorted(writer.DATA.glob("*/episodes.jsonl")):
                 if f.parent.name < cutoff:

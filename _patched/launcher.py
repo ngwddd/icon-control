@@ -50,6 +50,8 @@ def main():
         sys.argv=[sys.argv[0],'--port',str(args.bridge_port or (security.bridge_port() if args.port==8000 else args.port))]
         return bridge_main()
     from computer_mcp import mcp
+    from computer_mcp import process_registry
+    process_registry.register_current()
     if args.command=='http':asyncio.run(mcp.run_http(args.host,args.port))
     else:asyncio.run(mcp.run_stdio())
     return 0

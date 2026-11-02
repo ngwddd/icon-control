@@ -74,9 +74,9 @@ class TaskTests(unittest.TestCase):
         self.assertFalse(result['ok']);self.assertFalse(result['verified'])
         self.assertEqual(result['state'],'executed_unverified')
 
-    def test_final_assert_verifies_sequence(self):
+    def test_unrelated_final_assert_does_not_verify_sequence(self):
         result=self.run_task([{'op':'click'},{'op':'assert','expect':{'kind':'text','query':'changed'}}])
-        self.assertTrue(result['ok']);self.assertTrue(result['steps'][0]['verified'])
+        self.assertFalse(result['ok']);self.assertFalse(result['steps'][0]['verified'])
 
     def test_failed_postcondition_does_not_count_action_done(self):
         self.condition.return_value=False

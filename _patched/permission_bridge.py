@@ -27,6 +27,7 @@ import secrets
 import os
 import sys
 import threading
+import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -87,6 +88,11 @@ def note_client(client: str, granted: bool, event: str) -> None:
     if event == 'action':
         _revision += 1
         _last_action = (now, bool(granted), key)
+    elif not granted and _last_action and _last_action[1] and _last_action[2] == key:
+        # A lost explicit revoke must be repaired by the owner's next heartbeat.
+        # Make the downgrade irreversible by subsequent positive heartbeats.
+        _revision += 1
+        _last_action = (now, False, key)
     for k in list(CLIENTS):                    # 清掉陈旧条目，避免无限增长
         if now - CLIENTS[k]["ts"] > CLIENT_ACTION_TTL_S:
             CLIENTS.pop(k, None)
@@ -101,11 +107,11 @@ def effective_state() -> tuple:
     live = CLIENTS.get(client, {})
     if now - ts > CLIENT_ACTION_TTL_S or now - live.get('ts', 0) > CLIENT_HB_TTL_S:
         return False, 'expired'
-    return granted, 'action@%ds' % int(now - ts)
+    return bool(granted and live.get('granted')), 'action@%ds' % int(now - ts)
 
 
 def write_state(granted: bool, origin: str = "bridge",
-                client: str = None, event: str = None, sequence=None, action_at=None) -> None:
+                client: str = None, event: str = None, sequence=None, action_at=None) -> dict:
     with _lock:
         global _last_event_stamp
         if event == 'action' and sequence is not None:
@@ -113,10 +119,15 @@ def write_state(granted: bool, origin: str = "bridge",
                 type(action_at) is not int or action_at < _last_event_stamp or
                 (action_at == _last_event_stamp and granted and _last_action is not None and not _last_action[1]) or
                 abs(time.time()*1000-action_at)>30000):
-                return
+                return read_state()
             _client_sequences[client]=sequence
             _last_event_stamp=action_at
+        elif event == 'hb' and not granted and _last_action and _last_action[2] == client:
+            _last_event_stamp = max(_last_event_stamp, int(time.time()*1000))
+            if type(sequence) is int:
+                _client_sequences[client] = max(sequence, _client_sequences.get(client, 0))
         _write_state_locked(granted, origin, client, event)
+        return read_state()
 
 def _write_state_locked(granted, origin, client, event):
     now = time.time()
@@ -151,10 +162,16 @@ def _write_state_locked(granted, origin, client, event):
     payload['signature'] = security.signature(payload, token)
     with _lock:
         os.makedirs(STATE_DIR, exist_ok=True)
-        tmp = STATE_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
-        os.replace(tmp, STATE_PATH)
+        tmp = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=STATE_DIR,
+                                             prefix='permission-', suffix='.tmp', delete=False) as fh:
+                tmp = fh.name
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+                fh.flush(); os.fsync(fh.fileno())
+            os.replace(tmp, STATE_PATH)
+        finally:
+            if tmp and os.path.exists(tmp): os.unlink(tmp)
 
 
 def read_state() -> dict:
@@ -300,13 +317,18 @@ class Handler(BaseHTTPRequestHandler):
             event = "hb"
         if event=='action' and (type(data.get('sequence')) is not int or type(data.get('action_at')) is not int):
             self.send_error(400,'Action sequence and time required');return
-        write_state(granted, origin=str(data.get("origin") or "client"),
+        state = write_state(granted, origin=str(data.get("origin") or "client"),
                     client=client, event=event,sequence=data.get('sequence') if event=='action' else None,
                     action_at=data.get('action_at') if event=='action' else None)
         log(f"POST granted={granted}")
-        self.send_response(204)
+        body = json.dumps(state).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
         self._cors()
         self.end_headers()
+        self.wfile.write(body)
 
 
 def main() -> int:

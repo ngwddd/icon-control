@@ -14,6 +14,7 @@ import tempfile
 import time
 import unittest
 from authority_fixture import AuthorityCase
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -106,14 +107,18 @@ class TestPruneTool(unittest.TestCase):
 @NEED
 class TestTempSweep(unittest.TestCase):
     def test_own_prefixes_removed(self) -> None:
-        base = Path(tempfile.gettempdir())
+        private = tempfile.TemporaryDirectory()
+        self.addCleanup(private.cleanup)
+        base = Path(private.name) / 'tmp'
+        base.mkdir()
         mine = base / f"vh-test-{os.getpid()}"
         mine.mkdir(exist_ok=True)
         (mine / "x.txt").write_bytes(b"1")
         old = time.time() - 12 * 3600
         os.utime(mine, (old, old))
         try:
-            res = retention.sweep_temp(max_age_hours=6)
+            with patch.object(retention, 'DRAW_ROOT', Path(private.name)):
+                res = retention.sweep_temp(max_age_hours=6)
             self.assertIn(mine.name, res["removed"])
             self.assertFalse(mine.exists())
         finally:

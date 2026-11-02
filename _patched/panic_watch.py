@@ -18,40 +18,29 @@
 from __future__ import annotations
 
 import os
-import re
 import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "venv", "Lib", "site-packages"))
 
-from computer_mcp import panic  # noqa: E402
+from computer_mcp import panic, process_registry, security  # noqa: E402
 
 import psutil  # noqa: E402
 
 # 哪些进程算"自动化进程"（急停时必须一并清掉）
-AUTOMATION_PATTERNS = [
-    r"[\w\-]+_(bot|run|play|fight)\w*\.py",
-    r"macro_run",
-    r"desk\.py\s+macro",
-    r"(bot|run|fight)_?[\w\-]*",
-]
+AUTOMATION_PATTERNS = []  # Names never establish ownership.
 
 
 def automation_pids(exclude_self: bool = True) -> list[tuple[int, str]]:
     me = os.getpid()
     hits: list[tuple[int, str]] = []
-    for p in psutil.process_iter(["name", "pid", "cmdline"]):
+    for p in process_registry.registered():
         try:
-            name = (p.info.get("name") or "").lower()
-            if "python" not in name:
-                continue
-            pid = p.info["pid"]
+            pid = p.pid
             if exclude_self and pid == me:
                 continue
-            cmd = " ".join(p.info.get("cmdline") or [])
-            if any(re.search(pat, cmd) for pat in AUTOMATION_PATTERNS):
-                hits.append((pid, cmd[:140]))
+            hits.append((pid, 'registered Icon Control process'))
         except Exception:
             continue
     return hits
@@ -66,23 +55,27 @@ def main() -> int:
         pass
 
     print("[watchdog] ✋ 收到急停，开始清理自动化进程", flush=True)
-    victims = automation_pids()
+    # Cooperative cancellation releases owned held inputs before forced exit.
+    security.latch_stop()
+    time.sleep(.25)
+    victims = [p for p in process_registry.registered() if p.pid != os.getpid()]
     if not victims:
         print("[watchdog] 没有发现正在跑的自动化进程（可能已经停了）", flush=True)
-    for pid, cmd in victims:
+    for process in victims:
+        pid = process.pid
         try:
-            psutil.Process(pid).terminate()
-            print(f"[watchdog]   ✓ 已终止 {pid}: {cmd}", flush=True)
+            process.terminate()  # psutil verifies PID/create-time before termination.
+            print(f"[watchdog]   ✓ 已终止 {pid}", flush=True)
         except Exception as exc:
             print(f"[watchdog]   ✗ {pid} 终止失败: {exc}", flush=True)
 
     time.sleep(1.0)
-    left = automation_pids()
+    left = [p for p in process_registry.registered() if p.pid != os.getpid()]
     if left:
-        for pid, cmd in left:
+        for process in left:
             try:
-                psutil.Process(pid).kill()
-                print(f"[watchdog]   ✓ 强杀 {pid}", flush=True)
+                process.kill()
+                print(f"[watchdog]   ✓ 强杀 {process.pid}", flush=True)
             except Exception:
                 pass
 

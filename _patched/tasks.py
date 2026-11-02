@@ -86,10 +86,8 @@ class Task:
                     if not self.verify(expected,params.get('timeout_ms',3000)):
                         raise RuntimeError('Assertion failed or could not be verified')
                     row['verified']=True
-                    # A final assertion can verify the resulting state of a sequence.
-                    for earlier in self.rows[:-1]:
-                        if earlier['state']=='executed_unverified':
-                            earlier.update(verified=True,state='succeeded',verified_by=row['line'])
+                    # A standalone assertion proves only its own condition.
+                    # Each action must carry its own explicit postcondition.
                 else:
                     action=program._as_action(dict(params,op=op))
                     if not action: raise ValueError('Unsupported instruction: '+str(op))
@@ -115,6 +113,8 @@ class Task:
     def run(self):
         state='running'
         try:
+            if not self.instructions:
+                raise ValueError('Empty tasks cannot establish execution success')
             with execution.operation('run_script'):
                 self.execute(self.instructions)
             state='failed' if self.failed else ('succeeded' if all(r['verified'] for r in self.rows) else 'executed_unverified')

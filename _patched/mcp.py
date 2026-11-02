@@ -104,7 +104,9 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
         return format_response(result, computer_state, screenshot_data=screenshot_data)
     
     except Exception as e:
-        error_msg = {"error": str(e), "tool": name, "arguments": arguments}
+        # Exception messages can interpolate typed text, paths or credentials.
+        error_msg = {"success": False, "error": "Tool execution failed",
+                     "error_type": type(e).__name__, "tool": name}
         return [TextContent(type="text", text=json.dumps(error_msg))]
 
 

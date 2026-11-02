@@ -15,6 +15,26 @@ window.__ModuleLoader__.load({
       ? window.crypto.randomUUID() : String(Date.now()) + Math.random().toString(36);
     let lastMode = 'unknown';
     let actionSequence = 0;
+    let confirmed = null;
+    let desired = false;
+    let pending = false;
+    let revision = -1;
+    let bridgeSession = null;
+    let requestQueue = Promise.resolve();
+
+    function announce() { window.dispatchEvent(new CustomEvent(EVENT)); }
+    function acceptState(state, sequence) {
+      if (sequence !== actionSequence || typeof state.granted !== 'boolean') return;
+      if (bridgeSession === state.session && typeof state.revision === 'number' && state.revision < revision) return;
+      bridgeSession = state.session;
+      revision = state.revision;
+      confirmed = state.granted;
+      desired = confirmed;
+      pending = false;
+      lastMode = 'authenticated';
+      writeGranted(confirmed);
+      announce();
+    }
 
     function headers() {
       return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + BRIDGE_TOKEN };
@@ -28,29 +48,37 @@ window.__ModuleLoader__.load({
         if (!response.ok) throw new Error('Bridge state unavailable');
         return response.json();
       }).then(function (state) {
-        if (sequence !== actionSequence || typeof state.granted !== 'boolean') return;
-        if (readGranted() !== state.granted) {
-          writeGranted(state.granted);
-          window.dispatchEvent(new CustomEvent(EVENT));
-        }
+        acceptState(state, sequence);
       });
     }
 
     function pushToBridge(granted, event = 'hb') {
       if (!BRIDGE_TOKEN || BRIDGE_TOKEN.startsWith('__')) return;
-      const sequence = event === 'action' ? ++actionSequence : 0;
+      const sequence = event === 'action' ? ++actionSequence : actionSequence;
       const currentSequence = actionSequence;
       const actionAt = event === 'action' ? Date.now() : 0;
-      window.fetch(BRIDGE + '/state', {
+      requestQueue = requestQueue.catch(function () {}).then(function () {
+      // Re-evaluate queued heartbeats; they must not renew an obsolete intent.
+      if (event === 'hb') granted = desired && confirmed === true && !pending;
+      return window.fetch(BRIDGE + '/state', {
         method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store',
         referrerPolicy: 'no-referrer', headers: headers(),
         body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill',
                               client: CLIENT, event, sequence, action_at: actionAt }),
       }).then(function (response) {
         if (!response.ok) throw new Error('Bridge request rejected');
-        lastMode = 'authenticated';
-        return syncFromBridge(currentSequence);
-      }).catch(function () { lastMode = 'unavailable'; });
+        return response.json();
+      }).then(function (state) { acceptState(state, currentSequence); });
+      }).catch(function () {
+        if (currentSequence !== actionSequence) return;
+        lastMode = 'unavailable';
+        confirmed = null;
+        desired = false; // A subsequent negative heartbeat repairs a lost revoke.
+        pending = false;
+        writeGranted(false);
+        announce();
+      });
+      return requestQueue;
     }
 
     function ensureHeartbeat() {
@@ -62,7 +90,7 @@ window.__ModuleLoader__.load({
         window.removeEventListener('focus', window.__DSH_MOUSE_BRIDGE_BUMP__);
       }
       window.__DSH_MOUSE_BRIDGE_OWNER__ = CLIENT;
-      const bump = function () { pushToBridge(readGranted()); };
+      const bump = function () { pushToBridge(desired); };
       window.__DSH_MOUSE_BRIDGE_BUMP__ = bump;
       window.__DSH_MOUSE_BRIDGE_TIMER__ = window.setInterval(bump, HEARTBEAT_MS);
       document.addEventListener('visibilitychange', bump);
@@ -93,11 +121,7 @@ window.__ModuleLoader__.load({
 
     // ── 状态读写 ─────────────────────────────────────────────────────────
     function readGranted() {
-      try {
-        return window.localStorage.getItem(KEY) === '1';
-      } catch (err) {
-        return false;
-      }
+      return confirmed;
     }
 
     function writeGranted(value) {
@@ -110,6 +134,8 @@ window.__ModuleLoader__.load({
 
     // 文案既是给人看的，也是机器可读的（除颜色外还有明确文字）
     function label(granted) {
+      if (pending) return desired ? '控制·等待授权确认' : '控制·等待撤销确认';
+      if (granted === null) return '控制·状态未知';
       return granted ? '鼠标·已授权' : '鼠标·未授权';
     }
 
@@ -135,10 +161,11 @@ window.__ModuleLoader__.load({
 
       const toggle = function toggle(event) {
         if (!event || !event.isTrusted) return;
-        const next = !readGranted();
-        writeGranted(next);
-        setGranted(next);
-        window.dispatchEvent(new CustomEvent(EVENT));
+        const next = confirmed !== true;
+        desired = next;
+        pending = true;
+        confirmed = null;
+        announce();
         pushToBridge(next, 'action');
       };
 
@@ -157,10 +184,10 @@ window.__ModuleLoader__.load({
         {
           type: 'button',
           onClick: toggle,
-          'data-mouse-permission': granted ? 'granted' : 'denied',
+          'data-mouse-permission': pending ? 'pending' : granted === null ? 'unknown' : granted ? 'granted' : 'denied',
           'data-mouse-bridge': lastMode,
           'aria-label': label(granted),
-          'aria-pressed': granted,
+          'aria-pressed': granted === true,
           title: granted
             ? '鼠标接管：已授权 —— 代理可以操纵鼠标。点一下收回权限。'
             : '鼠标接管：未授权 —— 代理不得操纵鼠标。点一下授权。',

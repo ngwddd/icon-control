@@ -19,6 +19,10 @@ PATTERNS = (
 )
 
 MAX_STR = 400          # 单个字符串参数最多留这么多字符
+# Drop content by semantic field, even if it contains no recognizable secret.
+PRIVATE_KEYS = frozenset({'text','value','content','clipboard','password','passwd',
+    'secret','token','authorization','body','input','keys','key','script','source',
+    'query','title','window','command','cmd','condition','expect','labels'})
 HOME = os.path.expanduser("~")
 USER = os.path.basename(HOME)
 
@@ -50,7 +54,15 @@ def redact_args(args: dict) -> tuple:
             hits.update(h)
             return t if len(t) <= MAX_STR else t[:MAX_STR] + "…"
         if isinstance(v, dict):
-            return {k: walk(x) for k, x in v.items()}
+            out = {}
+            for k, x in v.items():
+                normalized = str(k).lower().replace('-', '_')
+                if normalized in PRIVATE_KEYS or any(s in normalized for s in ('password','secret','token','clipboard')):
+                    out[k] = '<private>'
+                    hits.add('private_content')
+                else:
+                    out[k] = walk(x)
+            return out
         if isinstance(v, (list, tuple)):
             return [walk(x) for x in v]
         return v

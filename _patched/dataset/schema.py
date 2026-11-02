@@ -80,10 +80,12 @@ def build_episode(*, tool: str, arguments, zone: str, result_text,
             json.dumps(safe_args, sort_keys=True, ensure_ascii=False).encode()
         ).hexdigest()[:16],
         "target": redact.target_of(safe_args),
-        "result": {"ok": ok, "error": error,
+        "result": {"ok": ok, "error": (error if error in
+                   {'ValueError','TypeError','RuntimeError','PermissionDenied','OSError','TimeoutError'}
+                   else 'operation_error') if error else None,
                    "bytes": len(result_text or "")},
         "verdict": verdict,
         "latency_ms": round(latency_ms, 1),
-        "labels": list(labels or []),
+        "labels": [label for label in (labels or []) if label in {'explore','regression','manual'}],
         "redactions": redactions,
     }

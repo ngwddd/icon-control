@@ -51,8 +51,8 @@ KEEP = ("macros", "recipes", "templates", "vision/glyphs.json", "_patched")
 # ⚠️ 绝不要把 "dsh-" 放进来：那是 DSH 宿主自己的临时目录
 # （实测有 dsh-spill-* / dsh-subprocess-* / dsh-workspace-changes-*），
 # 删了会影响运行中的会话。
-TEMP_PREFIXES = ("vh-", "canity_")
-TEMP_FILE_GLOBS = ("t_*.py", "t_*.json", "_dsh_*.py", "patch_*.py")
+TEMP_PREFIXES = ()
+TEMP_FILE_GLOBS = ()
 
 
 def _dir_stats(files: list[Path]) -> tuple[int, int]:
@@ -179,15 +179,16 @@ def sweep(root: Path | None = None, dry_run: bool = False) -> dict:
 
 
 def sweep_temp(max_age_hours: float = 6.0, dry_run: bool = False) -> dict:
-    """清 %TEMP% 里自己的东西（本工具与它的脚本留下的）。别的程序一概不碰。"""
-    base = Path(tempfile.gettempdir())
+    """Only sweep the dedicated private temp directory, never the system TEMP."""
+    base = DRAW_ROOT / 'tmp'
     cutoff = time.time() - max_age_hours * 3600
     removed: list[str] = []
     freed = 0
 
-    for entry in base.iterdir():
+    for entry in (base.iterdir() if base.is_dir() else []):
         try:
-            mine = (entry.is_dir() and entry.name.startswith(TEMP_PREFIXES))
+            mine = not entry.is_symlink() and not getattr(entry, 'is_junction', lambda: False)()
+            entry.resolve().relative_to(base.resolve())
         except Exception:
             continue
         if not mine:
@@ -195,9 +196,15 @@ def sweep_temp(max_age_hours: float = 6.0, dry_run: bool = False) -> dict:
         try:
             if entry.stat().st_mtime > cutoff:
                 continue
-            size = sum(f.stat().st_size for f in entry.rglob("*") if f.is_file())
+            if entry.is_dir():
+                if any(p.is_symlink() or getattr(p,'is_junction',lambda:False)() for p in entry.rglob('*')):
+                    continue
+                size = sum(f.stat().st_size for f in entry.rglob('*') if f.is_file())
+            else:
+                size = entry.stat().st_size
             if not dry_run:
-                shutil.rmtree(entry, ignore_errors=True)
+                if entry.is_dir(): shutil.rmtree(entry)
+                else: entry.unlink()
             removed.append(entry.name)
             freed += size
         except Exception:
