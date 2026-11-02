@@ -14,7 +14,11 @@ def main():
     from computer_mcp import permission
     permission._ensure_bridge()
     root = tk.Tk(); root.title('Icon Control — Permissions')
-    root.geometry('650x660'); root.minsize(600,600)
+    scale=max(1.0,root.winfo_fpixels('1i')/96.0)
+    width=min(int(650*scale),root.winfo_screenwidth()-80)
+    height=min(int(720*scale),root.winfo_screenheight()-100)
+    root.geometry(f'{width}x{height}')
+    root.minsize(min(width,int(600*scale)),min(height,int(600*scale)))
     frame = ttk.Frame(root, padding=16); frame.pack(fill='both',expand=True)
     status = tk.StringVar(value='正在连接权限服务…')
     ttk.Label(frame, textvariable=status, wraplength=610).pack(fill='x', pady=(0,12))
@@ -26,7 +30,7 @@ def main():
         options[scope] = tk.BooleanVar(value=False)
         ttk.Checkbutton(frame,text=LABELS[scope],variable=options[scope]).pack(anchor='w')
     ttk.Label(frame,text='允许操作的现有应用（PID 及启动时间绑定）：').pack(anchor='w',pady=(12,4))
-    applications = tk.Listbox(frame,selectmode='multiple',exportselection=False,height=9)
+    applications = tk.Listbox(frame,selectmode='multiple',exportselection=False,height=6)
     applications.pack(fill='both',expand=True)
     records = []
     launches = []
@@ -94,7 +98,7 @@ def main():
             status.set('状态未知：通信失败，已停止续期。')
         root.after(4000, heartbeat)
 
-    buttons = ttk.Frame(frame); buttons.pack(fill='x',pady=(12,0))
+    buttons = ttk.Frame(frame); buttons.pack(before=applications,side='bottom',fill='x',pady=(12,0))
     ttk.Button(buttons,text='刷新会话与应用',command=refresh).pack(side='left')
     ttk.Button(buttons,text='授权所选范围',command=grant).pack(side='left',padx=12)
     ttk.Button(buttons,text='立即撤销',command=revoke).pack(side='left')
@@ -107,7 +111,8 @@ def main():
             launches.append(capabilities.launch_record(path,arguments))
             status.set('已选择待批准的启动程序；请点击“授权所选范围”提交。')
         except Exception as exc: messagebox.showerror('无法批准',str(exc),parent=root)
-    ttk.Button(frame,text='选择允许启动的程序及固定参数…',command=approve_launch).pack(anchor='w',pady=(8,0))
+    ttk.Button(frame,text='选择允许启动的程序及固定参数…',command=approve_launch).pack(
+        before=applications,side='bottom',anchor='w',pady=(8,0))
     def close(): revoke(); root.destroy()
     root.protocol('WM_DELETE_WINDOW',close)
     refresh(); root.after(4000,heartbeat); root.mainloop()
