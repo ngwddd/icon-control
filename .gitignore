@@ -22,3 +22,8 @@ vision/baselines/
 .verify-baseline.json
 # 本机的测试解释器指针（每台机器不同，不进仓库）
 .verify-python
+.runtime/
+.venv/
+build/
+dist/
+*.egg-info/
