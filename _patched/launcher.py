@@ -33,7 +33,8 @@ def initialize(bridge_port=None, register_ui=False):
         config = security.data_home()/'state'/'bridge-config.json'
         previous = json.loads(config.read_text(encoding='utf-8')) if config.exists() else {}
         previous.update(port=bridge_port)
-        previous.setdefault('origins',['dsh-app://','dsh-app://localhost'])
+        if previous.get('origins') in (None,['dsh-app://','dsh-app://localhost']):
+            previous['origins']=['dsh-app://app']
         config.write_text(json.dumps(previous),encoding='utf-8')
     path=security.data_home()/'state'/'mcp-token.txt'
     if not path.exists():
