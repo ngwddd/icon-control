@@ -253,7 +253,8 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
     if st["granted"]:
         emergency = panic.default()
         if (emergency.triggered and isinstance(emergency.triggered_at_wall,(int,float)) and
-                st.get('authorized_at',0) > emergency.triggered_at_wall):
+                (st.get('authorized_at',0) > emergency.triggered_at_wall or
+                 (getattr(emergency,'durable_saved',False) is True and not security.stopped(st)))):
             emergency.reset()
         if emergency.triggered or not emergency.ready:
             return dict(success=False, blocked=True, tool=name, permission=st,

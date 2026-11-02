@@ -46,6 +46,7 @@ class PanicSwitch:
         self._lock = threading.Lock()
         self.triggered_at: float | None = None
         self.triggered_at_wall = None
+        self.durable_saved = False
         self.press_count = 0
         self._esc_down = False
 
@@ -92,8 +93,10 @@ class PanicSwitch:
                 from computer_mcp import security
                 try:
                     self.triggered_at_wall = security.latch_stop()
+                    self.durable_saved = True
                 except OSError:
                     self.triggered_at_wall = time.time()
+                    self.durable_saved = False
                 from computer_mcp import control
                 control.release('emergency stop')
                 from computer_mcp import input_guard
@@ -129,6 +132,7 @@ class PanicSwitch:
             self._esc_down = False
             self.triggered_at = None
             self.triggered_at_wall = None
+            self.durable_saved = False
             self._event.clear()
 
     def stop(self) -> None:

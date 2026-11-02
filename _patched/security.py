@@ -51,6 +51,12 @@ def latch_stop():
     path=data_home()/'state'/'emergency-stop.json'
     path.parent.mkdir(parents=True,exist_ok=True)
     payload={'stopped_at':time.time()}
+    # A wall clock can return the same value for two distinct events. Persist
+    # the signed authority generation so only a later explicit action clears it.
+    from computer_mcp import permission
+    authority=permission._read_state_file()
+    if isinstance(authority,dict) and authentic(authority):
+        payload.update(session=authority.get('session'),revision=authority.get('revision'))
     token=load_token()
     if token:payload['signature']=signature(payload,token)
     with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=path.parent,
@@ -68,5 +74,9 @@ def stopped(payload):
     if not path.exists():return False
     try:
         stop=json.loads(path.read_text(encoding='utf-8'))
-        return not authentic(stop) or float(payload.get('authorized_at',0)) <= float(stop['stopped_at'])
+        if not authentic(stop):return True
+        if stop.get('session') and payload.get('session')==stop['session']:
+            return (type(payload.get('revision')) is not int or
+                    type(stop.get('revision')) is not int or payload['revision']<=stop['revision'])
+        return float(payload.get('authorized_at',0)) <= float(stop['stopped_at'])
     except (OSError,ValueError,TypeError,KeyError):return True

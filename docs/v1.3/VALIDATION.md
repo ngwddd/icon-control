@@ -7,8 +7,8 @@
 
 | 范围 | 实际结果 | 可复核材料 |
 |---|---|---|
-| 完整自动化回归 | 375 项运行，370 通过、5 跳过、0 失败、0 错误 | test-results.json；tools/verify.py |
-| 新稳定性回归 | 77 项安全／任务／快照／传输／原生调用与发布闸门用例，全部通过 | tests/test_stability*.py |
+| 完整自动化回归 | 380 项运行，375 通过、5 跳过、0 失败、0 错误 | test-results.json；tools/verify.py |
+| 新稳定性回归 | 82 项安全／任务／快照／传输／原生调用与发布闸门用例，全部通过 | tests/test_stability*.py |
 | 标准构建 | wheel 与 sdist 成功；完整包不依赖宿主补丁目录 | pyproject.toml；dist/ 构建产物 |
 | 独立安装 | Windows x64 / CPython 3.12.14 新建 venv，pip 自动安装声明依赖；pip check 通过 | tools/install.ps1；constraints-windows-py312.txt |
 | 官方 MCP SDK 互通 | stdio、Streamable HTTP 均初始化成功、列出 89 工具；无凭据 HTTP 返回 401 | protocol-smoke.json；tools/protocol_smoke.py |
@@ -19,10 +19,11 @@
 没有修改原已安装宿主或原开发目录。窗口截图与部分屏幕采集测试可读取本机桌面，
 SDK 互通只列工具，不注入鼠标或键盘。
 
-77 项新回归包括：首请求 Token 缺失、错误 Token、伪域 Origin、伪造／过期状态、心跳不授予权限、
+82 项新回归包括：首请求 Token 缺失、错误 Token、伪域 Origin、伪造／过期状态、心跳不授予权限、
 撤销与跨窗口乱序／同毫秒冲突、名单实际执行、监听失败、claim 接管竞争、逐事件取消与持键释放、
 急停持久化、branch/photo 真实结果、失败计数、后置条件、快照 TTL／窗口／进程／DPI／内容失效、
 HTTP 认证与官方传输、中文及 UTF-16 输入、只读截图和 OCR 不切前台、微脚本未知指令和超时。
+后续补查还覆盖未验证微脚本／track 完成不返回成功，以及同一时钟刻度的急停与新授权代际。
 
 ## 跳过项没有计为通过
 
@@ -53,6 +54,7 @@ CI 继续运行完整测试，并保存失败时的回归日志；协议互通�
 - OCR、PrintWindow 和模板对 GPU／自绘窗口的支持因应用而异；候选命中不等于动作已验证。
 - 改写现有工具与直接 Python 入口，并未提供操作系统沙箱；任意第三方 Python 代码不属于受控执行接口。
 - HTTP 仅为本机使用设计；不支持公网监听或旧自制 SSE。当前不部署到用户生产宿主。
+- 后台 track 与其他编排任务同时提交时的调度和异常恢复，仍需并发真机复核；避免把隔离回归当作并发验收。
 
 ## 复现与回滚
 

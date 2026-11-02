@@ -7,7 +7,7 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, PropertyMock
 from http.server import ThreadingHTTPServer
 
 from computer_mcp import permission as P, permission_bridge as B, security as S
@@ -191,10 +191,11 @@ class SecurityTests(unittest.TestCase):
             self.assertFalse(P.status()['granted'])
 
     def test_only_new_user_action_clears_durable_stop(self):
-        self.grant();S.latch_stop()
-        B.write_state(True,client='human',event='hb')
-        self.assertFalse(P.status()['granted'])
-        self.grant();self.assertTrue(P.status()['granted'])
+        with patch('time.time',return_value=time.time()):
+            self.grant();S.latch_stop()
+            B.write_state(True,client='human',event='hb')
+            self.assertFalse(P.status()['granted'])
+            self.grant();self.assertTrue(P.status()['granted'])
 
     def test_double_escape_requires_two_physical_presses(self):
         from pynput.keyboard import Key
@@ -203,5 +204,16 @@ class SecurityTests(unittest.TestCase):
         self.assertFalse(switch.triggered)
         switch._on_release(Key.esc);switch._on_press(Key.esc)
         self.assertTrue(switch.triggered)
+
+    def test_same_clock_new_action_resets_physical_latch_generation(self):
+        from pynput.keyboard import Key
+        switch=panic.PanicSwitch(verbose=False)
+        with patch('time.time',return_value=time.time()), patch.object(panic,'default',return_value=switch), patch.object(panic.PanicSwitch,'ready',new_callable=PropertyMock,return_value=True):
+            self.grant()
+            switch._on_press(Key.esc);switch._on_release(Key.esc);switch._on_press(Key.esc)
+            self.assertIsNotNone(P.check_tool('click'))
+            self.grant()
+            self.assertIsNone(P.check_tool('click'))
+            self.assertFalse(switch.triggered)
 
 if __name__=='__main__': unittest.main()

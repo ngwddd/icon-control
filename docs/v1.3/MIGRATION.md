@@ -11,5 +11,7 @@
 - program 结果包含 state、verified、steps、artifacts。普通动作无后置验证返回 executed_unverified，ok=false；
   提供 expect 或最终 assert 才能得到已验证完成。branch 实际执行选中分支；photo 生成可读取证据文件。
 - 批处理等待超时不再报成功；安全中断不受 stop_on_error=false / on_fail=continue 覆盖。
+- run_script 没有应用后置验证时返回 executed=true、success=false、status=executed_unverified；
+  track 的运行中、引擎已结束和经过判据验证的成功分别报告，不把启动或未验证完成当作任务成功。
 
 不为兼容旧脚本重新开放安全绕过。请先在独立环境迁移和验收，正式发布门槛见 PLAN.md。

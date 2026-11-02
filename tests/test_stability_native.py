@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch, Mock
 from PIL import Image
 from authority_fixture import AuthorityCase
-from computer_mcp import permission_bridge, execution, micro, ocr_ext
+from computer_mcp import permission_bridge, execution, micro, ocr_ext, live
 from computer_mcp.actions import keyboard, window
 
 
@@ -56,6 +56,41 @@ class NativeTests(AuthorityCase, unittest.TestCase):
         runner.run([{'op':'until','timeout_ms':0,'cond':{'unknown':True}}])
         self.assertTrue(runner.stopped)
         self.assertIn('until',runner.stop_reason)
+
+    def test_unverified_micro_execution_is_not_reported_successful(self):
+        runner = Mock()
+        runner.result.return_value = dict(steps=1,seconds=0,stopped=False,stop_reason='')
+        with patch.object(live,'_ensure_frame',return_value=True), patch.object(live,'_daemon'), patch.object(live,'_controllers',return_value=(Mock(),Mock())), patch.object(micro,'Runner',return_value=runner):
+            result = live.tool_run_script({'ops':[{'op':'log','text':'fixture'}]})
+        self.assertTrue(result['executed'])
+        self.assertFalse(result['success'])
+        self.assertEqual(result['status'],'executed_unverified')
+
+    def test_cancelled_micro_execution_is_not_reported_successful(self):
+        runner = Mock()
+        runner.result.return_value = dict(steps=1,seconds=0,stopped=True,stop_reason='fixture stop')
+        with patch.object(live,'_ensure_frame',return_value=True), patch.object(live,'_daemon'), patch.object(live,'_controllers',return_value=(Mock(),Mock())), patch.object(micro,'Runner',return_value=runner):
+            result = live.tool_run_script({'ops':[{'op':'log','text':'fixture'}]})
+        self.assertFalse(result['executed'])
+        self.assertFalse(result['success'])
+        self.assertEqual(result['status'],'cancelled')
+
+    def _track_result(self,status):
+        from computer_mcp import train
+        runner=Mock(); runner.result={'status':status}
+        with patch.object(live,'_win_rect',return_value=(0,0,100,100)), patch.object(live,'_TRAINS',{}), patch.object(live,'_TRAIN_SEQ',[0]), patch.object(train,'Runner',return_value=runner):
+            return live.tool_track({'action':'run','hwnd':999,'track':{'name':'fixture','steps':[{'name':'wait','action':{'kind':'wait'}}]}})
+
+    def test_unverified_track_completion_is_not_success(self):
+        result=self._track_result('done')
+        self.assertFalse(result['success'])
+        self.assertFalse(result['verified'])
+        self.assertEqual(result['status'],'executed_unverified')
+
+    def test_track_timeout_is_not_success(self):
+        result=self._track_result('timeout')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['status'],'timeout')
 
 
 spec = importlib.util.spec_from_file_location('release_gate',Path(__file__).resolve().parents[1]/'tools'/'release_gate.py')

@@ -200,7 +200,10 @@ def tool_run_script(args: dict) -> dict:
                     max_seconds=float(a.get("max_seconds", 60)))
     runner.run(ops)
     res = runner.result()
-    res["success"] = not res.get('stopped')
+    res["executed"] = not res.get('stopped')
+    # Completing input instructions is not evidence that the requested app
+    # state was reached. A separate application postcondition must verify it.
+    res["success"] = False
     res["status"] = 'cancelled' if res.get('stopped') else 'executed_unverified'
     res["verified"] = False
     _LAST_RUN = res
@@ -727,10 +730,13 @@ def tool_track(args: dict) -> dict:
         wait_s = float(a.get("wait_s", max_total))
         th.join(timeout=wait_s)
         alive = th.is_alive()
-        status = 'running' if alive else runner.result.get('status','executed_unverified')
-        return {"success": status in ('running','done'),
+        engine_status = 'running' if alive else runner.result.get('status','executed_unverified')
+        verified = engine_status == 'done' and bool(track.steps) and all(
+            step.expect for step in track.steps)
+        status = 'succeeded' if verified else ('executed_unverified' if engine_status == 'done' else engine_status)
+        return {"success": verified or alive,
                 "id": tid, "alive": alive, **runner.result, "status": status,
-                "verified": False}
+                "engine_status": engine_status, "verified": verified}
 
     return {"success": True, "id": tid, "alive": True,
             "status": "running", "track": track.name, "hwnd": hwnd, "rect": list(rect)}
