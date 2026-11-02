@@ -10,6 +10,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install build
       - run: python -m build
+      - run: python tools/check_artifacts.py
       - shell: pwsh
         run: |
           $wheel = (Get-ChildItem dist -Filter *.whl | Select-Object -First 1).FullName

@@ -3,5 +3,6 @@ include constraints-windows-py312.txt
 recursive-include licenses *
 recursive-include docs *.md *.json
 recursive-include tools *.py *.ps1
+recursive-include tests *.py
 recursive-include skill *.md
 recursive-include programs *.json *.jsonl

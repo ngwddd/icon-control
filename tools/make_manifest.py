@@ -16,7 +16,7 @@ for item in tools:table.append('| %s | %s | %s | %s |'%(item['name'],item['zone'
 paths=[]
 for folder in ('_patched','plugin','tools','tests'):
     paths += [p for p in (root/folder).rglob('*') if p.is_file() and p.suffix in ('.py','.js','.ps1','.json','.yml')]
-paths += [root/'pyproject.toml',root/'VERSION',root/'constraints-windows-py312.txt']
+paths += [root/'pyproject.toml',root/'VERSION',root/'constraints-windows-py312.txt',root/'MANIFEST.in']
 manifest={str(p.relative_to(root)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest()
           for p in sorted(paths) if '__pycache__' not in p.parts}
 (out/'source-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
