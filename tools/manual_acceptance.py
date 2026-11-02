@@ -15,6 +15,10 @@ parser.add_argument('--output',type=Path,required=True)
 parser.add_argument('--wait-grant',type=float,default=0)
 args=parser.parse_args()
 from computer_mcp import __version__,permission,control,execution,ui_ext,live
+from computer_mcp import agent_session
+import subprocess
+source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=Path(__file__).resolve().parents[1],text=True).strip()
+agent_session.register('Icon Control dedicated desktop acceptance')
 from computer_mcp.input_guard import MouseController,Button
 import win32gui
 
@@ -33,7 +37,8 @@ win32gui.EnumWindows(lambda hwnd,_:windows.append(hwnd) if win32gui.GetWindowTex
 if len(windows)!=1:raise RuntimeError('Exactly one rc2 fixture window is required')
 hwnd=windows[0]
 mouse=MouseController()
-report=dict(case=args.case,version=__version__,started=time.time(),dpi=state().get('dpi'),results=[])
+report=dict(case=args.case,version=__version__,source_commit=source_commit,kind='real_desktop',simulated=False,
+            started=time.time(),dpi=state().get('dpi'),results=[])
 report['monitor_dpi']=ctypes.windll.user32.GetDpiForWindow(win32gui.FindWindow('Shell_TrayWnd',None))
 case_started=time.perf_counter()
 

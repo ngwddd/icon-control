@@ -54,6 +54,15 @@ KEEP = ("macros", "recipes", "templates", "vision/glyphs.json", "_patched")
 TEMP_PREFIXES = ()
 TEMP_FILE_GLOBS = ()
 
+def _contained(path,root):
+    try:
+        path.resolve().relative_to(root.resolve())
+        for item in (path,*path.parents):
+            if item.is_symlink() or getattr(item,'is_junction',lambda:False)(): return False
+            if item==root: break
+        return True
+    except (OSError,ValueError): return False
+
 
 def _dir_stats(files: list[Path]) -> tuple[int, int]:
     return len(files), sum(f.stat().st_size for f in files if f.is_file())
@@ -92,6 +101,7 @@ def _prune_one(path: Path, rule: dict, now: float) -> tuple[list[str], int]:
 
     def _del(f: Path) -> None:
         nonlocal freed
+        if not _contained(f,path): return
         try:
             size = f.stat().st_size
             f.unlink()
@@ -138,6 +148,8 @@ def _prune_one(path: Path, rule: dict, now: float) -> tuple[list[str], int]:
                       key=lambda d: d.stat().st_mtime)
         while len(subs) > cap_dirs:
             d = subs.pop(0)
+            if not _contained(d,path) or any(not _contained(p,path) for p in d.rglob('*')):
+                continue
             try:
                 size = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
                 shutil.rmtree(d, ignore_errors=True)
@@ -170,6 +182,7 @@ def sweep(root: Path | None = None, dry_run: bool = False) -> dict:
         return {"dry_run": True, "would_trim": planned, "root": str(root)}
 
     for rel, rule in POLICY.items():
+        if not _contained(root/rel,root): continue
         r, f = _prune_one(root / rel, rule, now)
         removed += r
         freed += f
@@ -185,7 +198,7 @@ def sweep_temp(max_age_hours: float = 6.0, dry_run: bool = False) -> dict:
     removed: list[str] = []
     freed = 0
 
-    for entry in (base.iterdir() if base.is_dir() else []):
+    for entry in (base.iterdir() if base.is_dir() and _contained(base,DRAW_ROOT) else []):
         try:
             mine = not entry.is_symlink() and not getattr(entry, 'is_junction', lambda: False)()
             entry.resolve().relative_to(base.resolve())

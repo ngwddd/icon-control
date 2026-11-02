@@ -36,6 +36,11 @@ class ComputerState:
         
     def start_mouse_listener(self):
         """Start mouse state tracking."""
+        from computer_mcp import permission
+        from computer_mcp.capabilities import has_scope
+        if not has_scope('input_observe'):
+            self.stop_mouse_listener()
+            return
         if self.mouse_listener is None and (self.config["observe_mouse_position"] or self.config["observe_mouse_button_states"]):
             self.mouse_listener = mouse.Listener(
                 on_move=self._on_mouse_move,
@@ -52,6 +57,12 @@ class ComputerState:
     
     def start_keyboard_listener(self):
         """Start keyboard state tracking."""
+        from computer_mcp import permission
+        from computer_mcp.capabilities import has_scope
+        if not has_scope('input_observe'):
+            self.stop_keyboard_listener()
+            self.keyboard_keys.clear()
+            return
         if self.keyboard_listener is None and self.config["observe_keyboard_key_states"]:
             self.keyboard_listener = keyboard.Listener(
                 on_press=self._on_key_press,
@@ -66,10 +77,14 @@ class ComputerState:
             self.keyboard_listener = None
     
     def _on_mouse_move(self, x: int, y: int):
+        from computer_mcp.capabilities import has_scope
+        if not has_scope('input_observe'): return
         if self.config["observe_mouse_position"]:
             self.mouse_position = (x, y)
     
     def _on_mouse_click(self, x: int, y: int, button: Button, pressed: bool):
+        from computer_mcp.capabilities import has_scope
+        if not has_scope('input_observe'): return
         if self.config["observe_mouse_position"]:
             self.mouse_position = (x, y)
         if self.config["observe_mouse_button_states"]:
@@ -79,10 +94,14 @@ class ComputerState:
                 self.mouse_buttons.discard(button)
     
     def _on_mouse_scroll(self, x: int, y: int, dx: int, dy: int):  # noqa: ARG002
+        from computer_mcp.capabilities import has_scope
+        if not has_scope('input_observe'): return
         if self.config["observe_mouse_position"]:
             self.mouse_position = (x, y)
     
     def _on_key_press(self, key):
+        from computer_mcp.capabilities import has_scope
+        if not has_scope('input_observe'): return
         self.keyboard_keys.add(key)
     
     def _on_key_release(self, key):
@@ -94,6 +113,8 @@ class ComputerState:
         from computer_mcp import permission
         if permission.check_tool('screenshot') is not None:
             return state
+        from computer_mcp.capabilities import has_scope
+        input_observation=has_scope('input_observe')
         
         # Screenshot (default true)
         if include_screenshot and self.config["observe_screen"]:
@@ -103,16 +124,16 @@ class ComputerState:
                 state["screenshot"] = {"error": str(e)}
         
         # Mouse position
-        if self.config["observe_mouse_position"]:
+        if input_observation and self.config["observe_mouse_position"]:
             current_pos = self.mouse_controller.position
             state["mouse_position"] = {"x": int(current_pos[0]), "y": int(current_pos[1])}
         
         # Mouse button states
-        if self.config["observe_mouse_button_states"]:
+        if input_observation and self.config["observe_mouse_button_states"]:
             state["mouse_button_states"] = [str(btn) for btn in self.mouse_buttons]
         
         # Keyboard key states
-        if self.config["observe_keyboard_key_states"]:
+        if input_observation and self.config["observe_keyboard_key_states"]:
             state["keyboard_key_states"] = [self._format_key(key) for key in self.keyboard_keys]
         
         # Focused app

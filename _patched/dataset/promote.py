@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from . import writer
+from computer_mcp.workspace import component, owned_path, create_text
 
 CASES = writer.ROOT / "cases"
 
@@ -35,8 +36,9 @@ def promote(episode_id: str, note: str = "", signature: str = "") -> dict:
         "source_episode": target["id"],
         "signature": signature or "",
     }
-    p = CASES / f"{case['case_id']}.json"
-    p.write_text(json.dumps(case, ensure_ascii=False, indent=2), encoding="utf-8")
+    component(case['case_id'])
+    p = owned_path(CASES, f"{case['case_id']}.json")
+    create_text(p, json.dumps(case, ensure_ascii=False, indent=2))
     return {"success": True, "case": str(p), "case_id": case["case_id"]}
 
 

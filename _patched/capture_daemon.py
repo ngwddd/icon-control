@@ -150,7 +150,8 @@ class CaptureDaemon:
         self._thread = threading.Thread(target=lambda: context.run(self._loop), name="capture-daemon", daemon=True)
         self._thread.start()
         time.sleep(0.35)                      # 等第一帧
-        return {"ok": True, "already": False, **self.status()}
+        state = self.status()
+        return {"ok": state['running'], "already": False, **state}
 
     def stop(self) -> dict:
         self._stop.set()

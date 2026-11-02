@@ -73,6 +73,11 @@ class WorkspaceTests(unittest.TestCase):
         self.assertFalse(verify_flow.run([])['ok'])
         self.assertFalse(verify_flow.run([{'name':'empty'}])['ok'])
 
+    def test_unknown_and_string_success_are_not_success(self):
+        self.assertIsNone(schema.ok_of('{"success":"false"}'))
+        self.assertIsNone(schema.ok_of('{"message":"done"}'))
+        self.assertIs(schema.ok_of('{"ok":false}'),False)
+
     def test_training_never_records_input_or_exception_content(self):
         import json
         secret = 'ordinary words that are also a private password'

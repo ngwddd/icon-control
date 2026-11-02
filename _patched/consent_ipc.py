@@ -21,7 +21,7 @@ def _native_client(pid):
         process = psutil.Process(pid)
         command = process.cmdline()
         executable = Path(process.exe()).resolve()
-        expected = Path(sys.executable).resolve()
+        expected = Path(getattr(sys,'_base_executable',sys.executable)).resolve()
         module = len(command)>=3 and command[1:3] == ['-m','computer_mcp.consent']
         bootstrap = (len(command)==2 and Path(command[1]).resolve() ==
                      (security.data_home()/'plugin'/'open-permissions.py').resolve())

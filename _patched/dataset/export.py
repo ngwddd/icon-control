@@ -28,7 +28,12 @@ def export(days: int = 7, tag: str | None = None) -> dict:
             for f in sorted(writer.DATA.glob("*/episodes.jsonl")):
                 if f.parent.name < cutoff:
                     continue
-                zf.write(f, arcname=f"raw/{f.parent.name}/episodes.jsonl")
+                from .schema import sanitize_episode
+                owned_path(writer.DATA,str(f))
+                records = [sanitize_episode(json.loads(line)) for line in
+                           f.read_text(encoding='utf-8').splitlines() if line.strip()]
+                zf.writestr(f"raw/{f.parent.name}/episodes.jsonl",
+                            '\n'.join(json.dumps(item,ensure_ascii=False) for item in records)+'\n')
                 files.append(f.parent.name)
                 count += sum(1 for ln in f.read_text(encoding="utf-8").splitlines() if ln.strip())
         manifest = {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),

@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 from computer_mcp import consent_ipc, capabilities
 
 LABELS = {'screen_read':'读取屏幕、OCR 和窗口信息', 'input':'鼠标、切换窗口',
+          'input_observe':'读取物理鼠标及按键状态（可选）',
           'text_entry':'键盘输入及文本填写', 'window_close':'关闭所选应用窗口',
           'file_write':'写入 Icon Control 专用目录', 'file_delete':'清理专用目录文件',
           'config_write':'修改助手运行设置', 'process':'启动已批准的应用'}

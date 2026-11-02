@@ -95,7 +95,12 @@ class TestBotsWired(unittest.TestCase):
             found += glob.glob(os.path.join(HERE, pat))
         found = [f for f in found if "panic_watch" not in os.path.basename(f)]
         if not found:
-            self.skipTest("项目里没有自动跑脚本（专项脚本已移出，符合预期）")
+            from authority_fixture import AuthorityFixture
+            from computer_mcp import process_registry, panic_watch
+            with AuthorityFixture():
+                process_registry.register_current()
+                self.assertIn(os.getpid(),[pid for pid,_ in panic_watch.automation_pids(exclude_self=False)])
+            return
         for path in found:
             src = open(path, encoding="utf-8").read()
             name = os.path.basename(path)

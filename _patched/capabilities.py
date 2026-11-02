@@ -6,7 +6,7 @@ from pathlib import Path
 import psutil
 from computer_mcp import agent_session
 
-SCOPES = frozenset({'screen_read','input','text_entry','window_close','file_write',
+SCOPES = frozenset({'screen_read','input_observe','input','text_entry','window_close','file_write',
                     'file_delete','config_write','process'})
 
 def required(spec, args):
@@ -14,6 +14,11 @@ def required(spec, args):
     needed = effects & SCOPES
     if effects & {'window','clipboard_write','control','compose'}: needed.add('input')
     return needed
+
+def has_scope(scope):
+    from computer_mcp import permission
+    state = permission.status()
+    return bool(state.get('granted') and scope in state.get('authorization',{}).get('scopes',[]))
 
 def validate(authorization):
     if not isinstance(authorization, dict): return False

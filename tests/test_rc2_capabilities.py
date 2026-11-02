@@ -117,4 +117,10 @@ class CapabilityTests(AuthorityCase, unittest.TestCase):
         with patch('computer_mcp.core.state.capture_screenshot',side_effect=AssertionError('privacy leak')):
             self.assertEqual(state.get_state(),{})
 
+    def test_dispatch_cannot_promote_a_failed_backend_to_success(self):
+        from computer_mcp.zones.dispatch import dispatch
+        with patch('computer_mcp.live.tool_watch',return_value={'ok':False,'error':'timeout'}):
+            result=dispatch('watch',{},computer_state=Mock(),mouse_controller=Mock(),keyboard_controller=Mock())
+        self.assertFalse(result['result']['success'])
+
 if __name__=='__main__': unittest.main()

@@ -116,6 +116,8 @@ async def run_stdio():
     """Run MCP server in stdio mode."""
     from computer_mcp import permission
     permission._ensure_bridge()
+    from computer_mcp import agent_session
+    agent_session.register('stdio MCP process '+str(__import__('os').getpid()))
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

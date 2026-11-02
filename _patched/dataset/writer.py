@@ -48,6 +48,8 @@ def today_dir() -> Path:
 
 
 def append_episode(ep: dict) -> Path:
+    from .schema import sanitize_episode
+    ep = sanitize_episode(ep)
     p = today_dir() / "episodes.jsonl"
     line = json.dumps(ep, ensure_ascii=False) + "\n"
     with open(p, "a", encoding="utf-8") as fh:
@@ -67,7 +69,8 @@ def _iter_episodes():
                     if not line:
                         continue
                     try:
-                        yield json.loads(line)
+                        from .schema import sanitize_episode
+                        yield sanitize_episode(json.loads(line))
                     except Exception:                   # noqa: BLE001
                         continue
         except Exception:                               # noqa: BLE001

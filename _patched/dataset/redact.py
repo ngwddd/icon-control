@@ -22,7 +22,7 @@ MAX_STR = 400          # 单个字符串参数最多留这么多字符
 # Drop content by semantic field, even if it contains no recognizable secret.
 PRIVATE_KEYS = frozenset({'text','value','content','clipboard','password','passwd',
     'secret','token','authorization','body','input','keys','key','script','source',
-    'query','title','window','command','cmd','condition','expect','labels'})
+    'query','title','window','command','cmd','condition','expect','labels','facts','params','variables'})
 HOME = os.path.expanduser("~")
 USER = os.path.basename(HOME)
 
@@ -52,6 +52,12 @@ def redact_args(args: dict) -> tuple:
         if isinstance(v, str):
             t, h = redact_text(v)
             hits.update(h)
+            from computer_mcp import tool_registry
+            safe_values = {'click','wait','type','move','left','right','middle','start','stop','status',
+                           'text','template','baseline','stable','file','true','false'} | set(tool_registry.TOOLS)
+            if not h and v not in safe_values:
+                hits.add('private_content')
+                return '<private>'
             return t if len(t) <= MAX_STR else t[:MAX_STR] + "…"
         if isinstance(v, dict):
             out = {}

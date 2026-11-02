@@ -13,6 +13,20 @@ FIELDS = (
     "result", "verdict", "latency_ms", "labels", "redactions",
 )
 
+def sanitize_episode(episode):
+    """Also protect reads/exports of records produced by older collectors."""
+    safe = {key:episode.get(key) for key in FIELDS}
+    safe['args'], hits = redact.redact_args(episode.get('args') or {})
+    safe['target'] = redact.target_of(safe['args'])
+    result = episode.get('result') or {}
+    error = result.get('error')
+    safe['result'] = {'ok':result.get('ok'), 'bytes':result.get('bytes',0),
+                      'error':(error if error in {'ValueError','TypeError','RuntimeError','PermissionDenied',
+                        'OSError','TimeoutError'} else 'operation_error') if error else None}
+    safe['labels'] = [label for label in (episode.get('labels') or []) if label in {'explore','regression','manual'}]
+    safe['redactions'] = sorted(set(hits) | {'storage_boundary'})
+    return safe
+
 
 def _uid() -> str:
     t = time.strftime("%Y%m%d-%H%M%S")
@@ -52,8 +66,9 @@ def ok_of(text: str):
         return None
     if d.get("blocked"):
         return False
-    if "success" in d:
-        return bool(d["success"])
+    for flag in ('success','ok'):
+        if flag in d:
+            return d[flag] if type(d[flag]) is bool else None
     if "error" in d and d.get("error"):
         return False
     return None

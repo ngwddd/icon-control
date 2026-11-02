@@ -236,107 +236,107 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
     elif name == "capture_daemon":
         from computer_mcp import live as _live
         result = _live.tool_capture(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "sense":
         from computer_mcp import live as _live
         result = _live.tool_sense(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "watch":
         from computer_mcp import live as _live
         result = _live.tool_watch(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "probe":
         from computer_mcp import live as _live
         result = _live.tool_probe(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "snapshot":
         from computer_mcp import live as _live
         result = _live.tool_snapshot(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "run_script":
         from computer_mcp import live as _live
         result = _live.tool_run_script(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "act_until":
         from computer_mcp import live as _live
         result = _live.tool_act_until(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "frame_mark":
         from computer_mcp import live as _live
         result = _live.tool_frame_mark(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "frame_diff":
         from computer_mcp import live as _live
         result = _live.tool_frame_diff(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "trace":
         from computer_mcp import live as _live
         result = _live.tool_trace(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "glyph":
         from computer_mcp import live as _live
         result = _live.tool_glyph(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "read_digits":
         from computer_mcp import live as _live
         result = _live.tool_read_digits(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "hud":
         from computer_mcp import live as _live
         result = _live.tool_hud(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "track":
         from computer_mcp import live as _live
         result = _live.tool_track(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "layout_mem":
         from computer_mcp import live as _live
         result = _live.tool_layout_mem(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "screen_layout":
         from computer_mcp import live as _live
         result = _live.tool_screen_layout(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "world_state":
         from computer_mcp import live as _live
         result = _live.tool_world_state(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "servo":
         from computer_mcp import live as _live
         result = _live.tool_servo(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "navigate":
         from computer_mcp import live as _live
         result = _live.tool_navigate(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "housekeeping":
         from computer_mcp import live as _live
         result = _live.tool_housekeeping(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "record":
         from computer_mcp import live as _live
         result = _live.tool_record(arguments or {})
-        result.setdefault("success", True)
+        result.setdefault("success", result.get("ok") is True and not result.get("error"))
         screenshot_data = {"error": "intentionally skipped"}
     # ---- DSH patch v0.2: staged verification ----
     elif name == "verify_flow":

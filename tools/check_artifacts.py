@@ -13,8 +13,14 @@ with zipfile.ZipFile(wheel) as archive:
     assert archive.testzip() is None, 'Corrupt wheel member'
     for name in archive.namelist():
         assert '.runtime/' not in name and not name.endswith(('bridge-token.txt','mcp-token.txt','.pyc'))
-    for name in ('__init__.py','mcp.py','security.py','permission_bridge.py','actions/keyboard.py'):
-        assert archive.read('computer_mcp/'+name)==(root/'_patched'/name).read_bytes(), name+' differs from source'
+    for path in (root/'_patched').rglob('*.py'):
+        if '__pycache__' in path.parts: continue
+        name=path.relative_to(root/'_patched').as_posix()
+        assert archive.read('computer_mcp/'+name)==path.read_bytes(), name+' differs from source'
+    for path in (root/'plugin').glob('*'):
+        if path.is_file():
+            name=prefix+'.data/data/share/icon-control/plugin/'+path.name
+            assert archive.read(name)==path.read_bytes(), path.name+' differs from packaged plugin'
 with tarfile.open(source) as archive:
     for name in ('tests/_bootstrap.py','tests/authority_fixture.py','tools/verify.py',
                  'tools/test_suite.py','tools/install.ps1','constraints-windows-py312.txt'):

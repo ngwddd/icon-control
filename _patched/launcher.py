@@ -10,6 +10,22 @@ import shutil
 import sys
 from computer_mcp import security, __version__
 
+def add_http_client(name):
+    from computer_mcp.workspace import component
+    import hashlib
+    component(name)
+    root = security.data_home()/'state'
+    folder = root/'http-client-credentials';folder.mkdir(parents=True,exist_ok=True)
+    path = folder/(name+'.token')
+    credential = secrets.token_urlsafe(32)
+    with path.open('x',encoding='utf-8') as stream: stream.write(credential)
+    index = root/'http-clients.json'
+    entries = json.loads(index.read_text(encoding='utf-8')) if index.exists() else []
+    entries.append(dict(label=name,sha256=hashlib.sha256(credential.encode()).hexdigest()))
+    temporary=index.with_suffix('.tmp')
+    temporary.write_text(json.dumps(entries),encoding='utf-8');os.replace(temporary,index)
+    return dict(client=name,credential_file=str(path),granted=False)
+
 def initialize(bridge_port=None, register_ui=False):
     token=security.provision_token()
     if bridge_port is not None:
@@ -58,12 +74,15 @@ def initialize(bridge_port=None, register_ui=False):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('command',choices=['stdio','http','bridge','init','check'],nargs='?',default='stdio')
+    parser.add_argument('command',choices=['stdio','http','bridge','init','check','client-add'],nargs='?',default='stdio')
     parser.add_argument('--host',default='127.0.0.1');parser.add_argument('--port',type=int,default=8000)
     parser.add_argument('--bridge-port',type=int)
     parser.add_argument('--register-ui',action='store_true')
+    parser.add_argument('--client-name')
     args=parser.parse_args()
     if args.command=='init':print(json.dumps(initialize(args.bridge_port,args.register_ui)));return 0
+    if args.command=='client-add':
+        print(json.dumps(add_http_client(args.client_name)));return 0
     if args.command=='check':
         from computer_mcp import tool_registry,permission
         print(json.dumps(dict(version=__version__,tools=tool_registry.summary(),permission=permission.status())));return 0

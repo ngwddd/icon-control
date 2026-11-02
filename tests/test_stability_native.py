@@ -1,5 +1,6 @@
 """Native API regressions with fake HWNDs, fake actuators and isolated authority."""
 import hashlib
+import json
 import importlib.util
 import tempfile
 import unittest
@@ -115,9 +116,21 @@ class ReleaseGateTests(unittest.TestCase):
 
     def test_complete_fixture_can_validate_without_claiming_live_acceptance(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp); data = b'unit fixture only'; (root/'fixture').write_bytes(data)
+            root = Path(temp);sha='a'*40
+            data=json.dumps(dict(source_commit=sha,kind='real_desktop',simulated=False,
+                                 note='Validator unit fixture, not release evidence')).encode()
+            (root/'fixture').write_bytes(data)
+            unit=json.dumps(dict(source_commit=sha,run=1,failures=[],errors=[],skipped=[])).encode()
+            (root/'unit.json').write_bytes(unit)
             cases=[dict(id=f'B{i:02}',status='passed',elapsed_ms=1,environment='unit fixture',
                         application_state='fixture',evidence={'path':'fixture','sha256':hashlib.sha256(data).hexdigest()}) for i in range(1,33)]
             report=dict(p0_review='passed',clean_windows_install='passed',known_false_success_paths=0,
+                        source_commit=sha,implementer_id='implementation-fixture',unit_skipped=0,
+                        independent_review=dict(status='passed',source_commit=sha,reviewer_id='independent-fixture',
+                            open_p0=0,open_p1=0,evidence={'path':'fixture','sha256':hashlib.sha256(data).hexdigest()}),
+                        unit_evidence={'path':'unit.json','sha256':hashlib.sha256(unit).hexdigest()},
                         unit_failures=0,unit_errors=0,desktop_tasks=cases)
-            self.assertEqual(gate.evaluate(report,root),[])
+            self.assertEqual(gate.evaluate(report,root,sha),[])
+            self.assertTrue(gate.evaluate(report,root,'b'*40),'Different commit must fail')
+            report['independent_review']['reviewer_id']='implementation-fixture'
+            self.assertTrue(gate.evaluate(report,root,sha),'Self review must fail')
