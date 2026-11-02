@@ -1,0 +1,139 @@
+{
+  "version": "1.3.0rc1",
+  "status": "blocked",
+  "p0_review": "pending",
+  "clean_windows_install": "pending",
+  "known_false_success_paths": null,
+  "unit_failures": 0,
+  "unit_errors": 0,
+  "desktop_tasks": [
+    {
+      "id": "B01",
+      "status": "not_run"
+    },
+    {
+      "id": "B02",
+      "status": "not_run"
+    },
+    {
+      "id": "B03",
+      "status": "not_run"
+    },
+    {
+      "id": "B04",
+      "status": "not_run"
+    },
+    {
+      "id": "B05",
+      "status": "not_run"
+    },
+    {
+      "id": "B06",
+      "status": "not_run"
+    },
+    {
+      "id": "B07",
+      "status": "not_run"
+    },
+    {
+      "id": "B08",
+      "status": "not_run"
+    },
+    {
+      "id": "B09",
+      "status": "not_run"
+    },
+    {
+      "id": "B10",
+      "status": "not_run"
+    },
+    {
+      "id": "B11",
+      "status": "not_run"
+    },
+    {
+      "id": "B12",
+      "status": "not_run"
+    },
+    {
+      "id": "B13",
+      "status": "not_run"
+    },
+    {
+      "id": "B14",
+      "status": "not_run"
+    },
+    {
+      "id": "B15",
+      "status": "not_run"
+    },
+    {
+      "id": "B16",
+      "status": "not_run"
+    },
+    {
+      "id": "B17",
+      "status": "not_run"
+    },
+    {
+      "id": "B18",
+      "status": "not_run"
+    },
+    {
+      "id": "B19",
+      "status": "not_run"
+    },
+    {
+      "id": "B20",
+      "status": "not_run"
+    },
+    {
+      "id": "B21",
+      "status": "not_run"
+    },
+    {
+      "id": "B22",
+      "status": "not_run"
+    },
+    {
+      "id": "B23",
+      "status": "not_run"
+    },
+    {
+      "id": "B24",
+      "status": "not_run"
+    },
+    {
+      "id": "B25",
+      "status": "not_run"
+    },
+    {
+      "id": "B26",
+      "status": "not_run"
+    },
+    {
+      "id": "B27",
+      "status": "not_run"
+    },
+    {
+      "id": "B28",
+      "status": "not_run"
+    },
+    {
+      "id": "B29",
+      "status": "not_run"
+    },
+    {
+      "id": "B30",
+      "status": "not_run"
+    },
+    {
+      "id": "B31",
+      "status": "not_run"
+    },
+    {
+      "id": "B32",
+      "status": "not_run"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "stdio": {
+    "protocol": "2025-11-25",
+    "tools": 89
+  },
+  "http": {
+    "protocol": "2025-11-25",
+    "tools": 89
+  },
+  "http_unauthenticated_status": 401,
+  "elapsed_s": 1.985
+}

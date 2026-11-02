@@ -1,0 +1,40 @@
+{
+  "pattern": "test_*.py",
+  "run": 375,
+  "failures": [],
+  "errors": [],
+  "skipped": [
+    {
+      "test": "test_e2e_smoke.TestE2E.test_1_clipboard_roundtrip",
+      "reason": "设置 DSH_E2E=1 才跑 e2e（会开窗口、动键盘）"
+    },
+    {
+      "test": "test_e2e_smoke.TestE2E.test_2_window_enumeration",
+      "reason": "设置 DSH_E2E=1 才跑 e2e（会开窗口、动键盘）"
+    },
+    {
+      "test": "test_e2e_smoke.TestE2E.test_3_TextEditor_typing",
+      "reason": "设置 DSH_E2E=1 才跑 e2e（会开窗口、动键盘）"
+    },
+    {
+      "test": "test_panic_switch.TestBotsWired.test_any_bot_wires_panic",
+      "reason": "项目里没有自动跑脚本（专项脚本已移出，符合预期）"
+    },
+    {
+      "test": "test_patch_invariants.TestMacros.test_send_macro_uses_enter_not_send_button",
+      "reason": "没有 wechat_send 宏"
+    },
+    {
+      "test": "test_v02_features.TestWiring.test_patched_in_sync",
+      "reason": "没有 venv 安装副本"
+    },
+    {
+      "test": "test_v03_bridge.TestCliUsesGate.test_mouse_permission_delegates_to_status",
+      "reason": "没有 mouse_permission.py"
+    },
+    {
+      "test": "test_v07_cases.TestPromotedCases.test_all_cases_still_behave",
+      "reason": "需要 DSH_RUN_CASES=1 且能导入 computer_mcp"
+    }
+  ]
+}

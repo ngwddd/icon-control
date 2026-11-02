@@ -1,0 +1,728 @@
+[
+  {
+    "name": "act_until",
+    "zone": "Z4",
+    "effects": [
+      "compose"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "anchor_mem",
+    "zone": "Z5",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "batch",
+    "zone": "Z4",
+    "effects": [
+      "compose"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "button_down",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "button_up",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "capture_config",
+    "zone": "Z1",
+    "effects": [
+      "config_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "capture_daemon",
+    "zone": "Z1",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "capture_template",
+    "zone": "Z5",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "click",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "click_template",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "click_text",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "close_window",
+    "zone": "Z3",
+    "effects": [
+      "window",
+      "process"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "control_claim",
+    "zone": "Z0",
+    "effects": [
+      "control"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "control_status",
+    "zone": "Z0",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "dataset_explore",
+    "zone": "Z6",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "dataset_export",
+    "zone": "Z6",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "dataset_promote",
+    "zone": "Z6",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "dataset_query",
+    "zone": "Z6",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "dataset_status",
+    "zone": "Z6",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "dataset_triage",
+    "zone": "Z6",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "diff_baseline",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "double_click",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "drag",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "find_element",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "find_text",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "frame_diff",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "frame_mark",
+    "zone": "Z2",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "get_window_info",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "glyph",
+    "zone": "Z5",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "housekeeping",
+    "zone": "Z0",
+    "effects": [
+      "file_delete"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "hover_probe",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "hud",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "key_down",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "key_press",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "key_up",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "layout_mem",
+    "zone": "Z5",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "list_virtual_desktops",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "list_windows",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "macro_list",
+    "zone": "Z5",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "macro_run",
+    "zone": "Z4",
+    "effects": [
+      "compose",
+      "input",
+      "clipboard_write",
+      "process",
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "macro_save",
+    "zone": "Z5",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "match_template",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "maximize_window",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "minimize_window",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "mouse_move",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "move_window",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "move_window_to_virtual_desktop",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "navigate",
+    "zone": "Z4",
+    "effects": [
+      "compose"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "ocr_read",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "probe",
+    "zone": "Z2",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "read_digits",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "record",
+    "zone": "Z1",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "resize_window",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "restore_window",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "run_script",
+    "zone": "Z4",
+    "effects": [
+      "compose",
+      "input",
+      "clipboard_write",
+      "process"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "sample_stable",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "screen_layout",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "screen_state",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "screenshot",
+    "zone": "Z1",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "screenshot_window",
+    "zone": "Z1",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "sense",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "servo",
+    "zone": "Z4",
+    "effects": [
+      "compose"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "set_baseline",
+    "zone": "Z5",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "set_config",
+    "zone": "Z0",
+    "effects": [
+      "config_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "set_window_topmost",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "snap_window_bottom",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "snap_window_left",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "snap_window_right",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "snap_window_top",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "snapshot",
+    "zone": "Z1",
+    "effects": [
+      "file_write",
+      "file_delete"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "switch_to_window",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "switch_virtual_desktop",
+    "zone": "Z3",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "trace",
+    "zone": "Z4",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "track",
+    "zone": "Z1",
+    "effects": [
+      "compose",
+      "input",
+      "clipboard_write",
+      "window",
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "triple_click",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "type",
+    "zone": "Z3",
+    "effects": [
+      "input",
+      "clipboard_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "ui_click",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "ui_find",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "ui_invoke",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "ui_set_text",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "ui_tree",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "verify_flow",
+    "zone": "Z4",
+    "effects": [
+      "file_write"
+    ],
+    "requires_authority": true
+  },
+  {
+    "name": "vision_list",
+    "zone": "Z5",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "wait_baseline_change",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "wait_for",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "wait_for_change",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "wait_template",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "watch",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  },
+  {
+    "name": "world_state",
+    "zone": "Z2",
+    "effects": [
+      "observe"
+    ],
+    "requires_authority": false
+  }
+]

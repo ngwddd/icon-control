@@ -1,0 +1,9 @@
+{
+  "before_version": "candidate-20261102-181946-4615",
+  "constrained_install": true,
+  "restored_import_tools": 89,
+  "upgrade_switched": true,
+  "rollback_restored_exact_previous_target": true,
+  "scope": "isolated Windows Python 3.12 virtual environments; not a clean Windows account",
+  "upgraded_version": "candidate-20261102-184900-2533"
+}
