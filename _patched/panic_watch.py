@@ -10,8 +10,8 @@
     start /b venv\\Scripts\\python.exe panic_watch.py    # 后台看守
 
 触发后行为：
-    1. 立刻打印 ✋ 提示
-    2. 枚举 python 进程里命令行含 *_bot*.py / *_run*.py / macro_run / desk.py 的，全部终止
+    1. 立刻持久化停止状态；日志故障不能阻止清理
+    2. 仅终止已登记且 PID、启动时间与命令身份仍匹配的 Icon Control 进程
     3. 打印被杀的 PID 列表，然后退出（不自动重启任何东西）
 """
 
@@ -32,6 +32,13 @@ import psutil  # noqa: E402
 AUTOMATION_PATTERNS = []  # Names never establish ownership.
 
 
+def _log(message):
+    try:
+        print(message,flush=True)
+    except Exception:
+        pass  # Output can be closed or unable to encode Unicode during an emergency.
+
+
 def automation_pids(exclude_self: bool = True) -> list[tuple[int, str]]:
     me = os.getpid()
     hits: list[tuple[int, str]] = []
@@ -49,28 +56,28 @@ def automation_pids(exclude_self: bool = True) -> list[tuple[int, str]]:
 def main() -> int:
     sw = panic.PanicSwitch()
     sw.start()
-    print(f"[watchdog] pid={os.getpid()} 看守中 —— 连按两下 ESC 我会立刻杀掉所有自动化进程", flush=True)
+    _log(f"[watchdog] pid={os.getpid()} 看守中 —— 连按两下 ESC 我会停止已登记的助手进程")
 
     while not sw.wait(timeout=0.5):
         pass
 
-    print("[watchdog] ✋ 收到急停，开始清理自动化进程", flush=True)
+    _log("[watchdog] 收到急停，开始清理已登记的助手进程")
     # Cooperative cancellation releases owned held inputs before forced exit.
     try:
         security.latch_stop()
     except Exception as exc:
-        print('[watchdog] Durable stop failed; owned-process cleanup continues: '+type(exc).__name__,flush=True)
+        _log('[watchdog] Durable stop failed; owned-process cleanup continues: '+type(exc).__name__)
     time.sleep(.25)
     victims = [p for p in process_registry.registered() if p.pid != os.getpid()]
     if not victims:
-        print("[watchdog] 没有发现正在跑的自动化进程（可能已经停了）", flush=True)
+        _log("[watchdog] 没有发现正在跑的助手进程（可能已经停了）")
     for process in victims:
         pid = process.pid
         try:
             process.terminate()  # psutil verifies PID/create-time before termination.
-            print(f"[watchdog]   ✓ 已终止 {pid}", flush=True)
+            _log(f"[watchdog] 已终止 {pid}")
         except Exception as exc:
-            print(f"[watchdog]   ✗ {pid} 终止失败: {exc}", flush=True)
+            _log(f"[watchdog] {pid} 终止失败: {type(exc).__name__}")
 
     time.sleep(1.0)
     left = [p for p in process_registry.registered() if p.pid != os.getpid()]
@@ -78,11 +85,11 @@ def main() -> int:
         for process in left:
             try:
                 process.kill()
-                print(f"[watchdog]   ✓ 强杀 {process.pid}", flush=True)
+                _log(f"[watchdog] 强杀 {process.pid}")
             except Exception:
                 pass
 
-    print("[watchdog] 已松手，等你指示。", flush=True)
+    _log("[watchdog] 已松手，等你指示。")
     return 0
 
 

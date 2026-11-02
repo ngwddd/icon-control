@@ -30,7 +30,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='record',
-        effects=('file_write',),
+        effects=('screen_read','file_write','file_delete',),
         zone='Z1',
         description='Dump the daemon ring buffer (frames + manifest + last trace) to disk for evidence or replay.',
         read_only=False,

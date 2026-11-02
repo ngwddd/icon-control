@@ -212,6 +212,11 @@ class TestExpectPure(unittest.TestCase):
         class FakeWheel:
             state = T.STATE_STABLE
             last_change_at = time.time() - 1.0
+            first_frame_at = time.time() - 1.0
+            last_frame_at = time.time()
+            frames = 30
+            fps = 30
+            error = ''
             last_frac = 0.0
 
         self.assertTrue(T.check_expect({"kind": "stable", "ms": 300}, FakeWheel(), (0, 0, 10, 10)))

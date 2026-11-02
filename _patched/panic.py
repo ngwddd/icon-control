@@ -70,8 +70,12 @@ class PanicSwitch:
         if not self._ready.wait(2):
             self.stop()
             return
+        self._log("[panic] 急停开关已就绪：连按两下 ESC = 立即松手")
+
+    def _log(self,message):
         if self.verbose:
-            print("[panic] 急停开关已就绪：连按两下 ESC = 立即松手", flush=True, file=sys.stderr)
+            try:print(message,flush=True,file=sys.stderr)
+            except Exception:pass
 
     def _on_press(self, key) -> None:
         try:
@@ -103,8 +107,7 @@ class PanicSwitch:
                 control.release('emergency stop')
                 from computer_mcp import input_guard
                 input_guard.release_all()
-                if self.verbose:
-                    print("[panic] ✋ 收到「连按两下 ESC」—— 立即停止鼠标/键盘控制，等待指示", flush=True, file=sys.stderr)
+                self._log("[panic] 收到「连按两下 ESC」—— 立即停止鼠标/键盘控制，等待指示")
 
     # ---------- 查询 ----------
     @property

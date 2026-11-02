@@ -15,6 +15,27 @@ def evidence_file(evidence, root, errors, label):
         errors.append(label+' evidence hash mismatch');return None
     return path
 
+
+def desktop_result_supports(raw,name,summary):
+    """A hash authenticates bytes, not the claim that this case actually passed."""
+    if any(raw.get(key) for key in ('error','errors','failures','skipped')):return False
+    if 'run' in raw and (type(raw['run']) is not int or raw['run']<1):return False
+    if raw.get('source_dirty',False) is not False:return False
+    if raw.get('case_id')==name:
+        matches=[raw]
+    else:
+        rows=raw.get('results',[])
+        if not isinstance(rows,list):return False
+        matches=[row for row in rows if isinstance(row,dict) and row.get('id')==name]
+    if len(matches)!=1:return False
+    result=matches[0]
+    if result.get('status')!='passed' or any(result.get(key) for key in ('error','errors','failures','skipped')):return False
+    return (result.get('elapsed_ms')==summary.get('elapsed_ms') and
+            type(result.get('elapsed_ms')) in (int,float) and math.isfinite(result['elapsed_ms']) and result['elapsed_ms']>=0 and
+            bool(result.get('environment') or raw.get('environment')) and bool(result.get('application_state')) and
+            (result.get('environment') or raw.get('environment'))==summary.get('environment') and
+            result.get('application_state')==summary.get('application_state'))
+
 def evaluate(report,root,expected_commit=None):
     errors=[]
     source=report.get('source_commit')
@@ -69,6 +90,8 @@ def evaluate(report,root,expected_commit=None):
                 if (raw.get('source_commit')!=expected_commit or raw.get('kind')!='real_desktop' or
                         raw.get('simulated') is not False):
                     errors.append(name+' raw evidence is stale or is not actual desktop execution')
+                elif not desktop_result_supports(raw,name,case):
+                    errors.append(name+' raw evidence does not support successful execution of this case')
             except (ValueError,TypeError):errors.append(name+' raw evidence is invalid')
     return errors
 

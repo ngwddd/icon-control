@@ -164,9 +164,12 @@ class CaptureDaemon:
         return {"ok": True, "stopped": True}
 
     def status(self) -> dict:
+        from computer_mcp import capabilities,agent_session
+        can_read=(getattr(self,'owner_session',agent_session.current())==agent_session.current() and
+                  capabilities.has_scope('screen_read'))
         with self._lock:
             n = len(self._frames)
-            last = self._frames[-1] if n else None
+            last = self._frames[-1] if n and can_read else None
             span = (last.ts - self._frames[0].ts) if n >= 2 else 0.0
         running = bool(self._thread and self._thread.is_alive())
         fps = (n - 1) / span if span > 0 else 0.0

@@ -118,6 +118,8 @@ class ReleaseGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp);sha='a'*40
             data=json.dumps(dict(source_commit=sha,kind='real_desktop',simulated=False,
+                                 results=[dict(id=f'B{i:02}',status='passed',elapsed_ms=1,
+                                     environment='unit fixture',application_state='fixture') for i in range(1,33)],
                                  note='Validator unit fixture, not release evidence')).encode()
             (root/'fixture').write_bytes(data)
             unit=json.dumps(dict(source_commit=sha,source_dirty=False,scope='full_suite',pattern='test_*.py',run=1,failures=[],errors=[],skipped=[])).encode()

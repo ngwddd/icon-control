@@ -43,6 +43,7 @@ DEFAULT_BLOCK = 4          # 降采样倍数
 BLOCK_THRESH = 6.0         # 块平均灰度差超过它算"变了"
 STATE_STABLE = "STABLE"
 STATE_TRANSITION = "TRANSITION"
+STATE_UNKNOWN = "UNKNOWN"
 
 
 def block_reduce(gray: np.ndarray, k: int = DEFAULT_BLOCK) -> np.ndarray:
@@ -366,8 +367,10 @@ class FrameWheel(threading.Thread):
         self.down = max(1, int(down))
         self.q = int(jpeg_quality)
         self._stop_evt = threading.Event()
-        self.state = STATE_STABLE
+        self.state = STATE_UNKNOWN
         self.last_change_at = time.time()
+        self.first_frame_at = 0.0
+        self.last_frame_at = 0.0
         self.last_frac = 0.0
         self.frames = 0
         self.fps_actual = 0.0
@@ -406,6 +409,9 @@ class FrameWheel(threading.Thread):
                     if self._first:
                         # 第一帧没有 prev，change_blocks 会返回 100% → 假事件，跳过
                         self._first = False
+                        self.first_frame_at = self.last_frame_at = time.time()
+                        self.last_change_at = self.first_frame_at
+                        self.state = STATE_TRANSITION
                         self._prev = small
                         self.last_small = small
                         self.last_mask = None
@@ -414,6 +420,7 @@ class FrameWheel(threading.Thread):
                         continue
                     n, frac, mask = change_blocks(self._prev, small)
                     now = time.time()
+                    self.last_frame_at = now
                     self._prev = small
                     self.last_small = small
                     self.last_mask = mask
@@ -818,7 +825,11 @@ def check_expect(expect: dict | None, wheel: FrameWheel,
 
     if kind == "stable":
         need = float(expect.get("ms", 300)) / 1000.0
-        return wheel.state == STATE_STABLE and (time.time() - wheel.last_change_at) >= need
+        observed = wheel.last_frame_at
+        return (not wheel.error and wheel.frames > 0 and wheel.first_frame_at > 0 and
+                0 <= time.time()-observed <= max(.5,3.0/wheel.fps) and
+                wheel.state == STATE_STABLE and
+                observed-max(wheel.last_change_at,since or wheel.first_frame_at) >= need)
 
     if kind == "changed":
         # 锁存：自 since 起**出现过**足够大的变化就算成立（不等它稳定）
@@ -1107,6 +1118,9 @@ class Runner:
                         _execution.sleep(0.4)
 
                 while time.time() < deadline and not self._stop_evt.is_set():
+                    if self.wheel.error:
+                        row.update(state='failed',verified=False)
+                        return self._finish('error',step.name,'Capture worker failed: '+self.wheel.error)
                     if step.wait_before_action_ms and not acted:
                         if (time.time() - self.budget.step_start) * 1000 < step.wait_before_action_ms:
                             _execution.sleep(0.02)

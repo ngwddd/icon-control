@@ -363,23 +363,27 @@ def tool_hud(args: dict) -> dict:
 def tool_record(args: dict) -> dict:
     """把最近缓冲里的帧 + 事件落盘（回放/证据）。"""
     a = args or {}
+    from computer_mcp.permission import require
+    require('record',a)
     action = a.get("action", "stop")
     d = _daemon()
     if action == "start":
         d._recording = True
         return {"success": True, "recording": True, "note": "开始录制（帧写入缓冲，stop 时落盘）"}
     if action == "stop":
+        frames = d.frames_between(-1)  # Privacy scope and initiating Agent checked under the buffer lock.
         d._recording = False
-        frames = [frame for frame in list(d._frames) if not frame.skipped]
         if not frames:
             return {"success": False, "error": "缓冲里没有帧"}
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        out = os.path.join(_RECORD_ROOT, stamp)
-        os.makedirs(out, exist_ok=True)
+        import tempfile
+        os.makedirs(_RECORD_ROOT, exist_ok=True)
+        out = tempfile.mkdtemp(prefix=stamp+'-',dir=_RECORD_ROOT)
         from PIL import Image
         manifest = {"started": frames[0].ts, "frames": [], "trace": _session_runs()['last'].get("trace", [])}
         for fr in frames[-120:]:
             if fr.skipped: continue
+            _execution.checkpoint('record')
             # JPEG 而不是 PNG：同样的帧，体积小一个数量级（实测 17 帧 PNG 9.4 MB → JPEG 约 0.3 MB）
             name = f"f{fr.idx:05d}.jpg"
             try:
@@ -390,13 +394,14 @@ def tool_record(args: dict) -> dict:
             except Exception:
                 continue
         with open(os.path.join(out, "manifest.json"), "w", encoding="utf-8") as fh:
+            _execution.checkpoint('record')
             json.dump(manifest, fh, ensure_ascii=False, indent=1)
         try:
             from computer_mcp import retention
             pruned = retention.sweep()
         except Exception:
             pruned = {}
-        return {"success": True, "dir": out, "frames": len(manifest["frames"]),
+        return {"success": bool(manifest['frames']), "dir": out, "frames": len(manifest["frames"]),
                 "bytes": sum(os.path.getsize(os.path.join(out, f))
                              for f in os.listdir(out)),
                 "pruned_old": pruned.get("removed_count", 0)}
