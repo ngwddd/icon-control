@@ -15,6 +15,7 @@ parser.add_argument('--home',type=Path,required=True)
 parser.add_argument('--state',type=Path,required=True)
 parser.add_argument('--output',type=Path,required=True)
 parser.add_argument('--wait',type=float,default=180)
+parser.add_argument('--start-signal',type=Path)
 args=parser.parse_args()
 root=Path(__file__).resolve().parents[1]
 source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
@@ -33,6 +34,12 @@ report=dict(source_commit=source_commit,kind='real_desktop',simulated=False,agen
 print(json.dumps(dict(waiting_for_human=True,agent=identity['label'],session=identity['id'][:10])),flush=True)
 deadline=time.monotonic()+args.wait
 while time.monotonic()<deadline and not permission.status().get('granted'):time.sleep(.2)
+if args.start_signal and permission.status().get('granted'):
+    while time.monotonic()<deadline and not args.start_signal.exists():time.sleep(.2)
+    if not args.start_signal.exists():
+        raise RuntimeError('Operator start acknowledgement not received; no desktop tests executed')
+    print('Operator acknowledged; desktop smoke starts in 3 seconds',flush=True)
+    time.sleep(3)
 if not permission.status().get('granted'):
     report.update(error='Human approval not received',run=0,failures=[],errors=[],skipped=[])
     code=2
