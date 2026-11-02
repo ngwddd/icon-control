@@ -120,14 +120,17 @@ class ReleaseGateTests(unittest.TestCase):
             data=json.dumps(dict(source_commit=sha,kind='real_desktop',simulated=False,
                                  note='Validator unit fixture, not release evidence')).encode()
             (root/'fixture').write_bytes(data)
-            unit=json.dumps(dict(source_commit=sha,source_dirty=False,run=1,failures=[],errors=[],skipped=[])).encode()
+            unit=json.dumps(dict(source_commit=sha,source_dirty=False,scope='full_suite',pattern='test_*.py',run=1,failures=[],errors=[],skipped=[])).encode()
             (root/'unit.json').write_bytes(unit)
+            review=json.dumps(dict(source_commit=sha,reviewer_id='independent-fixture',implementer_id='implementation-fixture',
+                status='passed',open_p0=0,open_p1=0,findings=[])).encode()
+            (root/'review.json').write_bytes(review)
             cases=[dict(id=f'B{i:02}',status='passed',elapsed_ms=1,environment='unit fixture',
                         application_state='fixture',evidence={'path':'fixture','sha256':hashlib.sha256(data).hexdigest()}) for i in range(1,33)]
             report=dict(p0_review='passed',clean_windows_install='passed',known_false_success_paths=0,
                         source_commit=sha,implementer_id='implementation-fixture',unit_skipped=0,
                         independent_review=dict(status='passed',source_commit=sha,reviewer_id='independent-fixture',
-                            open_p0=0,open_p1=0,evidence={'path':'fixture','sha256':hashlib.sha256(data).hexdigest()}),
+                            open_p0=0,open_p1=0,evidence={'path':'review.json','sha256':hashlib.sha256(review).hexdigest()}),
                         unit_evidence={'path':'unit.json','sha256':hashlib.sha256(unit).hexdigest()},
                         unit_failures=0,unit_errors=0,desktop_tasks=cases)
             self.assertEqual(gate.evaluate(report,root,sha),[])

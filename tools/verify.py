@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--baseline', action='store_true')
     parser.add_argument('--pattern', default='test_stability*.py')
     args = parser.parse_args()
+    tested_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     runtime = ROOT / '.runtime'
     package = runtime / 'computer_mcp'
     package.mkdir(parents=True, exist_ok=True)
@@ -31,6 +32,7 @@ def main():
     state.mkdir(exist_ok=True)
     env = dict(os.environ, PYTHONPATH=str(runtime), PYTHONIOENCODING='utf-8',
                ICON_CONTROL_HOME=str(runtime), DSH_MOUSE_STATE=str(state / 'mouse-permission.json'),
+               ICON_CONTROL_TEST_SOURCE_SHA=tested_commit,
                DSH_MOUSE_BRIDGE='off', DSH_E2E='0', DSH_LIVE='0')
     if args.baseline:
         code = ('import json; from computer_mcp import tool_registry as r; '

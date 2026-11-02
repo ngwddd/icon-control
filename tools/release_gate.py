@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import math
 
 def evidence_file(evidence, root, errors, label):
     path=(root/str(evidence.get('path',''))).resolve()
@@ -26,7 +27,18 @@ def evaluate(report,root,expected_commit=None):
             review.get('reviewer_id')==report.get('implementer_id') or
             review.get('open_p0')!=0 or review.get('open_p1')!=0):
         errors.append('Independent reviewer identity, exact commit or unresolved findings invalid')
-    evidence_file(review.get('evidence',{}),root,errors,'Independent review')
+    review_path=evidence_file(review.get('evidence',{}),root,errors,'Independent review')
+    if review_path:
+        try:
+            raw_review=json.loads(review_path.read_text(encoding='utf-8'))
+            if (raw_review.get('source_commit')!=expected_commit or raw_review.get('status')!='passed' or
+                    raw_review.get('reviewer_id')!=review.get('reviewer_id') or
+                    raw_review.get('implementer_id')!=report.get('implementer_id') or
+                    raw_review.get('open_p0')!=0 or raw_review.get('open_p1')!=0 or
+                    any(f.get('severity') in ('P0','P1') and f.get('status')!='resolved'
+                        for f in raw_review.get('findings',[]))):
+                errors.append('Raw independent review does not support the release claim')
+        except (ValueError,TypeError,AttributeError):errors.append('Raw independent review is invalid')
     if report.get('clean_windows_install')!='passed':errors.append('Clean Windows account installation missing')
     if report.get('known_false_success_paths')!=0:errors.append('False-success audit incomplete')
     if (report.get('unit_failures',1)!=0 or report.get('unit_errors',1)!=0 or
@@ -35,7 +47,8 @@ def evaluate(report,root,expected_commit=None):
     if unit_path:
         try:
             unit=json.loads(unit_path.read_text(encoding='utf-8'))
-            if (unit.get('source_commit')!=expected_commit or unit.get('source_dirty') is not False or unit.get('run',0)<1 or
+            if (unit.get('source_commit')!=expected_commit or unit.get('source_dirty') is not False or
+                    unit.get('scope')!='full_suite' or unit.get('pattern')!='test_*.py' or unit.get('run',0)<1 or
                     unit.get('failures')!=[] or unit.get('errors')!=[] or unit.get('skipped')!=[]):
                 errors.append('Raw automated regression does not support the release claim')
         except (ValueError,TypeError):errors.append('Raw automated regression is invalid')
@@ -45,7 +58,7 @@ def evaluate(report,root,expected_commit=None):
     for number in range(1,33):
         name=f'B{number:02}';case=cases.get(name,{})
         if case.get('status')!='passed':errors.append(name+' desktop task not passed');continue
-        if type(case.get('elapsed_ms')) not in (int,float) or case['elapsed_ms']<0:
+        if type(case.get('elapsed_ms')) not in (int,float) or not math.isfinite(case['elapsed_ms']) or case['elapsed_ms']<0:
             errors.append(name+' timing missing')
         if not case.get('environment') or not case.get('application_state'):
             errors.append(name+' environment or application-state oracle missing')
