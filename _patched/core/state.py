@@ -3,8 +3,7 @@
 from typing import Any, Optional
 
 from pynput import keyboard, mouse
-from pynput.keyboard import Controller as KeyboardController, Key, KeyCode
-from pynput.mouse import Button, Controller as MouseController
+from computer_mcp.input_guard import KeyboardController, MouseController, Key, KeyCode, Button
 
 from computer_mcp.core.screenshot import capture_screenshot
 

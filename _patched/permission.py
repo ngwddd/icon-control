@@ -1,31 +1,7 @@
-"""permission.py — 鼠标接管的**硬闸门**（v0.4，颜色+文字双判）
-
-v0.4（2026-11-02）修「前端绿、后台灰」三个根因：
-  ① 负向结果（未授权 / 读不到）原来缓存 45s，期间**连桥都不问** → 改成 NEG_TTL_S（3s）
-  ② OCR 把「已授权」认成「床授权」被当成未授权 → 现在只有明确「未授权」才判灰，
-     含糊一律返回 None，交给桥裁决
-  ③ 桥侧多窗口互相覆盖（A 授权、B 心跳上报 false 盖掉）→ 桥改为按 client 记账、
-     区分 action/hb，见 permission_bridge.py
-
-v0.1 的授权开关只做到"agent 自己愿意先查一下"（`mouse_permission.py` 靠自觉）。
-v0.2 把它下沉到执行点：**任何会动输入的工具，在真正执行之前都会被这里拦一次**，
-未授权就直接返回结构化拒绝，根本不进入 mouse_actions / keyboard_actions。
-
-判定来源（按优先级）
-  1. 环境变量 `DSH_MOUSE_GATE=off`  → 整体放行（只给自动化测试用，会记录 reason）
-  2. 状态文件（默认 `~/.dsh/tools/desktop-mcp/state/mouse-permission.json`）
-     新鲜度 < TTL（默认 45 s）时直接复用，命中约 0 ms
-  3. 状态过期 → 读 GUI 上那个胶囊（"鼠标·已授权 / 未授权"）→ 回写状态文件
-  4. 读不到（GUI 没开 / OCR 失败）→ **fail closed**：拒绝
-
-设计原则
-  · **fail closed**：拿不准就算没授权。没授权时宁可什么都不做。
-  · **只读授权**：这里只读，不写任何授权状态；授权只能由用户在 GUI 上点。
-  · **零成本常驻**：缓存命中不截图，不给每次点击加 IO。
-
-CLI:
-    python -m computer_mcp.permission            # 打印状态
-    python -m computer_mcp.permission --json     # 机器可读
+"""Execution authority: fresh HMAC-signed bridge state, physical takeover and emergency stop.
+OCR and legacy cache readers remain diagnostic helpers and never grant authority.
+DSH_MOUSE_GATE cannot disable this boundary. Explicit user actions alone grant;
+revocation, expired state, listener failures and unknown tools fail closed.
 """
 
 from __future__ import annotations
@@ -256,7 +232,8 @@ def status(force: bool = False) -> dict:
         age = now - float(cached['checked_at_ts']) if cached else -1
         if (cached and type(cached.get('granted')) is bool and
                 cached.get('source') == 'bridge' and security.authentic(cached) and
-                0 <= age < BRIDGE_TTL_S):
+                0 <= age < BRIDGE_TTL_S and now < float(cached.get('expires_at',now+BRIDGE_TTL_S)) and
+                not security.stopped(cached)):
             return dict(cached, age_s=round(age, 3))
     except (ValueError, TypeError, KeyError):
         pass
@@ -272,11 +249,15 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         return dict(success=False, blocked=True, tool=name, error='Tool disabled or unknown')
     if not spec.requires_authority:
         return None
-    emergency = panic.default()
-    if emergency.triggered or not emergency.ready:
-        return dict(success=False, blocked=True, tool=name, error='Emergency stop active or listener unavailable')
     st = status()
     if st["granted"]:
+        emergency = panic.default()
+        if (emergency.triggered and isinstance(emergency.triggered_at_wall,(int,float)) and
+                st.get('authorized_at',0) > emergency.triggered_at_wall):
+            emergency.reset()
+        if emergency.triggered or not emergency.ready:
+            return dict(success=False, blocked=True, tool=name, permission=st,
+                        error='Emergency stop active or listener unavailable')
         # P0-1：授权之外还看「控制权是否在用户手上」（用户随时可以夺回）
         try:
             from computer_mcp import control as _ctl

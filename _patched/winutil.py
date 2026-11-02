@@ -107,11 +107,13 @@ def activate(hwnd: int) -> bool:
     if not is_alive(hwnd):
         return False
     try:
+        _execution.checkpoint('switch_to_window')
         win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
                               win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
         if win32gui.GetForegroundWindow() == hwnd:
             return True
         try:
+            _execution.checkpoint('switch_to_window')
             win32gui.SetForegroundWindow(hwnd)
         except Exception:
             from computer_mcp import appkit

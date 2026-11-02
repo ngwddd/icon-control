@@ -1,0 +1,24 @@
+name: Stability candidate validation
+on: [push, pull_request]
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install build
+      - run: python -m build
+      - shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist -Filter *.whl | Select-Object -First 1).FullName
+          python -m pip install -c constraints-windows-py312.txt $wheel
+          if ($LASTEXITCODE -ne 0) { throw 'Package installation failed' }
+      - run: python tools/verify.py --pattern "test_*.py"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: icon-control-candidate
+          path: dist/*
+      # Formal releases require manual S5 desktop acceptance; this workflow
+      # never tags or publishes v1.3.0 automatically.

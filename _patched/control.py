@@ -1,24 +1,6 @@
-"""control.py — 桌面控制权归属（Z0 治理，P0-1）
-
-为什么要有这个：`permission` 只管「用户是否允许 agent 动鼠标」，是**一次性开关**；
-但真实使用中用户随时会想「别动了，我来」。Windows-MCP 的做法是：AI 操作时屏幕
-边缘发光，**物理鼠标一动就把控制权还给用户**，闲置 10 秒后恢复给 AI。
-
-本模块提供同样的语义：
-    owner = "ai"    代理持有控制权
-    owner = "user"  用户接管（期间输入类工具一律被拒）
-    owner = "idle"  谁都没动，等待下一个动作
-
-关键难点：pynput 的全局监听器**也会看到我们自己注入的事件**。所以注入前后要
-开一个「静默窗」（默认 250 ms），窗内的输入事件不算用户接管，否则 AI 每点一下
-都会把自己锁死。
-
-对外：
-    status()          读状态（给 control_status 工具）
-    claim(reason)     申请控制权
-    release(reason)   主动交还
-    blocking_reason() 给 permission 闸门用：返回 None 表示放行
-    quiet(ms)         注入静默窗（注入类工具在调用前后用）
+"""Desktop ownership with physical takeover, fail-closed listener readiness and generations.
+Injected events are filtered by Windows injection flags. quiet() remains a legacy
+API; it never suppresses a real user event. claim() cannot override active takeover.
 """
 
 from __future__ import annotations
@@ -129,9 +111,10 @@ def status() -> dict:
         reason = STATE["reason"]
     # 用户接管后闲置够久 → 自动回到 idle，允许 AI 再次申请
     if owner == "user" and idle_s >= IDLE_RESUME_S:
-        _set("idle", f"用户闲置 {int(idle_s)}s，控制权已释放")
-        owner = "idle"
         with _lock:
+            if now - max(STATE['since'],STATE['last_user']) >= IDLE_RESUME_S:
+                _set('idle',f'用户闲置 {int(idle_s)}s，控制权已释放')
+            owner = STATE['owner']
             idle_s = now - max(STATE["since"], STATE["last_user"])
             reason = STATE["reason"]
     return {
@@ -162,6 +145,10 @@ def blocking_reason() -> str | None:
 
 # ── 全局监听：只在第一次 claim 时启动 ────────────────────────────────
 def ensure_watcher() -> bool:
+    with _lock:
+        return _ensure_watcher_locked()
+
+def _ensure_watcher_locked() -> bool:
     """启动 pynput 全局监听（幂等）。拿不到权限就静默失败。"""
     global _started
     if not ENABLED:

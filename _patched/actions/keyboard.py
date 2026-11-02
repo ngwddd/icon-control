@@ -82,142 +82,94 @@ def key_press(key: str, controller: Controller | None = None) -> dict[str, Any]:
 
 # Window-targeted keyboard functions
 if IS_WINDOWS:
-    def type_text_to_window(text: str, hwnd: int) -> dict[str, Any]:
-        """Type text to a specific window on Windows."""
-        try:
-            import win32gui
-            import win32con
+    import threading
+    _window_controllers = {}
+    _window_lock = threading.RLock()
+
+    class _MessageKeyboard:
+        """WM_CHAR for text; tracked WM_KEYDOWN/UP for held keys."""
+        def __init__(self, hwnd):
+            self.hwnd = hwnd
+
+        def _vk(self, key):
             import win32api
-            
-            if not win32gui.IsWindow(hwnd):
-                return {"error": "Invalid window handle"}
-            
-            # Post WM_CHAR messages for each character
+            from pynput.keyboard import Key
+            if isinstance(key, Key):
+                return key.value.vk
+            if getattr(key, 'vk', None) is not None:
+                return key.vk
+            value = win32api.VkKeyScan(key.char)
+            if value == -1:
+                raise ValueError('Character has no virtual key; use type_text_to_window')
+            return value & 0xff
+
+        def press(self, key):
+            import win32gui, win32con
+            win32gui.PostMessage(self.hwnd, win32con.WM_KEYDOWN, self._vk(key), 0)
+
+        def release(self, key):
+            import win32gui, win32con
+            win32gui.PostMessage(self.hwnd, win32con.WM_KEYUP, self._vk(key), 0)
+
+    def _window_controller(hwnd):
+        import win32gui
+        if not win32gui.IsWindow(hwnd):
+            raise ValueError('Invalid window handle')
+        with _window_lock:
+            if hwnd not in _window_controllers:
+                # Inactive cached controllers may be discarded. Held ones stay
+                # alive in input_guard until emergency cleanup releases them.
+                if len(_window_controllers) >= 64:
+                    for handle, controller in list(_window_controllers.items()):
+                        if not controller.held:
+                            del _window_controllers[handle]
+                _window_controllers[hwnd] = Controller(_MessageKeyboard(hwnd))
+            return _window_controllers[hwnd]
+
+    def type_text_to_window(text: str, hwnd: int) -> dict[str, Any]:
+        """Type Unicode text, checking each posted character, never silently skipping it."""
+        try:
+            import win32gui, win32con
+            from pynput.keyboard import Key
+            from computer_mcp.execution import check
+            controller = _window_controller(hwnd)
             for char in text:
+                check('type')
                 if char == '\n':
-                    # Handle newline as Enter key
-                    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
-                    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
+                    controller.press(Key.enter)
+                    controller.release(Key.enter)
                 else:
-                    # Convert char to virtual key code if needed, or use WM_CHAR
-                    vk = win32api.VkKeyScan(char)
-                    if vk != -1:
-                        # Low-order byte is the virtual key, high-order byte has shift state
-                        vk_code = vk & 0xFF
-                        shift_state = (vk >> 8) & 0xFF
-                        
-                        # Post WM_CHAR message for the character (handles Unicode properly)
-                        win32gui.PostMessage(hwnd, win32con.WM_CHAR, ord(char), 0)
-            
+                    # WM_CHAR expects UTF-16 code units on Windows.
+                    units = char.encode('utf-16-le')
+                    for offset in range(0, len(units), 2):
+                        check('type')
+                        win32gui.PostMessage(hwnd, win32con.WM_CHAR,
+                                             int.from_bytes(units[offset:offset+2], 'little'), 0)
             return {"success": True, "action": "type", "text": text, "hwnd": hwnd}
-        except ImportError:
-            return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window keyboard support"}
-        except Exception as e:
-            return {"error": f"Failed to type to window: {str(e)}"}
-    
+        except Exception as exc:
+            return {"error": f"Failed to type to window: {exc}"}
+
     def key_down_to_window(key: str, hwnd: int) -> dict[str, Any]:
-        """Press a key down to a specific window on Windows."""
         try:
-            import win32gui
-            import win32con
-            from pynput.keyboard import Key
-            
-            if not win32gui.IsWindow(hwnd):
-                return {"error": "Invalid window handle"}
-            
-            key_obj = key_from_string(key)
-            
-            # Map pynput keys to Windows virtual key codes
-            vk_map = {
-                Key.enter: win32con.VK_RETURN,
-                Key.tab: win32con.VK_TAB,
-                Key.space: win32con.VK_SPACE,
-                Key.backspace: win32con.VK_BACK,
-                Key.delete: win32con.VK_DELETE,
-                Key.esc: win32con.VK_ESCAPE,
-                Key.up: win32con.VK_UP,
-                Key.down: win32con.VK_DOWN,
-                Key.left: win32con.VK_LEFT,
-                Key.right: win32con.VK_RIGHT,
-                Key.ctrl: win32con.VK_CONTROL,
-                Key.alt: win32con.VK_MENU,
-                Key.shift: win32con.VK_SHIFT,
-                Key.cmd: win32con.VK_LWIN,
-            }
-            
-            if isinstance(key_obj, Key):
-                vk = vk_map.get(key_obj)
-                if vk is None:
-                    return {"error": f"Key '{key}' not supported for window targeting"}
-                win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, vk, 0)
-            elif isinstance(key_obj, KeyCode) and key_obj.char:
-                # Character key - use WM_CHAR for printable characters
-                win32gui.PostMessage(hwnd, win32con.WM_CHAR, ord(key_obj.char), 0)
-            else:
-                return {"error": f"Key '{key}' not supported for window targeting"}
-            
+            _window_controller(hwnd).press(key_from_string(key))
             return {"success": True, "action": "key_down", "key": key, "hwnd": hwnd}
-        except ImportError:
-            return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window keyboard support"}
-        except Exception as e:
-            return {"error": f"Failed to press key to window: {str(e)}"}
-    
+        except Exception as exc:
+            return {"error": f"Failed to press key to window: {exc}"}
+
     def key_up_to_window(key: str, hwnd: int) -> dict[str, Any]:
-        """Release a key to a specific window on Windows."""
         try:
-            import win32gui
-            import win32con
-            from pynput.keyboard import Key
-            
-            if not win32gui.IsWindow(hwnd):
-                return {"error": "Invalid window handle"}
-            
-            key_obj = key_from_string(key)
-            
-            # Map pynput keys to Windows virtual key codes
-            vk_map = {
-                Key.enter: win32con.VK_RETURN,
-                Key.tab: win32con.VK_TAB,
-                Key.space: win32con.VK_SPACE,
-                Key.backspace: win32con.VK_BACK,
-                Key.delete: win32con.VK_DELETE,
-                Key.esc: win32con.VK_ESCAPE,
-                Key.up: win32con.VK_UP,
-                Key.down: win32con.VK_DOWN,
-                Key.left: win32con.VK_LEFT,
-                Key.right: win32con.VK_RIGHT,
-                Key.ctrl: win32con.VK_CONTROL,
-                Key.alt: win32con.VK_MENU,
-                Key.shift: win32con.VK_SHIFT,
-                Key.cmd: win32con.VK_LWIN,
-            }
-            
-            if isinstance(key_obj, Key):
-                vk = vk_map.get(key_obj)
-                if vk is None:
-                    return {"error": f"Key '{key}' not supported for window targeting"}
-                win32gui.PostMessage(hwnd, win32con.WM_KEYUP, vk, 0)
-            elif isinstance(key_obj, KeyCode) and key_obj.char:
-                # For character keys, key_up is typically not needed (WM_CHAR handles it)
-                # But we'll post it anyway for consistency
-                pass
-            else:
-                return {"error": f"Key '{key}' not supported for window targeting"}
-            
+            _window_controller(hwnd).release(key_from_string(key))
             return {"success": True, "action": "key_up", "key": key, "hwnd": hwnd}
-        except ImportError:
-            return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window keyboard support"}
-        except Exception as e:
-            return {"error": f"Failed to release key to window: {str(e)}"}
-    
+        except Exception as exc:
+            return {"error": f"Failed to release key to window: {exc}"}
+
     def key_press_to_window(key: str, hwnd: int) -> dict[str, Any]:
-        """Press and release a key to a specific window on Windows."""
-        result_down = key_down_to_window(key, hwnd)
-        if "error" in result_down:
-            return result_down
-        result_up = key_up_to_window(key, hwnd)
-        if "error" in result_up:
-            return result_up
+        result = key_down_to_window(key, hwnd)
+        if "error" in result:
+            return result
+        result = key_up_to_window(key, hwnd)
+        if "error" in result:
+            return result
         return {"success": True, "action": "key_press", "key": key, "hwnd": hwnd}
 
 elif IS_DARWIN:

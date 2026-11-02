@@ -44,8 +44,8 @@ except Exception:                      # pragma: no cover
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 默认存到**工具根目录**下的 vision/（不要放进 venv，重装依赖会连模板一起丢）
-STORE = os.environ.get("DSH_VISION_STORE") or os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE)))), "vision")
+from computer_mcp.security import data_home
+STORE = os.environ.get('DSH_VISION_STORE') or str(data_home() / 'vision')
 TPL_DIR = os.path.join(STORE, "templates")
 BAS_DIR = os.path.join(STORE, "baselines")
 

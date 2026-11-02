@@ -13,6 +13,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bootstrap  # noqa: F401
+from authority_fixture import AuthorityCase,signed_state
 
 import json
 import tempfile
@@ -33,7 +34,7 @@ def _fresh_bridge():
     bridge.CLIENTS.clear()
 
 
-class TestMultiClient(unittest.TestCase):
+class TestMultiClient(AuthorityCase,unittest.TestCase):
     """bug 1：多窗口互相覆盖。"""
 
     @NEED
@@ -60,7 +61,7 @@ class TestMultiClient(unittest.TestCase):
         _fresh_bridge()
         bridge.write_state(False, origin="beacon", client="winA", event="hb")
         bridge.write_state(True, origin="beacon", client="winB", event="hb")
-        self.assertTrue(bridge.read_state()["granted"], "心跳阶段任一窗口为真即放行")
+        self.assertFalse(bridge.read_state()['granted'],'心跳不得自行建立用户授权')
 
     @NEED
     def test_no_client_is_pure_heartbeat(self) -> None:
@@ -68,11 +69,11 @@ class TestMultiClient(unittest.TestCase):
         _fresh_bridge()
         bridge.write_state(True, origin="beacon", client="winA", event="action")
         bridge.write_state(False, origin="client")      # 老格式
-        self.assertFalse(bridge.read_state()["granted"],
-                         "旧格式没有 client/event，按动作处理（最后动作说了算）")
+        self.assertTrue(bridge.read_state()['granted'],
+                        '旧格式属于心跳，不能覆盖明确用户动作')
 
 
-class TestNegativeCache(unittest.TestCase):
+class TestNegativeCache(AuthorityCase,unittest.TestCase):
     """bug 2：负向缓存 45 秒，期间不问桥。"""
 
     @NEED
@@ -99,9 +100,9 @@ class TestNegativeCache(unittest.TestCase):
             bridge.CLIENTS.clear()
             bridge.write_state(True, origin="beacon", client="winA", event="action")
             with open(perm.STATE_PATH, "w", encoding="utf-8") as fh:
-                json.dump({"granted": True, "source": "bridge",
+                json.dump(signed_state({"granted": True, "source": "bridge",
                            "checked_at_ts": time.time(),
-                           "effective_from": "action@0s"}, fh)
+                           "effective_from": "action@0s"}), fh)
 
             st = perm.status()
             self.assertTrue(st["granted"], "5 秒前的负向缓存不该继续封死")

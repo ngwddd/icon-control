@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bootstrap  # noqa: F401
+from authority_fixture import AuthorityCase
 
 try:
     from computer_mcp.dataset import explore, writer
@@ -23,7 +24,8 @@ except Exception:
 NEED = unittest.skipUnless(HAVE, "导不进 dataset.explore")
 
 
-class TestExploreSafety(unittest.TestCase):
+class TestExploreSafety(AuthorityCase,unittest.TestCase):
+    fixture_authorized=True
     @NEED
     def test_pool_is_read_only(self):
         pool = explore.candidates()

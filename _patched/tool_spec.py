@@ -26,9 +26,15 @@ class ToolSpec:
             overrides = {
                 'housekeeping': ('file_delete',), 'set_config': ('config_write',),
                 'capture_config': ('config_write',), 'anchor_mem': ('file_write',),
-                'layout_mem': ('file_write',), 'snapshot': ('file_write',),
+                'layout_mem': ('file_write',), 'snapshot': ('file_write','file_delete'),
                 'frame_mark': ('file_write',), 'probe': ('file_write',),
                 'control_claim': ('control',), 'verify_flow': ('file_write',),
+                'type': ('input','clipboard_write'),
+                'close_window': ('window','process'),
+                'run_script': ('compose','input','clipboard_write','process'),
+                'macro_run': ('compose','input','clipboard_write','process','file_write'),
+                'track': ('compose','input','clipboard_write','window','file_write'),
+                'glyph': ('file_write',),
             }
             if self.zone == 'Z3' and ('window' in self.name or 'desktop' in self.name):
                 effect = ('window',)

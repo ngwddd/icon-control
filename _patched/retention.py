@@ -30,7 +30,8 @@ from pathlib import Path
 
 HOME = Path.home()
 # 工具根目录以 _draw 的位置为准更稳（venv 布局各不相同）
-DRAW_ROOT = HOME / ".dsh" / "tools" / "desktop-mcp"
+from computer_mcp.security import data_home
+DRAW_ROOT = data_home()
 
 # 每个区域的保留策略：files=最多文件数, mb=最多总字节, days=最老天龄
 # None 表示该维度不限制。资产类目录**不列在这里**，就永远不会被删。

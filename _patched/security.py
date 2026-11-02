@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import secrets
+import time
+import tempfile
 
 def data_home() -> Path:
     return Path(os.environ.get('ICON_CONTROL_HOME') or
@@ -43,3 +45,28 @@ def authentic(payload: dict) -> bool:
     token = load_token()
     return bool(token and isinstance(payload.get('signature'), str) and
                 hmac.compare_digest(signature(payload, token), payload['signature']))
+
+def latch_stop():
+    """Persist a physical emergency stop across worker process restarts."""
+    path=data_home()/'state'/'emergency-stop.json'
+    path.parent.mkdir(parents=True,exist_ok=True)
+    payload={'stopped_at':time.time()}
+    token=load_token()
+    if token:payload['signature']=signature(payload,token)
+    with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=path.parent,
+                                     prefix='stop-',suffix='.tmp',delete=False) as stream:
+        temp=Path(stream.name)
+        json.dump(payload,stream)
+    try:
+        os.replace(temp,path)
+    finally:
+        temp.unlink(missing_ok=True)
+    return payload['stopped_at']
+
+def stopped(payload):
+    path=data_home()/'state'/'emergency-stop.json'
+    if not path.exists():return False
+    try:
+        stop=json.loads(path.read_text(encoding='utf-8'))
+        return not authentic(stop) or float(payload.get('authorized_at',0)) <= float(stop['stopped_at'])
+    except (OSError,ValueError,TypeError,KeyError):return True

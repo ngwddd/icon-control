@@ -11,6 +11,7 @@ from __future__ import annotations
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bootstrap  # noqa: F401
+from authority_fixture import AuthorityCase
 
 import os
 import sys
@@ -207,7 +208,9 @@ class FakeMS:
         self.moves.append("click")
 
 
-class TestMicroInterpreter(unittest.TestCase):
+class TestMicroInterpreter(AuthorityCase,unittest.TestCase):
+    fixture_authorized=True
+    fixture_monitoring=True
     @NEED
     def test_key_actions_recorded(self) -> None:
         d = FakeDaemon(blank())
@@ -309,7 +312,9 @@ class TestDaemonBasics(unittest.TestCase):
             d.stop()
 
 
-class TestLiveSurface(unittest.TestCase):
+class TestLiveSurface(AuthorityCase, unittest.TestCase):
+    fixture_authorized = True
+    fixture_monitoring = True
     @NEED
     def test_capture_tool_contract(self) -> None:
         r = live.tool_capture({"action": "status"})

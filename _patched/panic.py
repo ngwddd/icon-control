@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import threading
+import sys
 import time
 
 try:
@@ -41,8 +42,10 @@ class PanicSwitch:
         self._event = threading.Event()
         self._press_times: list[float] = []
         self._listener = None
+        self._ready = threading.Event()
         self._lock = threading.Lock()
         self.triggered_at: float | None = None
+        self.triggered_at_wall = None
         self.press_count = 0
         self._esc_down = False
 
@@ -54,8 +57,20 @@ class PanicSwitch:
                                           win32_event_filter=lambda msg, data: not (data.flags & 0x10))
         self._listener.daemon = True
         self._listener.start()
+        listener = self._listener
+        def await_ready():
+            try:
+                listener.wait()
+                if listener.is_alive():
+                    self._ready.set()
+            except Exception:
+                pass
+        threading.Thread(target=await_ready, daemon=True, name='icon-panic-ready').start()
+        if not self._ready.wait(2):
+            self.stop()
+            return
         if self.verbose:
-            print("[panic] 急停开关已就绪：连按两下 ESC = 立即松手", flush=True)
+            print("[panic] 急停开关已就绪：连按两下 ESC = 立即松手", flush=True, file=sys.stderr)
 
     def _on_press(self, key) -> None:
         try:
@@ -74,12 +89,17 @@ class PanicSwitch:
             if len(self._press_times) >= 2 and not self._event.is_set():
                 self._event.set()
                 self.triggered_at = now
+                from computer_mcp import security
+                try:
+                    self.triggered_at_wall = security.latch_stop()
+                except OSError:
+                    self.triggered_at_wall = time.time()
                 from computer_mcp import control
                 control.release('emergency stop')
                 from computer_mcp import input_guard
                 input_guard.release_all()
                 if self.verbose:
-                    print("[panic] ✋ 收到「连按两下 ESC」—— 立即停止鼠标/键盘控制，等待指示", flush=True)
+                    print("[panic] ✋ 收到「连按两下 ESC」—— 立即停止鼠标/键盘控制，等待指示", flush=True, file=sys.stderr)
 
     # ---------- 查询 ----------
     @property
@@ -88,7 +108,7 @@ class PanicSwitch:
 
     @property
     def ready(self) -> bool:
-        return bool(self._listener and self._listener.is_alive())
+        return bool(self._ready.is_set() and self._listener and self._listener.is_alive())
 
     def _on_release(self, key):
         if keyboard and key == keyboard.Key.esc:
@@ -108,9 +128,11 @@ class PanicSwitch:
             self._press_times.clear()
             self._esc_down = False
             self.triggered_at = None
+            self.triggered_at_wall = None
             self._event.clear()
 
     def stop(self) -> None:
+        self._ready.clear()
         if self._listener is not None:
             try:
                 self._listener.stop()

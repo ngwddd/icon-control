@@ -6,8 +6,10 @@ from functools import wraps
 import importlib
 import inspect
 import time
+import threading
 
 _current = ContextVar('icon_execution', default=None)
+_operation_lock = threading.RLock()
 
 def check(tool):
     from computer_mcp import permission, control
@@ -20,15 +22,19 @@ def check(tool):
 
 @contextmanager
 def operation(tool):
-    from computer_mcp import permission, control
-    check(tool)
+    from computer_mcp import permission, control, tool_registry
     previous = _current.get()
+    spec = tool_registry.get(tool)
+    locked = previous is None and spec is not None and spec.requires_authority
+    if locked:
+        _operation_lock.acquire()
     token = None
-    if previous is None:
-        authority = permission.status()
-        token = _current.set(dict(generation=control.status()['generation'],
-                                  revision=(authority.get('session'), authority.get('revision')), tool=tool))
     try:
+        check(tool)
+        if previous is None:
+            authority = permission.status()
+            token = _current.set(dict(generation=control.status()['generation'],
+                                      revision=(authority.get('session'), authority.get('revision')), tool=tool))
         yield
     except BaseException:
         from computer_mcp.input_guard import release_all
@@ -37,6 +43,13 @@ def operation(tool):
     finally:
         if token is not None:
             _current.reset(token)
+        if locked:
+            _operation_lock.release()
+
+def checkpoint(default_tool):
+    """Recheck a composed operation immediately before a native side effect."""
+    task = _current.get()
+    check(task['tool'] if task else default_tool)
 
 def boundary(tool):
     def decorate(function):
@@ -101,6 +114,13 @@ def install_boundaries():
         'appkit': {'launch':'run_script','activate':'switch_to_window','exit_app':'close_window','close_windows':'close_window'},
         'winutil': {'activate':'switch_to_window','ensure_front':'switch_to_window'},
         'program': {'run':'run_script'},
+        'core.screenshot': {'set_capture_config':'capture_config'},
+        'live': {'tool_capture':'capture_daemon', 'tool_snapshot':'snapshot',
+                 'tool_run_script':'run_script', 'tool_act_until':'act_until',
+                 'tool_frame_mark':'frame_mark', 'tool_glyph':'glyph',
+                 'tool_record':'record', 'tool_housekeeping':'housekeeping',
+                 'tool_servo':'servo', 'tool_navigate':'navigate',
+                 'tool_layout_mem':'layout_mem', 'tool_track':'track'},
     }
     for path, names in tables.items():
         module = importlib.import_module('computer_mcp.' + path)

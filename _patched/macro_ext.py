@@ -35,7 +35,7 @@ from typing import Any
 
 MACRO_DIR = os.environ.get(
     "DESK_MACRO_DIR",
-    os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp", "macros"),
+    str(__import__('computer_mcp.security', fromlist=['data_home']).data_home() / 'macros'),
 )
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -178,8 +178,11 @@ def _force_foreground(hwnd: int) -> bool:
     except Exception:
         attached = False
     try:
+        _execution.checkpoint('macro_run')
         win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+        _execution.checkpoint('macro_run')
         win32gui.BringWindowToTop(hwnd)
+        _execution.checkpoint('macro_run')
         win32gui.SetForegroundWindow(hwnd)
     except Exception:
         pass
@@ -193,13 +196,16 @@ def _force_foreground(hwnd: int) -> bool:
         # last resort: bounce the window through TOPMOST, which forces a z-order change
         try:
             swp = win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW
+            _execution.checkpoint('macro_run')
             win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, swp)
+            _execution.checkpoint('macro_run')
             win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, swp)
+            _execution.checkpoint('macro_run')
             win32gui.SetForegroundWindow(hwnd)
         except Exception:
             pass
 
-    _t.sleep(0.12)
+    _execution.sleep(0.12)
     try:
         return win32gui.GetForegroundWindow() == hwnd
     except Exception:
@@ -239,8 +245,9 @@ def _ensure_usable(hwnd: int, restore: bool = True) -> dict[str, Any]:
     if win32gui.IsIconic(hwnd):
         if not restore:
             return {"error": "target window is minimized and restore=false"}
+        _execution.checkpoint('macro_run')
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        _t.sleep(0.35)
+        _execution.sleep(0.35)
         info["restored"] = True
 
     info["foreground"] = _force_foreground(hwnd)
@@ -1013,7 +1020,9 @@ def run_macro(
 
                 if action == "clipboard_set":
                     txt = str(step.get("text", ""))
+                    _execution.checkpoint('macro_run')
                     _wcb.OpenClipboard(); _wcb.EmptyClipboard()
+                    _execution.checkpoint('macro_run')
                     _wcb.SetClipboardText(txt); _wcb.CloseClipboard()
                     entry["chars"] = len(txt)
                     sub = {"ok": True}
@@ -1036,7 +1045,9 @@ def run_macro(
                 elif action == "paste":
                     txt = str(step.get("text", ""))
                     if txt:
+                        _execution.checkpoint('macro_run')
                         _wcb.OpenClipboard(); _wcb.EmptyClipboard()
+                        _execution.checkpoint('macro_run')
                         _wcb.SetClipboardText(txt); _wcb.CloseClipboard()
                         _execution.sleep(0.15)
                     _ctrl = ui_ext.resolve_key("ctrl")

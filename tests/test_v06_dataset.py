@@ -19,6 +19,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bootstrap  # noqa: F401
+from authority_fixture import AuthorityFixture
 
 try:
     from computer_mcp import dataset as DS
@@ -68,7 +69,7 @@ class TestConfig(unittest.TestCase):
     def test_frames_off_by_default(self) -> None:
         cfg = writer.load_config()
         self.assertFalse(cfg["frames"], "默认不抓屏（隐私）")
-        self.assertTrue(cfg["enabled"], "默认开启采集")
+        self.assertFalse(cfg['enabled'],'训练采集需要显式开启')
 
     @NEED
     def test_retention_defaults(self) -> None:
@@ -79,6 +80,8 @@ class TestConfig(unittest.TestCase):
 
 class TestTee(unittest.TestCase):
     def setUp(self) -> None:
+        authority=AuthorityFixture(authorized=True)
+        authority.__enter__();self.addCleanup(authority.__exit__,None,None,None)
         self.tmp = tempfile.mkdtemp()
         self._old = (writer.DATA, writer.FRAMES, writer.CONFIG)
         writer.DATA = __import__("pathlib").Path(self.tmp) / "raw"

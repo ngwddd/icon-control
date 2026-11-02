@@ -23,8 +23,8 @@ import os
 
 import numpy as np
 
-STORE = os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp",
-                     "vision", "glyphs.json")
+from computer_mcp.security import data_home
+STORE = str(data_home() / 'vision' / 'glyphs.json')
 
 GW, GH = 5, 7                      # 归一化网格
 

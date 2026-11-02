@@ -113,26 +113,13 @@ def _grab(hwnd=None, region=None):
 
 
 def _region_for(region: dict[str, int] | None, hwnd: int | None) -> dict[str, int] | None:
-    """Resolve the rectangle to OCR. Raising the window is best-effort: Windows
-    refuses foreground steals often, and that must NOT poison the region."""
+    """Resolve the rectangle without restoring or raising a read-only target."""
     if not hwnd:
         return region
     try:
-        import win32con
         import win32gui
     except Exception:
         return region
-    try:
-        if win32gui.IsIconic(hwnd):
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            _execution.sleep(0.30)
-    except Exception:
-        pass
-    try:
-        win32gui.SetForegroundWindow(hwnd)
-        _execution.sleep(0.15)
-    except Exception:
-        pass  # not allowed to steal focus - rendering below still works
     try:
         left, top, right, bottom = win32gui.GetWindowRect(hwnd)
     except Exception:

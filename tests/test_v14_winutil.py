@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import unittest
+from authority_fixture import AuthorityFixture
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 "venv", "Lib", "site-packages"))
@@ -42,7 +43,8 @@ class TestDeadHandles(unittest.TestCase):
         self.assertEqual(W.find_window("绝对不存在的窗口标题_zzz"), 0)
 
     def test_activate_dead(self) -> None:
-        self.assertFalse(W.activate(0))
+        with AuthorityFixture(authorized=True,monitoring=True):
+            self.assertFalse(W.activate(0))
 
 
 @NEED

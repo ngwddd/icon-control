@@ -56,8 +56,9 @@ class TestPanicModule(unittest.TestCase):
         sw._on_press(keyboard.Key.esc)
         self.assertFalse(sw.triggered, "单次 ESC 不应触发")
 
+        sw._on_release(keyboard.Key.esc)
         sw._on_press(keyboard.Key.esc)
-        self.assertTrue(sw.triggered, "连按两下必须触发")
+        self.assertTrue(sw.triggered, "两次独立按键必须触发，自动重复不算")
 
         # 粘住：再按还是触发状态
         sw._on_press(keyboard.Key.esc)

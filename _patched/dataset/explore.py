@@ -29,7 +29,7 @@ def candidates() -> list:
 
     return sorted(
         name for name, spec in R.TOOLS.items()
-        if spec.read_only and name not in EXCLUDE
+        if not spec.requires_authority and R.allowed(name) and name not in EXCLUDE
     )
 
 

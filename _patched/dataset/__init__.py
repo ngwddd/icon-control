@@ -52,7 +52,8 @@ def record(tool: str, arguments, zone: str, result_text: str | None,
            ok: bool | None, latency_ms: float, error: str | None = None) -> None:
     """写一条 episode。任何异常都吞掉。"""
     try:
-        if not enabled():
+        from computer_mcp import permission
+        if not enabled() or not permission.status().get('granted'):
             return
         ep = schema.build_episode(tool=tool, arguments=arguments, zone=zone,
                                   result_text=result_text, ok=ok,

@@ -14,6 +14,7 @@ from __future__ import annotations
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bootstrap  # noqa: F401
+from authority_fixture import AuthorityCase
 
 import json
 import os
@@ -37,7 +38,7 @@ def _pkg_dir() -> str:
     return here
 
 
-class TestPermissionGate(unittest.TestCase):
+class TestPermissionGate(AuthorityCase,unittest.TestCase):
     @NEED
     def test_api_and_classification(self) -> None:
         self.assertTrue(callable(perm.check_tool))
@@ -84,11 +85,11 @@ class TestPermissionGate(unittest.TestCase):
         old = os.environ.get("DSH_MOUSE_GATE")
         try:
             os.environ["DSH_MOUSE_GATE"] = "off"
-            self.assertFalse(perm.enabled())
-            self.assertIsNone(perm.check_tool("click"), "关闭闸门后应放行")
+            self.assertTrue(perm.enabled())
+            self.assertIsNotNone(perm.check_tool('click'),'环境变量不得关闭执行闸门')
             st = perm.status(force=True)
-            self.assertTrue(st["granted"])
-            self.assertEqual(st["source"], "env-disabled")
+            self.assertFalse(st['granted'])
+            self.assertEqual(st['source'],'unknown')
         finally:
             if old is None:
                 os.environ.pop("DSH_MOUSE_GATE", None)
@@ -115,7 +116,7 @@ class TestPermissionGate(unittest.TestCase):
             perm._read_pill = spy
             try:
                 st = perm.status()
-                self.assertTrue(st["granted"], "应使用缓存里的 granted")
+                self.assertFalse(st['granted'],'未签名缓存不能成为授权来源')
                 self.assertEqual(called["n"], 0, "缓存命中不应再读屏幕")
             finally:
                 perm._read_pill = orig

@@ -46,8 +46,7 @@ TOKEN_PATH = str(security.token_path())
 
 _lock = threading.RLock()
 
-# 一旦收到过带 token 的请求，就再也不接受无 token 的请求（自动收紧）
-_token_seen = False
+# Token is mandatory from the first request; there is no compatibility bypass.
 
 
 def log(line: str) -> None:
@@ -73,6 +72,8 @@ CLIENTS: dict[str, dict] = {}
 _last_action = None
 _revision = 0
 _session = secrets.token_hex(16)
+_client_sequences = {}
+_last_event_stamp = int(time.time()*1000)
 CLIENT_HB_TTL_S = 30.0          # 心跳多久内算这个窗口还活着
 CLIENT_ACTION_TTL_S = 1800.0    # 用户动作的有效期（30 分钟）
 
@@ -91,13 +92,7 @@ def note_client(client: str, granted: bool, event: str) -> None:
 
 
 def effective_state() -> tuple:
-    """返回 (是否授权, 依据)。None 表示没有任何客户端报过状态。
-
-    规则：
-      1. 最近一次「用户动作」说了算（授权与收回都算），有效期 30 分钟
-      2. 没有动作 → 看心跳：任一窗口在心跳里报 granted 即视为授权
-      3. 都没有 → None（Host 会退回 OCR，读不到就 fail closed）
-    """
+    """Only the latest explicit user action may grant; heartbeats only keep it live."""
     now = time.time()
     if _last_action is None:
         return False, 'no-user-action'
@@ -109,8 +104,17 @@ def effective_state() -> tuple:
 
 
 def write_state(granted: bool, origin: str = "bridge",
-                client: str = None, event: str = None) -> None:
+                client: str = None, event: str = None, sequence=None, action_at=None) -> None:
     with _lock:
+        global _last_event_stamp
+        if event == 'action' and sequence is not None:
+            if (type(sequence) is not int or sequence <= _client_sequences.get(client,0) or
+                type(action_at) is not int or action_at < _last_event_stamp or
+                (action_at == _last_event_stamp and granted and _last_action is not None and not _last_action[1]) or
+                abs(time.time()*1000-action_at)>30000):
+                return
+            _client_sequences[client]=sequence
+            _last_event_stamp=action_at
         _write_state_locked(granted, origin, client, event)
 
 def _write_state_locked(granted, origin, client, event):
@@ -128,6 +132,8 @@ def _write_state_locked(granted, origin, client, event):
         'session': _session,
         "revision": _revision,
         "granted": bool(eff),
+        'authorized_at': _last_action[0] if _last_action else 0,
+        'expires_at': min(now+15,(_last_action[0]+CLIENT_ACTION_TTL_S) if _last_action else now),
         "source": "bridge",
         "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "checked_at_ts": now,
@@ -172,15 +178,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
-    def _origin_ok(self) -> bool:
-        origin = (self.headers.get("Origin") or "").strip().lower()
-        if not origin:
-            return True                      # CLI / 原生客户端 / 图片信标
-        return (origin.startswith("dsh-app://")
-                or origin.startswith("file://")
-                or origin.startswith("http://127.0.0.1")
-                or origin.startswith("http://localhost"))
-
     def _source_ok(self) -> bool:
         """来源校验：Origin 或 Referer 必须指向 DSH 自己的页面。
 
@@ -215,8 +212,7 @@ class Handler(BaseHTTPRequestHandler):
             log(f"REJECT source path={path} "
                 f"origin={self.headers.get('Origin')!r} referer={self.headers.get('Referer')!r}")
             return False
-        # 带 token 时校验 token；不带 token 但来源合格也接受
-        # （Host 缓存的插件模块在 DSH 重启前不会更新，不能因为没 token 就把用户晾着）
+        # First request and every subsequent request require the installed secret.
         expected = load_token()
         got = (parse_qs(parsed.query).get("k") or [""])[0]
         return bool(expected and got and hmac.compare_digest(expected, got))
@@ -240,7 +236,13 @@ class Handler(BaseHTTPRequestHandler):
             event = (q.get("event") or ["hb"])[0]
             if event not in ("action", "hb"):
                 event = "hb"
-            write_state(granted, origin="beacon", client=client, event=event)
+            sequence=(q.get('sequence') or [''])[0]
+            stamp=(q.get('action_at') or [''])[0]
+            if event=='action' and (not sequence.isdigit() or not stamp.isdigit()):
+                self.send_error(400,'Action sequence and time required');return
+            write_state(granted, origin="beacon", client=client, event=event,
+                        sequence=int(sequence) if event=='action' else None,
+                        action_at=int(stamp) if event=='action' else None)
             log(f"BEACON granted={granted} client={client} event={event}")
             self.send_response(204)
             self._cors()
@@ -286,8 +288,11 @@ class Handler(BaseHTTPRequestHandler):
         event = str(data.get("event") or "hb")
         if event not in ("action", "hb"):
             event = "hb"
+        if event=='action' and (type(data.get('sequence')) is not int or type(data.get('action_at')) is not int):
+            self.send_error(400,'Action sequence and time required');return
         write_state(granted, origin=str(data.get("origin") or "client"),
-                    client=client, event=event)
+                    client=client, event=event,sequence=data.get('sequence') if event=='action' else None,
+                    action_at=data.get('action_at') if event=='action' else None)
         log(f"POST granted={granted}")
         self.send_response(204)
         self._cors()

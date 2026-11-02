@@ -53,8 +53,8 @@ def main():
         target.parent.mkdir(parents=True,exist_ok=True)
         target.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
         args.pattern='test_v13_program.py'
-    return subprocess.call([sys.executable,'-m','unittest','discover','-s','tests',
-                            '-p',args.pattern,'-v'],cwd=ROOT,env=env)
+    return subprocess.call([sys.executable,str(ROOT/'tools'/'test_suite.py'),
+                            '--pattern',args.pattern],cwd=ROOT,env=env)
 
 if __name__ == '__main__':
     raise SystemExit(main())

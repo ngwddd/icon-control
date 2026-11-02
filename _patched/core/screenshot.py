@@ -138,13 +138,6 @@ def _grab(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
 
 
 def _grab_mss(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
-    fast = _grab_dxcam(region)
-    if fast is not None:
-        return fast
-    return _grab_mss(region)
-
-
-def _grab_mss(region: dict[str, int] | None = None) -> tuple[Image.Image, int, int]:
     sct = _sct()
     shot = sct.grab(_monitor(region, sct))
     img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")

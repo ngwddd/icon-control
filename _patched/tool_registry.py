@@ -57,7 +57,7 @@ def _csv(env: str) -> set:
 def _allowed(name: str) -> bool:
     """DSH_TOOLS_ALLOW / DSH_TOOLS_DENY 过滤（P0-4）。
 
-    只影响**模型能看到什么**，不影响内部调用（宏、测试、脚本仍可直接用名字）。
+    同时控制工具可见性与实际执行，包括别名、宏和脚本的内部调用。
     """
     name = resolve(name) or name
     allow = {resolve(n) or n for n in _csv('DSH_TOOLS_ALLOW')}

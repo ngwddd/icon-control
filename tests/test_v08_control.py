@@ -16,6 +16,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bootstrap  # noqa: F401
+from authority_fixture import AuthorityFixture
 
 try:
     from computer_mcp import control as C
@@ -35,6 +36,8 @@ def _reset():
 
 class TestControlState(unittest.TestCase):
     def setUp(self):
+        authority=AuthorityFixture(authorized=True,monitoring=True)
+        authority.__enter__();self.addCleanup(authority.__exit__,None,None,None)
         _reset()
 
     def tearDown(self):
@@ -58,11 +61,11 @@ class TestControlState(unittest.TestCase):
         self.assertIsNotNone(C.blocking_reason(), "接管后闸门必须能给出理由")
 
     @NEED
-    def test_quiet_window_ignores_our_own_events(self):
+    def test_quiet_window_does_not_ignore_physical_input(self):
         C.claim("test")
         C.quiet()                           # 刚注入 → 接下来 250ms 内的输入不算用户
         C.note_physical("injected")
-        self.assertEqual(C.status()["owner"], "ai", "自己的注入不该触发接管")
+        self.assertEqual(C.status()['owner'],'user','静默窗口不得隐藏物理接管')
 
     @NEED
     def test_idle_resume(self):

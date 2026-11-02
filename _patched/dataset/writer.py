@@ -10,13 +10,14 @@ import os
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+from computer_mcp.security import data_home
+ROOT = data_home() / 'dataset'
 DATA = ROOT / "raw"
 FRAMES = ROOT / "frames"
 CONFIG = ROOT / "config.json"
 
 DEFAULT_CONFIG = {
-    "enabled": True,
+    "enabled": False,
     "frames": False,
     "max_frame_kb": 120,
     "debug": False,

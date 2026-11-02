@@ -25,7 +25,8 @@ import unittest
 
 HERE = pathlib.Path(__file__).resolve()
 PROJECT = HERE.parents[1]                     # ...\desktop-mcp
-PKG = PROJECT / "venv" / "Lib" / "site-packages" / "computer_mcp"
+import computer_mcp
+PKG = pathlib.Path(computer_mcp.__file__).parent
 MACROS = PROJECT / "macros"
 
 
@@ -40,7 +41,7 @@ def _defined_names(path: pathlib.Path) -> list[str]:
 
 class TestProjectLayout(unittest.TestCase):
     def test_own_scripts_exist(self):
-        for name in ("desk.py", "clean.py", "app_facts.md", "_tray_walk.py"):
+        for name in ('tools/desk.py','tools/clean.py','README.md','pyproject.toml'):
             self.assertTrue((PROJECT / name).is_file(), f"缺少 {name}")
 
     def test_patched_package_is_present(self):
@@ -253,7 +254,7 @@ class TestPatchDrift(unittest.TestCase):
     两边不一致意味着「改了 venv 但忘了同步」。"""
 
     PAIRS = {
-        "core_screenshot.py": ("core", "screenshot.py"),
+        "core/screenshot.py": ("core", "screenshot.py"),
         "mcp.py": (None, "mcp.py"),
         "cli.py": (None, "cli.py"),
         "ui_ext.py": (None, "ui_ext.py"),
@@ -279,9 +280,10 @@ class TestPatchDrift(unittest.TestCase):
         self.assertEqual(drift, [], "; ".join(drift))
 
     def test_reapply_knows_every_patch_file(self):
-        src = _read(PROJECT / "_patched" / "reapply.py")
-        missing = [n for n in self.PAIRS if f'"{n}"' not in src]
-        self.assertEqual(missing, [], f"reapply.py 的 FILES 列表缺少：{missing}")
+        import tomllib
+        project=tomllib.loads(_read(PROJECT/'pyproject.toml'))
+        self.assertEqual(project['tool']['setuptools']['package-dir']['computer_mcp'],'_patched')
+        self.assertIn('computer_mcp.core',project['tool']['setuptools']['packages'])
 
 
 if __name__ == "__main__":

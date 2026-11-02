@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
+from authority_fixture import AuthorityCase
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -145,7 +146,9 @@ class TestTempSweep(unittest.TestCase):
 
 
 @NEED
-class TestHousekeepingTool(unittest.TestCase):
+class TestHousekeepingTool(AuthorityCase, unittest.TestCase):
+    fixture_authorized = True
+    fixture_monitoring = True
     def test_status_is_read_only(self) -> None:
         r = live.tool_housekeeping({"action": "status"})
         self.assertTrue(r["success"])

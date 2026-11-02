@@ -165,6 +165,37 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(len(R.TOOLS),89)
         for spec in R.iter_specs(): self.assertTrue(spec.effects,spec.name)
 
+    def test_out_of_order_grant_does_not_override_revoke(self):
+        now=int(time.time()*1000)
+        with patch.multiple(B,_client_sequences={},_last_event_stamp=0):
+            B.write_state(False,client='human',event='action',sequence=2,action_at=now)
+            B.write_state(True,client='human',event='action',sequence=1,action_at=now-1)
+            self.assertFalse(P.status()['granted'])
+
+    def test_old_other_window_action_does_not_override_revoke(self):
+        now=int(time.time()*1000)
+        with patch.multiple(B,_client_sequences={},_last_event_stamp=0):
+            B.write_state(False,client='human',event='action',sequence=2,action_at=now)
+            B.write_state(True,client='other',event='action',sequence=1,action_at=now-1)
+            self.assertFalse(P.status()['granted'])
+
+    def test_durable_stop_blocks_existing_authority(self):
+        self.grant();S.latch_stop()
+        self.assertFalse(P.status()['granted'])
+
+    def test_same_millisecond_cross_window_revoke_wins(self):
+        now=int(time.time()*1000)
+        with patch.multiple(B,_client_sequences={},_last_event_stamp=0):
+            B.write_state(False,client='human',event='action',sequence=1,action_at=now)
+            B.write_state(True,client='other',event='action',sequence=1,action_at=now)
+            self.assertFalse(P.status()['granted'])
+
+    def test_only_new_user_action_clears_durable_stop(self):
+        self.grant();S.latch_stop()
+        B.write_state(True,client='human',event='hb')
+        self.assertFalse(P.status()['granted'])
+        self.grant();self.assertTrue(P.status()['granted'])
+
     def test_double_escape_requires_two_physical_presses(self):
         from pynput.keyboard import Key
         switch=panic.PanicSwitch(verbose=False)

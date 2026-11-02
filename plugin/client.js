@@ -22,13 +22,14 @@ window.__ModuleLoader__.load({
     const CLIENT = (window.crypto && window.crypto.randomUUID)
       ? window.crypto.randomUUID() : String(Date.now()) + Math.random().toString(36);
     let lastMode = 'unknown';
+    let actionSequence = 0;
 
-    function sendBeacon(granted, event) {
+    function sendBeacon(granted, event, sequence, actionAt) {
       try {
         const img = new Image();
         // 不带 no-referrer：桥要靠 Referer 判断来源
-        if (!BRIDGE_TOKEN || BRIDGE_TOKEN === '__BRIDGE_TOKEN__') return false;
-        img.src = BRIDGE + '/beacon?k=' + encodeURIComponent(BRIDGE_TOKEN) + '&granted=' + (granted ? '1' : '0') + '&client=' + encodeURIComponent(CLIENT) + '&event=' + event + '&t=' + Date.now();
+        if (!BRIDGE_TOKEN || BRIDGE_TOKEN.startsWith('__')) return false;
+        img.src = BRIDGE + '/beacon?k=' + encodeURIComponent(BRIDGE_TOKEN) + '&granted=' + (granted ? '1' : '0') + '&client=' + encodeURIComponent(CLIENT) + '&event=' + event + '&sequence=' + sequence + '&action_at=' + actionAt + '&t=' + Date.now();
         lastMode = 'beacon';
         return true;
       } catch (err) {
@@ -37,14 +38,16 @@ window.__ModuleLoader__.load({
     }
 
     function pushToBridge(granted, event = 'hb') {
-      sendBeacon(granted, event);
+      const sequence = event === 'action' ? ++actionSequence : 0;
+      const actionAt = event === 'action' ? Date.now() : 0;
+      sendBeacon(granted, event, sequence, actionAt);
       try {
-        if (!BRIDGE_TOKEN || BRIDGE_TOKEN === '__BRIDGE_TOKEN__') return;
+        if (!BRIDGE_TOKEN || BRIDGE_TOKEN.startsWith('__')) return;
         window.fetch(BRIDGE + '/state?k=' + encodeURIComponent(BRIDGE_TOKEN), {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill', client: CLIENT, event }),
+          body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill', client: CLIENT, event, sequence, action_at: actionAt }),
         }).catch(function () { /* 桥没起来就算了 */ });
       } catch (err) {
         /* 没有 fetch 也不影响信标 */

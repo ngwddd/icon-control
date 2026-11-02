@@ -150,6 +150,7 @@ class Runner:
             self.kb.release(k)
 
     # ---------- 执行 ----------
+    @_execution.boundary('run_script')
     def run(self, ops: list, depth: int = 0) -> None:
         if depth > 8:
             self.stopped, self.stop_reason = True, "嵌套过深"
@@ -198,6 +199,8 @@ class Runner:
                 self._until(op, depth)
             else:
                 self.log(f"未知 op：{kind}")
+                self.stopped, self.stop_reason = True, f"未知 op：{kind}"
+                return
 
     def _walk_or_turn(self, op: dict) -> None:
         """走一步；画面没动就转身 —— 一条 op 顶一整段 if+diff。"""
@@ -241,6 +244,7 @@ class Runner:
             else:
                 _execution.sleep(poll)
         self.log(f"until 超时（{iters} 次）", cond=cond)
+        self.stopped, self.stop_reason = True, "until 条件未达成"
 
     # ---------- 结果 ----------
     def result(self) -> dict:

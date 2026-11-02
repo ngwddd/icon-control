@@ -134,8 +134,10 @@ def launch(target: str, extra_args: str | None = None, settle_ms: int = 0) -> di
     # Explorer shell 启动
     try:
         if extra_args:
+            _execution.checkpoint('run_script')
             subprocess.run(["explorer.exe", path, extra_args], check=False)
         else:
+            _execution.checkpoint('run_script')
             subprocess.run(["explorer.exe", path], check=False)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"explorer 启动失败: {exc}", "target": path}
@@ -261,7 +263,9 @@ def activate(hwnd: int, tries: int = 3) -> dict:
         try:
             if t_fg and t_fg != t_me:
                 attached = bool(u32.AttachThreadInput(t_fg, t_me, True))
+            _execution.checkpoint('run_script')
             win32gui.BringWindowToTop(hwnd)
+            _execution.checkpoint('run_script')
             win32gui.SetForegroundWindow(hwnd)
         finally:
             if attached:
@@ -269,8 +273,10 @@ def activate(hwnd: int, tries: int = 3) -> dict:
 
     def _restore_force() -> None:
         if win32gui.IsIconic(hwnd):
+            _execution.checkpoint('run_script')
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             _execution.sleep(0.3)
+        _execution.checkpoint('run_script')
         win32gui.SetForegroundWindow(hwnd)
 
     methods = (("attach_input", _attach_force),
@@ -278,6 +284,7 @@ def activate(hwnd: int, tries: int = 3) -> dict:
                ("setforeground", lambda: win32gui.SetForegroundWindow(hwnd)))
     for name, fn in methods:
         for _ in range(max(1, tries)):
+            _execution.checkpoint('switch_to_window')
             try:
                 fn()
             except Exception:
@@ -328,6 +335,7 @@ def exit_app(process: str | None = None,
             return
         if pid in pids and win32gui.IsWindowVisible(hwnd):
             try:
+                _execution.checkpoint('run_script')
                 win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
                 windows_closed += 1
             except Exception:
@@ -348,6 +356,7 @@ def exit_app(process: str | None = None,
     if force:
         for pid in remaining:
             try:
+                _execution.checkpoint('run_script')
                 psutil.Process(pid).terminate()
                 terminated += 1
             except Exception:
@@ -409,6 +418,7 @@ def close_windows(process: str | None = None,
     closed = 0
     for t in targets:
         try:
+            _execution.checkpoint('run_script')
             win32gui.PostMessage(t["hwnd"], win32con.WM_CLOSE, 0, 0)
             closed += 1
         except Exception:

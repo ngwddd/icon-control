@@ -115,8 +115,9 @@ if IS_WINDOWS:
             import time
             placement = win32gui.GetWindowPlacement(hwnd)
             if placement[1] == win32con.SW_SHOWMAXIMIZED:
+                _execution.checkpoint('move_window')
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                time.sleep(0.05)
+                _execution.sleep(0.05)
         except Exception:
             pass
 
@@ -174,15 +175,17 @@ if IS_WINDOWS:
             
             placement = win32gui.GetWindowPlacement(hwnd)
             if placement[1] == win32con.SW_SHOWMAXIMIZED:
+                _execution.checkpoint('move_window')
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                time.sleep(0.05)
+                _execution.sleep(0.05)
             
+            _execution.checkpoint('move_window')
             win32gui.SetWindowPos(
                 hwnd, 0, L, T, W, H,
                 win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW
             )
             
-            time.sleep(0.02)
+            _execution.sleep(0.02)
             
             visL, visT, visR, visB = _get_visible_frame_win(hwnd)
             outL, outT, outR, outB = win32gui.GetWindowRect(hwnd)
@@ -202,6 +205,7 @@ if IS_WINDOWS:
             corrW = max(1, int(round(corrW)))
             corrH = max(1, int(round(corrH)))
             
+            _execution.checkpoint('move_window')
             win32gui.SetWindowPos(
                 hwnd, 0, corrL, corrT, corrW, corrH,
                 win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW
@@ -213,12 +217,14 @@ if IS_WINDOWS:
                 import time
                 placement = win32gui.GetWindowPlacement(hwnd)
                 if placement[1] == win32con.SW_SHOWMAXIMIZED:
+                    _execution.checkpoint('move_window')
                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    time.sleep(0.05)
+                    _execution.sleep(0.05)
                 
                 L, T, R, B = target_ltrb
                 W = max(1, R - L)
                 H = max(1, B - T)
+                _execution.checkpoint('move_window')
                 win32gui.SetWindowPos(
                     hwnd, 0, L, T, W, H,
                     win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE
@@ -261,7 +267,9 @@ if IS_WINDOWS:
                 return {"error": "Either 'hwnd' or 'title' parameter is required"}
         
         try:
+            _execution.checkpoint('move_window')
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            _execution.checkpoint('move_window')
             win32gui.SetForegroundWindow(hwnd)
             
             window_data = _get_window_data(hwnd)
@@ -287,6 +295,7 @@ if IS_WINDOWS:
                 width = rect[2] - rect[0]
                 height = rect[3] - rect[1]
             
+            _execution.checkpoint('move_window')
             win32gui.SetWindowPos(hwnd, 0, x, y, width, height, flags)
             
             window_data = _get_window_data(hwnd)
@@ -311,6 +320,7 @@ if IS_WINDOWS:
             y = rect[1]
             
             flags = win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
+            _execution.checkpoint('move_window')
             win32gui.SetWindowPos(hwnd, 0, x, y, width, height, flags)
             
             window_data = _get_window_data(hwnd)
@@ -327,6 +337,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
+            _execution.checkpoint('move_window')
             win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
             window_data = _get_window_data(hwnd)
             return {"success": True, "action": "minimize_window", "window": window_data}
@@ -342,6 +353,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
+            _execution.checkpoint('move_window')
             win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
             window_data = _get_window_data(hwnd)
             return {"success": True, "action": "maximize_window", "window": window_data}
@@ -357,6 +369,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
+            _execution.checkpoint('move_window')
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             window_data = _get_window_data(hwnd)
             return {"success": True, "action": "restore_window", "window": window_data}
@@ -374,6 +387,7 @@ if IS_WINDOWS:
         try:
             hwnd_insert_after = win32con.HWND_TOPMOST if topmost else win32con.HWND_NOTOPMOST
             flags = win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
+            _execution.checkpoint('move_window')
             win32gui.SetWindowPos(hwnd, hwnd_insert_after, 0, 0, 0, 0, flags)
             
             window_data = _get_window_data(hwnd)
@@ -403,6 +417,7 @@ if IS_WINDOWS:
             return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window management support"}
         
         try:
+            _execution.checkpoint('move_window')
             win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
             return {"success": True, "action": "close_window", "hwnd": hwnd}
         except Exception as e:
@@ -517,126 +532,21 @@ if IS_WINDOWS:
             return {"error": f"Failed to snap window bottom: {str(e)}"}
 
     def screenshot_window(hwnd: int) -> dict[str, Any]:
-        """Capture screenshot of a specific window."""
+        """Capture the target's own pixels without restoring or focusing it."""
         try:
-            import win32gui
-            import win32ui
-            import win32con
-            import win32api
-            from PIL import Image
             import base64
             from io import BytesIO
-        except ImportError:
-            return {"error": "pywin32 not installed", "note": "Install pywin32 for Windows window screenshot support"}
-        
-        try:
-            # Check if window exists and is valid
-            if not win32gui.IsWindow(hwnd):
-                return {"error": "Invalid window handle"}
-            
-            # Bring window to foreground before capturing
-            # Restore if minimized, then activate
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(hwnd)
-            
-            # Small delay to ensure window is fully in foreground
-            import time
-            time.sleep(0.1)
-            
-            # Get window bounds (including non-client area)
-            rect = win32gui.GetWindowRect(hwnd)
-            width = rect[2] - rect[0]
-            height = rect[3] - rect[1]
-            
-            if width <= 0 or height <= 0:
-                return {"error": "Window has invalid dimensions"}
-            
-            # Get client area bounds (excluding title bar, borders)
-            client_rect = win32gui.GetClientRect(hwnd)
-            client_width = client_rect[2] - client_rect[0]
-            client_height = client_rect[3] - client_rect[1]
-            
-            # Get client area coordinates in screen space (for screen capture)
-            client_point_left_top = win32gui.ClientToScreen(hwnd, (0, 0))
-            client_point_right_bottom = win32gui.ClientToScreen(hwnd, (client_width, client_height))
-            
-            client_screen_x = client_point_left_top[0]
-            client_screen_y = client_point_left_top[1]
-            
-            # Create a memory DC compatible with the screen
-            screen_dc = win32gui.GetDC(0)
-            mem_dc = win32ui.CreateDCFromHandle(screen_dc)
-            save_dc = mem_dc.CreateCompatibleDC()
-            
-            # Create bitmap for the exact client area size
-            bitmap = win32ui.CreateBitmap()
-            bitmap.CreateCompatibleBitmap(mem_dc, client_width, client_height)
-            save_dc.SelectObject(bitmap)
-            
-            # Capture from screen at the window's client area coordinates
-            # This directly captures the screen region where the window's client area is
-            save_dc.BitBlt(
-                (0, 0),
-                (client_width, client_height),
-                mem_dc,
-                (client_screen_x, client_screen_y),
-                win32con.SRCCOPY
-            )
-            
-            # Convert bitmap to PIL Image
-            bmp_info = bitmap.GetInfo()
-            bmp_str = bitmap.GetBitmapBits(True)
-            
-            # Get actual bitmap dimensions
-            bmp_width = bmp_info["bmWidth"]
-            bmp_height = bmp_info["bmHeight"]
-            
-            # Create image from bitmap data
-            img = Image.frombuffer(
-                "RGB",
-                (bmp_width, bmp_height),
-                bmp_str,
-                "raw",
-                "BGRX",
-                0,
-                1
-            )
-            
-            # The bitmap should already be exactly client_width x client_height since we
-            # created it with those dimensions and BitBlt'd the exact region
-            # Just verify and fix if needed
-            if img.size != (client_width, client_height):
-                if img.size[0] >= client_width and img.size[1] >= client_height:
-                    img = img.crop((0, 0, client_width, client_height))
-                else:
-                    img = img.resize((client_width, client_height), Image.Resampling.LANCZOS)
-            
-            actual_width = client_width
-            actual_height = client_height
-            
-            # Cleanup
-            win32gui.DeleteObject(bitmap.GetHandle())
-            save_dc.DeleteDC()
-            mem_dc.DeleteDC()
-            win32gui.ReleaseDC(0, screen_dc)
-            
-            # Convert to base64
+            from computer_mcp.ocr_ext import _print_window
+            image, _, _ = _print_window(hwnd)
+            if image is None:
+                return {"success": False, "error": "Window capture unavailable; focus was not changed"}
             buffer = BytesIO()
-            img.save(buffer, format="PNG")
-            img_bytes = buffer.getvalue()
-            img_base64 = base64.b64encode(img_bytes).decode("utf-8")
-            
-            return {
-                "success": True,
-                "action": "screenshot_window",
-                "hwnd": hwnd,
-                "format": "base64_png",
-                "data": img_base64,
-                "width": actual_width,
-                "height": actual_height
-            }
-        except Exception as e:
-            return {"error": f"Failed to screenshot window: {str(e)}"}
+            image.save(buffer, format='PNG')
+            return {"success": True, "action": "screenshot_window", "hwnd": hwnd,
+                    "format": "base64_png", "data": base64.b64encode(buffer.getvalue()).decode('ascii'),
+                    "width": image.width, "height": image.height}
+        except Exception as exc:
+            return {"success": False, "error": f"Failed to screenshot window: {exc}"}
 
     def list_virtual_desktops() -> dict[str, Any]:
         """List all virtual desktops with their IDs and names."""
@@ -958,7 +868,7 @@ elif IS_DARWIN:
             
             # Small delay to ensure window is fully activated
             import time
-            time.sleep(0.1)
+            _execution.sleep(0.1)
             
             # Get window bounds (window should be frontmost now)
             script_bounds = f'''
@@ -1245,7 +1155,7 @@ elif IS_LINUX:
             )
             
             # Small delay to ensure window is fully activated
-            time.sleep(0.1)
+            _execution.sleep(0.1)
             
             result_geom = subprocess.run(
                 ["xdotool", "getwindowgeometry", str(window_id)],

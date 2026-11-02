@@ -39,7 +39,8 @@ import re
 import time
 from pathlib import Path
 
-STORE = Path.home() / ".dsh" / "tools" / "desktop-mcp" / "state" / "layouts.json"
+from computer_mcp.security import data_home
+STORE = data_home() / 'state' / 'layouts.json'
 
 # 标题里的版本号/数字去掉，让 "Canity v1.6.5" 与 "Canity v1.6.6" 命中同一个档案
 _VER_RE = re.compile(r"\b(v|ver|version)?\s*\d+(\.\d+)*\b", re.I)

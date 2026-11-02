@@ -538,6 +538,7 @@ def text_landed(sent: str, got: str, min_lcs: float = 0.5) -> bool:
     return lcs_share(a, b) >= min_lcs
 
 
+@_execution.boundary('run_script')
 def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> dict:
     """执行一个动作。返回 {"ok": bool, "detail": str}。"""
     from computer_mcp.input_guard import KeyboardController as KB, Key, Button, MouseController as MS
@@ -607,7 +608,8 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             for _ in range(3):
                 try:
                     win32clipboard.OpenClipboard()
-                    win32clipboard.EmptyClipboard()
+                    check('type'); win32clipboard.EmptyClipboard()
+                    _execution.checkpoint('run_script')
                     win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text)
                     win32clipboard.CloseClipboard()
                     break
@@ -702,7 +704,9 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             for _ in range(3):
                 try:
                     win32clipboard.OpenClipboard()
+                    _execution.checkpoint('run_script')
                     win32clipboard.EmptyClipboard()
+                    _execution.checkpoint('run_script')
                     win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text)
                     win32clipboard.CloseClipboard()
                     break
@@ -910,7 +914,10 @@ class Runner:
             pass
         self.hwnd = hwnd
         self.rect = rect
-        self.wheel = FrameWheel(rect, hwnd)
+        self.wheel = FrameWheel(rect, self.ring, self.events,
+                                fps=int(self.track.capture.get('fps',30)),
+                                down=int(self.track.capture.get('down',4)),
+                                jpeg_quality=int(self.track.capture.get('jpeg_quality',70)))
         self.wheel.start()
         self.events.add("STEP", f"切换目标窗口 hwnd={hwnd} {name}".strip())
 
@@ -926,6 +933,7 @@ class Runner:
                 import win32con
                 import win32gui
 
+                _execution.checkpoint('run_script')
                 win32gui.SetWindowPos(self.hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
                                       win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
             except Exception:

@@ -1,5 +1,13 @@
 # 图标控制 · Icon Control
 
+> **Icon Control v1.3 稳定性重构计划 · 1.3.0rc1 候选版**
+>
+> 当前保留 89 个工具，优先修复权限执行、控制权、假成功与安装问题。
+> S0–S4 的源码和自动化验证已提交；S5 的 32 项真机验收及独立 P0 复审仍待完成，不能作为正式稳定版发布。
+> 安装与回滚见 [INSTALL](docs/v1.3/INSTALL.md)，迁移见 [MIGRATION](docs/v1.3/MIGRATION.md)，
+> 阶段要求见 [PLAN](docs/v1.3/PLAN.md)，验收见 [DESKTOP-BENCHMARKS](docs/v1.3/DESKTOP-BENCHMARKS.md)。
+> 下文历史性能数据来自 v1.2，尚未在 v1.3 真机环境复测。
+
 > **把「让 AI 真正接管你的鼠标和屏幕」做成可落地的工程，而不是又一个截图+坐标点击的 demo。**
 >
 > 它有性能基准、有验证纪律、有急停开关、有界面上的授权闸门，
@@ -7,11 +15,11 @@
 
 | 事实 | 当前值 |
 |---|---|
-| 版本 | **v1.2.0** |
+| 版本 | **v1.3.0rc1（待验收）**；回滚基线 v1.2.0 / `98b38b4` |
 | 工具数 | **89**（底座 31 + 本项目补丁 58，全部按 7 个分区归位） |
-| 测试 | **298 项**，全绿（含 5 项环境相关跳过） |
+| 测试 | 以 docs/v1.3/VALIDATION.md 和完整回归报告为准；跳过项不算通过 |
 | 平台 | Windows 11 · 2560×1440 @150% |
-| 底座 | [computer-mcp](https://github.com/)（MIT，31 工具）+ 本项目补丁层 |
+| 底座 | computer-mcp 0.0.7 的 MIT 源码随标准安装包提供；见 THIRD_PARTY_NOTICES.md |
 | 许可证 | MIT |
 
 ---
@@ -28,7 +36,7 @@
 
 ---
 
-## 实测数字（本机，不是估算）
+## v1.2 历史实测数字（候选版尚未复测）
 
 | 指标 | 改造前 | 现在 |
 |---|---|---|
@@ -156,12 +164,12 @@ Ctrl+Alt+Shift+Backspace    强制夺回
 闸门因此变成两层：**授权 granted → 控制权 owner**。被拒时返回 `control` 字段与剩余秒数，
 模型能自己判断该等还是该问人，而不是干等。
 
-> 有个坑值得记：pynput 的全局监听器**也会看到我们自己注入的事件**。所以注入前后各开 250 ms
-> 静默窗，否则 AI 每点一下就把自己锁死。这条有专门的测试守着。
+v1.3 使用 Windows 注入标志过滤自己的事件。旧 quiet() 接口保留，但不会忽略静默期间的物理输入。
+监听启动失败时拒绝接管，授权撤销或控制权代际改变会取消原任务。
 
 ### ⑥ 训练数据分区 `dataset` —— 用完即入、离线回流
 
-每次工具调用都被路由层的一个 tee 记成一条 episode：
+v1.3 数据记录默认关闭；显式启用且用户授权有效时，路由层可记成一条 episode：
 
 ```
 工具 + 参数（脱敏后）+ 结果 + 耗时 + 分区
@@ -210,28 +218,21 @@ UIA 控件名  →  OCR 文字  →  模板匹配
 
 ## 快速开始
 
-```powershell
-# 0) 前置：Python 3.11+，computer-mcp 装进 venv；本项目以"补丁层"工作，不 fork 上游
+~~~powershell
+# Python 3.12+；完整源码随 wheel 提供，不再覆盖宿主 site-packages
+python -m pip install build
+python -m build
+powershell -File tools\install.ps1
 
-# 1) 打补丁（把 computer_mcp 扩到 89 个工具）
-venv\Scripts\python.exe _patched\reapply.py
+# 在独立目录运行回归；不授予真实宿主鼠标权限
+python tools\verify.py --pattern "test_*.py"
 
-# 2) 环境体检（6 组检查，5~10 秒）
-venv\Scripts\python.exe doctor.py
+# MCP 客户端 stdio 入口（详细配置见 INSTALL）
+& "$env:LOCALAPPDATA\IconControl\current\Scripts\python.exe" -m computer_mcp.launcher stdio
+~~~
 
-# 3) 不变量测试（298 项）
-venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
-
-# 4) 真操作冒烟（会动鼠标，需要 GUI 上授权变绿）
-$env:SHELL_E2E=1; venv\Scripts\python.exe -m unittest tests.test_e2e_smoke -v
-
-# 5) 鼠标接管前先查权限闸门（0=已授权 2=未授权）
-venv\Scripts\python.exe mouse_permission.py
-
-# 6) 两个可复现的能力自证（不需要任何外部应用）
-venv\Scripts\python.exe tools\selector_demo.py      # 硬坐标失败 vs 软选择器命中
-venv\Scripts\python.exe tools\track_nopred_demo.py  # 无 expect 的步骤是否真的执行
-```
+加载安装目录的授权客户端后，必须由用户点击授权。源码中的占位 Token 不可使用。
+HTTP 使用官方 Streamable HTTP、独立 Bearer Token 和 loopback 绑定；旧自制 SSE 接口不再提供。
 
 ---
 
@@ -254,7 +255,7 @@ venv\Scripts\python.exe tools\track_nopred_demo.py  # 无 expect 的步骤是否
 icon-control/
 ├─ README.md                 # 你正在读的这份
 ├─ CHANGELOG.md              # 25 个版本，逐条记录（含失败）
-├─ VERSION                   # 1.2.0
+├─ VERSION                   # 1.3.0rc1
 ├─ LICENSE                   # MIT
 ├─ docs/                     # 发展历程长文 + 踩坑清单
 ├─ recipes/                  # 每个验证过的应用一份"配方"（含 measured_coords + 坑）
@@ -275,9 +276,9 @@ icon-control/
 │   ├─ selector_demo.py      # 软选择器 A/B（自开靶子）
 │   ├─ track_nopred_demo.py  # 无 expect 步骤的回归测试
 │   └─ track_oneshot.py      # 列车一次性自测（11 项检查）
-├─ _patched/                 # computer_mcp 补丁层（含 zones/ 与 dataset/ 两个子包）
+├─ _patched/                 # 完整 computer_mcp 包源码，由 pyproject.toml 打包
 ├─ skill/desktop-operator/   # 随身 skill（SKILL.md + 10 个分册）
-├─ tests/                    # 298 项不变量测试
+├─ tests/                    # 逻辑、安全、协议回归；真机任务另行验收
 ├─ templates/                # 模板文件
 └─ plugin/                   # GUI 授权开关
 ```

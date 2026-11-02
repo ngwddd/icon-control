@@ -218,8 +218,8 @@ def resolve(rect: tuple[int, int, int, int], spec: dict,
             from PIL import Image
             import mss
 
-            d = template_dir or os.path.expanduser(
-                r"~/.dsh/tools/desktop-mcp/templates")
+            from computer_mcp.security import data_home
+            d = template_dir or str(data_home() / 'templates')
             path = os.path.join(d, str(name))
             if os.path.isfile(path):
                 # cv2.imread 在 Windows 上读不了含中文/空格的路径（实测返回 None）

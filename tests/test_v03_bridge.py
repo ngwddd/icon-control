@@ -15,6 +15,7 @@ from __future__ import annotations
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bootstrap  # noqa: F401
+from authority_fixture import AuthorityCase,signed_state
 
 import json
 import os
@@ -43,7 +44,7 @@ def _isolated_state() -> tuple[str, str]:
     return d, path
 
 
-class TestBridgeModule(unittest.TestCase):
+class TestBridgeModule(AuthorityCase,unittest.TestCase):
     @NEED
     def test_constants(self) -> None:
         self.assertEqual(int(bridge.DEFAULT_PORT), 18765)
@@ -81,7 +82,7 @@ class TestBridgeModule(unittest.TestCase):
             self.assertNotIn(bad, src, f"桥里不该有 {bad}")
 
 
-class TestGatePrefersBridge(unittest.TestCase):
+class TestGatePrefersBridge(AuthorityCase,unittest.TestCase):
     @NEED
     def test_bridge_ttl_shorter_than_ocr(self) -> None:
         self.assertLess(perm.BRIDGE_TTL_S, perm.CACHE_TTL_S,
@@ -102,8 +103,8 @@ class TestGatePrefersBridge(unittest.TestCase):
             perm.STATE_PATH = path
             perm._read_pill = spy_pill
             with open(path, "w", encoding="utf-8") as fh:
-                json.dump({"granted": True, "source": "bridge",
-                           "checked_at_ts": time.time(), "origin": "unit-test"}, fh)
+                json.dump(signed_state({"granted": True, "source": "bridge",
+                           "checked_at_ts": time.time(), "origin": "unit-test"}), fh)
             st = perm.status()
             self.assertEqual(st["source"], "bridge")
             self.assertTrue(st["granted"])

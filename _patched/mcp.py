@@ -110,6 +110,8 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
 
 async def run_stdio():
     """Run MCP server in stdio mode."""
+    from computer_mcp import permission
+    permission._ensure_bridge()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
@@ -119,90 +121,7 @@ async def run_stdio():
 
 
 async def run_http(host: str = "127.0.0.1", port: int = 8000):
-    """Run MCP server in HTTP/SSE mode.
-    
-    Implements HTTP/SSE transport for MCP server using aiohttp or similar.
-    Note: The MCP Python SDK doesn't natively support HTTP/SSE transport,
-    so we implement a custom HTTP server that handles MCP protocol over SSE.
-    
-    Args:
-        host: Host to bind to
-        port: Port to bind to
-    """
-    try:
-        from aiohttp import web, web_response
-        import json as json_lib
-    except ImportError:
-        raise ImportError(
-            "aiohttp is required for HTTP/SSE mode. Install with: pip install aiohttp"
-        )
-    
-    async def handle_sse(request):
-        """Handle Server-Sent Events connection."""
-        response = web_response.StreamResponse()
-        response.headers['Content-Type'] = 'text/event-stream'
-        response.headers['Cache-Control'] = 'no-cache'
-        response.headers['Connection'] = 'keep-alive'
-        await response.prepare(request)
-        
-        # Read from request and write to response
-        # This is a simplified implementation - full MCP over SSE would need
-        # proper message framing according to MCP spec
-        try:
-            async for line in request.content:
-                # Process MCP messages (simplified - actual implementation would parse JSON-RPC)
-                await response.write(f"data: {line.decode()}\n\n".encode())
-        except Exception as e:
-            await response.write(f"event: error\ndata: {json_lib.dumps({'error': str(e)})}\n\n".encode())
-        finally:
-            await response.write_eof()
-        
-        return response
-    
-    async def handle_mcp_message(request):
-        """Handle MCP tool call via HTTP POST."""
-        try:
-            data = await request.json()
-            tool_name = data.get("name")
-            arguments = data.get("arguments", {})
-            
-            # Call the tool handler
-            result = await call_tool(tool_name, arguments)
-            
-            # Convert MCP response format to JSON
-            response_data = []
-            for content in result:
-                if hasattr(content, 'text'):
-                    response_data.append({"type": "text", "text": content.text})
-                elif hasattr(content, 'data'):
-                    response_data.append({
-                        "type": "image",
-                        "data": content.data,
-                        "mimeType": getattr(content, 'mimeType', 'image/png')
-                    })
-            
-            return web.json_response({"content": response_data})
-        except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
-    
-    app = web.Application()
-    app.router.add_get('/sse', handle_sse)
-    app.router.add_post('/mcp', handle_mcp_message)
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, host, port)
-    await site.start()
-    
-    print(f"MCP server running in HTTP/SSE mode on http://{host}:{port}")
-    print(f"SSE endpoint: http://{host}:{port}/sse")
-    print(f"MCP endpoint: http://{host}:{port}/mcp")
-    
-    # Keep running
-    try:
-        await asyncio.Future()  # Run forever
-    except KeyboardInterrupt:
-        pass
-    finally:
-        await runner.cleanup()
+    """Authenticated MCP Streamable HTTP. Legacy fake SSE endpoint is removed."""
+    from computer_mcp.transport import run_http as sdk_http
+    await sdk_http(server, host, port)
 

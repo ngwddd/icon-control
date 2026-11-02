@@ -18,8 +18,9 @@ from computer_mcp import execution as _execution
 from computer_mcp import perceive
 from computer_mcp.capture_daemon import CaptureDaemon
 
-_DRAW = os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp", "_draw")
-_RECORD_ROOT = os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp", "recordings")
+from computer_mcp.security import data_home
+_DRAW = str(data_home() / '_draw')
+_RECORD_ROOT = str(data_home() / 'recordings')
 
 # 最近一次 run_script 的 trace（给 trace 工具用）
 _LAST_RUN: dict = {}
@@ -199,7 +200,9 @@ def tool_run_script(args: dict) -> dict:
                     max_seconds=float(a.get("max_seconds", 60)))
     runner.run(ops)
     res = runner.result()
-    res["success"] = True
+    res["success"] = not res.get('stopped')
+    res["status"] = 'cancelled' if res.get('stopped') else 'executed_unverified'
+    res["verified"] = False
     _LAST_RUN = res
     _RUN_HISTORY.append({k: res[k] for k in ("steps", "seconds", "stopped", "stop_reason")})
     return res
@@ -657,7 +660,7 @@ def tool_track(args: dict) -> dict:
     spec = a.get("track")
     if not spec and a.get("recipe"):
         import pathlib as _p
-        rp = _p.Path.home() / ".dsh" / "tools" / "desktop-mcp" / "recipes" / (str(a["recipe"]) + ".json")
+        rp = data_home() / 'recipes' / (str(a['recipe']) + '.json')
         if rp.is_file():
             spec = json.loads(rp.read_text(encoding="utf-8")).get("track")
     if not spec:
@@ -710,15 +713,24 @@ def tool_track(args: dict) -> dict:
             runner.result = {"status": "error", "reason": f"{type(e).__name__}: {e}"}
             runner.events.add("ANOMALY", runner.result["reason"])
 
-    th = threading.Thread(target=_go, daemon=True)
+    # A worker must retain the initiating authority generation. Revocation and
+    # regrant must never resume an old background task under the new grant.
+    from contextvars import copy_context
+    context = copy_context()
+    th = threading.Thread(target=lambda: context.run(_go), daemon=True)
     th.start()
     _TRAINS[tid] = {"runner": runner, "thread": th, "track": track.name}
-    print(f"[train] #{tid} 轨道 {track.name!r} 启动，窗口 {hwnd} {rect}")
+    import sys
+    print(f"[train] #{tid} 轨道 {track.name!r} 启动，窗口 {hwnd} {rect}", file=sys.stderr)
 
     if action == "run":
         wait_s = float(a.get("wait_s", max_total))
         th.join(timeout=wait_s)
-        return {"success": True, "id": tid, "alive": th.is_alive(), **runner.result}
+        alive = th.is_alive()
+        status = 'running' if alive else runner.result.get('status','executed_unverified')
+        return {"success": status in ('running','done'),
+                "id": tid, "alive": alive, **runner.result, "status": status,
+                "verified": False}
 
     return {"success": True, "id": tid, "alive": True,
             "status": "running", "track": track.name, "hwnd": hwnd, "rect": list(rect)}

@@ -41,7 +41,7 @@ from typing import Any
 
 MEM_DIR = os.environ.get(
     "DESK_MEMORY_DIR",
-    os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp", "memory"),
+    str(__import__('computer_mcp.security', fromlist=['data_home']).data_home() / 'memory'),
 )
 STORE = os.path.join(MEM_DIR, "anchors.json")
 

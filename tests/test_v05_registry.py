@@ -28,7 +28,8 @@ NEED = unittest.skipUnless(HAVE, "导不进 computer_mcp.tool_registry")
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAP = os.path.join(HERE, "docs", "tools-snapshot.json")
-MCP = os.path.join(HERE, "venv", "Lib", "site-packages", "computer_mcp", "mcp.py")
+import computer_mcp
+MCP = os.path.join(os.path.dirname(computer_mcp.__file__), 'mcp.py')
 
 
 def _snapshot() -> dict:
@@ -94,7 +95,12 @@ class TestRegistryEquivalence(unittest.TestCase):
             spec = reg.TOOLS[row["name"]]
             self.assertEqual(spec.description, row["description"],
                              f"{row['name']} description 变了")
-            self.assertEqual(json.loads(json.dumps(spec.schema, sort_keys=True)),
+            current=json.loads(json.dumps(spec.schema))
+            if row['name']=='ui_click':
+                self.assertEqual(current['properties'].pop('ref')['type'],'string')
+                self.assertIn({'required':['name']},current.pop('anyOf'))
+                current['required']=['name']
+            self.assertEqual(current,
                              json.loads(json.dumps(row["schema"], sort_keys=True)),
                              f"{row['name']} inputSchema 变了")
 
