@@ -26,7 +26,9 @@ def main():
     scale=max(1.0,root.winfo_fpixels('1i')/96.0)
     width=min(int(650*scale),root.winfo_screenwidth()-80)
     height=min(int(720*scale),root.winfo_screenheight()-100)
-    root.geometry(f'{width}x{height}')
+    left=max(0,(root.winfo_screenwidth()-width)//2)
+    top=max(0,(root.winfo_screenheight()-height)//2)
+    root.geometry(f'{width}x{height}+{left}+{top}')
     root.minsize(min(width,int(600*scale)),min(height,int(600*scale)))
     frame = ttk.Frame(root, padding=16); frame.pack(fill='both',expand=True)
     status = tk.StringVar(value='正在连接权限服务…')
@@ -81,7 +83,8 @@ def main():
             if not selected: raise ValueError('请至少选择一种能力')
             result = ipc('grant', agent_session=agent_ids[index], scopes=selected,
                                         applications=[records[i] for i in applications.curselection()], launches=launches)
-            desired[0] = result.get('granted') is True
+            if result.get('granted') is not True:raise RuntimeError('后端尚未确认授权')
+            desired[0] = True
             status.set('后端已确认：已授权。30 分钟后到期；关闭本窗口将撤销。')
         except Exception as exc:
             status.set('状态未知或未授权：'+str(exc))

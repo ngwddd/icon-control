@@ -170,7 +170,7 @@ class CaptureDaemon:
         with self._lock:
             n = len(self._frames)
             last = self._frames[-1] if n and can_read else None
-            span = (last.ts - self._frames[0].ts) if n >= 2 else 0.0
+            span = (last.ts - self._frames[0].ts) if n >= 2 and last is not None else 0.0
         running = bool(self._thread and self._thread.is_alive())
         fps = (n - 1) / span if span > 0 else 0.0
         return {

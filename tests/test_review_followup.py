@@ -1,5 +1,6 @@
 """Reproduced IR-10..14 regressions; synthetic fixtures never grant the live host."""
 import hashlib
+import ast
 import importlib.util
 import io
 import json
@@ -41,7 +42,22 @@ class FollowupTests(AuthorityCase,unittest.TestCase):
 
     def test_daemon_status_cannot_disclose_other_agents_window_title(self):
         daemon=self.daemon();daemon.owner_session='different-agent'
+        daemon._frames.append(capture_daemon.Frame(1,time.time(),np.zeros((8,8,3),dtype=np.uint8),active_window='Private fixture'))
         self.assertIsNone(daemon.status()['last'])
+
+    def test_native_grant_callback_does_not_claim_a_denied_acknowledgement(self):
+        from computer_mcp import consent
+        tree=ast.parse(Path(consent.__file__).read_text(encoding='utf-8'))
+        handler=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='grant')
+        for granted in (False,True):
+            status=Mock();desired=[False]
+            namespace=dict(desired=desired,agents=Mock(current=lambda:0),options={'screen_read':Mock(get=lambda:True)},
+                agent_ids=['fixture'],records=[],applications=Mock(curselection=lambda:[]),launches=[],
+                ipc=Mock(return_value={'granted':granted}),status=status)
+            exec(compile(ast.Module(body=[handler],type_ignores=[]),consent.__file__,'exec'),namespace)
+            namespace['grant']()
+            self.assertEqual(desired,[granted])
+            self.assertEqual('后端已确认：已授权' in status.set.call_args.args[0],granted)
 
     def test_panic_callback_survives_broken_stderr(self):
         from computer_mcp import panic,input_guard
