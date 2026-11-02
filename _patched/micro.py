@@ -106,8 +106,9 @@ class Runner:
     def __init__(self, daemon, keyboard, mouse, scale: float, origin=(0, 0),
                  max_seconds: float = MAX_SECONDS):
         self.d = daemon
-        self.kb = keyboard
-        self.ms = mouse
+        from computer_mcp.input_guard import MouseController, KeyboardController
+        self.kb = keyboard if isinstance(keyboard, KeyboardController) else KeyboardController(keyboard)
+        self.ms = mouse if isinstance(mouse, MouseController) else MouseController(mouse)
         self.scale = scale
         self.origin = origin
         self.deadline = time.time() + min(MAX_SECONDS, max_seconds)
@@ -128,6 +129,8 @@ class Runner:
         self.trace.append(row)
 
     def _budget(self) -> bool:
+        from computer_mcp.execution import check
+        check('run_script')
         self.steps += 1
         if self.steps > MAX_STEPS:
             self.stopped, self.stop_reason = True, "超过最大步数"

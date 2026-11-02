@@ -35,6 +35,15 @@ from computer_mcp import anchor_mem
 
 def dispatch(name: str, arguments: dict, *, computer_state, mouse_controller,
              keyboard_controller) -> dict:
+    from computer_mcp.execution import operation
+    from computer_mcp.input_guard import MouseController, KeyboardController
+    with operation(name):
+        return _dispatch_impl(name, arguments, computer_state=computer_state,
+            mouse_controller=mouse_controller if isinstance(mouse_controller, MouseController) else MouseController(mouse_controller),
+            keyboard_controller=keyboard_controller if isinstance(keyboard_controller, KeyboardController) else KeyboardController(keyboard_controller))
+
+def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controller,
+             keyboard_controller) -> dict:
     """执行非闸门部分的分发；返回 {result, screenshot_data}。"""
     from computer_mcp.zones import aliases as _aliases
     name = _aliases.resolve(name)      # 新名→旧名（实现仍是旧名）

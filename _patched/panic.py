@@ -44,12 +44,14 @@ class PanicSwitch:
         self._lock = threading.Lock()
         self.triggered_at: float | None = None
         self.press_count = 0
+        self._esc_down = False
 
     # ---------- 监听 ----------
     def start(self) -> None:
         if keyboard is None or self._listener is not None:
             return
-        self._listener = keyboard.Listener(on_press=self._on_press)
+        self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release,
+                                          win32_event_filter=lambda msg, data: not (data.flags & 0x10))
         self._listener.daemon = True
         self._listener.start()
         if self.verbose:
@@ -61,7 +63,10 @@ class PanicSwitch:
                 return
         except Exception:
             return
-        now = time.time()
+        if self._esc_down:
+            return
+        self._esc_down = True
+        now = time.monotonic()
         with self._lock:
             self.press_count += 1
             self._press_times = [t for t in self._press_times if now - t <= self.window_s]
@@ -69,6 +74,10 @@ class PanicSwitch:
             if len(self._press_times) >= 2 and not self._event.is_set():
                 self._event.set()
                 self.triggered_at = now
+                from computer_mcp import control
+                control.release('emergency stop')
+                from computer_mcp import input_guard
+                input_guard.release_all()
                 if self.verbose:
                     print("[panic] ✋ 收到「连按两下 ESC」—— 立即停止鼠标/键盘控制，等待指示", flush=True)
 
@@ -76,6 +85,14 @@ class PanicSwitch:
     @property
     def triggered(self) -> bool:
         return self._event.is_set()
+
+    @property
+    def ready(self) -> bool:
+        return bool(self._listener and self._listener.is_alive())
+
+    def _on_release(self, key):
+        if keyboard and key == keyboard.Key.esc:
+            self._esc_down = False
 
     def check(self) -> bool:
         """便捷调用：返回是否已触发（等价于 .triggered）。"""
@@ -89,6 +106,7 @@ class PanicSwitch:
         """显式复位 —— 只有人确认之后才该调用。"""
         with self._lock:
             self._press_times.clear()
+            self._esc_down = False
             self.triggered_at = None
             self._event.clear()
 

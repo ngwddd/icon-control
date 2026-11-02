@@ -19,13 +19,16 @@ window.__ModuleLoader__.load({
     // 本机 token：由桥在自己的 state 目录生成，仓库里替换成 __BRIDGE_TOKEN__
     const BRIDGE_TOKEN = '__BRIDGE_TOKEN__';
     const HEARTBEAT_MS = 5000;
+    const CLIENT = (window.crypto && window.crypto.randomUUID)
+      ? window.crypto.randomUUID() : String(Date.now()) + Math.random().toString(36);
     let lastMode = 'unknown';
 
-    function sendBeacon(granted) {
+    function sendBeacon(granted, event) {
       try {
         const img = new Image();
         // 不带 no-referrer：桥要靠 Referer 判断来源
-        img.src = BRIDGE + '/beacon?k=' + BRIDGE_TOKEN + '&granted=' + (granted ? '1' : '0') + '&t=' + Date.now();
+        if (!BRIDGE_TOKEN || BRIDGE_TOKEN === '__BRIDGE_TOKEN__') return false;
+        img.src = BRIDGE + '/beacon?k=' + encodeURIComponent(BRIDGE_TOKEN) + '&granted=' + (granted ? '1' : '0') + '&client=' + encodeURIComponent(CLIENT) + '&event=' + event + '&t=' + Date.now();
         lastMode = 'beacon';
         return true;
       } catch (err) {
@@ -33,14 +36,15 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function pushToBridge(granted) {
-      sendBeacon(granted);
+    function pushToBridge(granted, event = 'hb') {
+      sendBeacon(granted, event);
       try {
-        window.fetch(BRIDGE + '/state?k=' + BRIDGE_TOKEN, {
+        if (!BRIDGE_TOKEN || BRIDGE_TOKEN === '__BRIDGE_TOKEN__') return;
+        window.fetch(BRIDGE + '/state?k=' + encodeURIComponent(BRIDGE_TOKEN), {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill' }),
+          body: JSON.stringify({ granted: !!granted, origin: 'mouse-permission-pill', client: CLIENT, event }),
         }).catch(function () { /* 桥没起来就算了 */ });
       } catch (err) {
         /* 没有 fetch 也不影响信标 */
@@ -88,12 +92,13 @@ window.__ModuleLoader__.load({
         pushToBridge(readGranted());
       }, []);
 
-      const toggle = function toggle() {
+      const toggle = function toggle(event) {
+        if (!event || !event.isTrusted) return;
         const next = !readGranted();
         writeGranted(next);
         setGranted(next);
         window.dispatchEvent(new CustomEvent(EVENT));
-        pushToBridge(next);
+        pushToBridge(next, 'action');
       };
 
       const dot = {

@@ -7,8 +7,7 @@ from typing import Any, Union
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import ImageContent, TextContent, Tool
-from pynput.keyboard import Controller as KeyboardController
-from pynput.mouse import Controller as MouseController
+from computer_mcp.input_guard import KeyboardController, MouseController
 
 from computer_mcp.actions import (
     keyboard as keyboard_actions,

@@ -46,7 +46,7 @@ TOOLS: dict[str, ToolSpec] = {s.name: s for s in _ALL_SPECS}
 
 
 def get(name: str):
-    return TOOLS.get(name)
+    return TOOLS.get(resolve(name))
 
 
 def _csv(env: str) -> set:
@@ -59,7 +59,9 @@ def _allowed(name: str) -> bool:
 
     只影响**模型能看到什么**，不影响内部调用（宏、测试、脚本仍可直接用名字）。
     """
-    allow, deny = _csv("DSH_TOOLS_ALLOW"), _csv("DSH_TOOLS_DENY")
+    name = resolve(name) or name
+    allow = {resolve(n) or n for n in _csv('DSH_TOOLS_ALLOW')}
+    deny = {resolve(n) or n for n in _csv('DSH_TOOLS_DENY')}
     if allow and name not in allow:
         return False
     if name in deny:
@@ -83,12 +85,17 @@ def by_zone(zone: str) -> list:
 
 def resolve(name: str):
     """名字或别名 → 规范名。"""
+    from computer_mcp.zones.aliases import resolve as implementation_name
+    name = implementation_name(name)
     if name in TOOLS:
         return name
     for spec in TOOLS.values():
         if name in spec.aliases:
             return spec.name
     return None
+
+def allowed(name: str) -> bool:
+    return resolve(name) is not None and _allowed(name)
 
 
 def iter_specs() -> Iterator[ToolSpec]:

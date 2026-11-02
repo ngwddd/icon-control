@@ -30,8 +30,7 @@ def _daemon() -> CaptureDaemon:
 
 
 def _controllers():
-    from pynput.keyboard import Controller as KB
-    from pynput.mouse import Controller as MS
+    from computer_mcp.input_guard import KeyboardController as KB, MouseController as MS
     return KB(), MS()
 
 

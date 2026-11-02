@@ -46,6 +46,7 @@ ENABLED = os.environ.get("DSH_CONTROL", "on").strip().lower() not in {"0", "off"
 _lock = threading.RLock()
 _watchers = {"mouse": None, "keyboard": None}
 _started = False
+_generation = 0
 
 
 def enabled() -> bool:
@@ -76,13 +77,11 @@ def _in_quiet() -> bool:
 
 def note_physical(reason: str = "physical input") -> None:
     """记录一次真实用户输入：若当前由 AI 持有，立刻交还。"""
-    if not ENABLED:
-        return
-    if _in_quiet():
-        return
+    global _generation
     with _lock:
+        _generation += 1
         STATE["last_user"] = _now()
-        if STATE["owner"] == "ai":
+        if STATE['owner'] != 'user':
             STATE["takeovers"] += 1
             STATE["owner"] = "user"
             STATE["since"] = _now()
@@ -90,8 +89,18 @@ def note_physical(reason: str = "physical input") -> None:
 
 
 def claim(reason: str = "agent") -> dict:
-    ensure_watcher()
+    from computer_mcp import permission, panic
+    if not permission.status().get('granted'):
+        return dict(status(), ok=False, error='User authorization required')
+    if panic.default().triggered or not panic.default().ready:
+        return dict(status(), ok=False, error='Emergency listener unavailable or stopped')
+    if not ensure_watcher():
+        return dict(status(), ok=False, error='Takeover listeners did not start')
+    if status()['owner'] == 'user':
+        return dict(status(), ok=False, error='User owns control; claim cannot override takeover')
     with _lock:
+        if status()['owner'] == 'user':
+            return dict(status(), ok=False, error='User took over while claim was starting')
         STATE["owner"] = "ai"
         STATE["since"] = _now()
         STATE["reason"] = reason
@@ -99,7 +108,9 @@ def claim(reason: str = "agent") -> dict:
 
 
 def release(reason: str = "agent released") -> dict:
+    global _generation
     with _lock:
+        _generation += 1
         STATE["owner"] = "user" if STATE["last_user"] else "idle"
         STATE["since"] = _now()
         STATE["reason"] = reason
@@ -130,14 +141,16 @@ def status() -> dict:
         "idle_resume_s": IDLE_RESUME_S,
         "enabled": ENABLED,
         "reason": reason,
-        "watcher": bool(_watchers["mouse"] or _watchers["keyboard"]),
+        'watcher': bool(_watchers['mouse'] and _watchers['keyboard'] and
+                        all(w.is_alive() for w in _watchers.values())),
+        'generation': _generation,
     }
 
 
 def blocking_reason() -> str | None:
     """给闸门用：非 None 表示当前不该注入输入。"""
-    if not ENABLED:
-        return None
+    if not ENABLED or not ensure_watcher():
+        return 'Takeover monitoring unavailable; execution is blocked'
     st = status()
     if st["owner"] == "user":
         return (f"用户已接管控制权（{st['idle_s']}s 前），"
@@ -149,9 +162,10 @@ def blocking_reason() -> str | None:
 def ensure_watcher() -> bool:
     """启动 pynput 全局监听（幂等）。拿不到权限就静默失败。"""
     global _started
-    if _started or not ENABLED:
-        return bool(_watchers["mouse"] or _watchers["keyboard"])
-    _started = True
+    if not ENABLED:
+        return False
+    if _started:
+        return all(w is not None and w.is_alive() for w in _watchers.values())
     try:
         from pynput import keyboard as kb
         from pynput import mouse as ms
@@ -167,21 +181,35 @@ def ensure_watcher() -> bool:
             note_physical("mouse scroll")
 
         def on_press(key):
-            try:
-                if _is_takeover_combo():
-                    note_physical("takeover hotkey")
-            except Exception:                           # noqa: BLE001
-                pass
+            note_physical('keyboard input')
 
-        ml = ms.Listener(on_move=on_move, on_click=on_click, on_scroll=on_scroll)
-        kl = kb.Listener(on_press=on_press)
+        # Windows distinguishes injected from physical input. A time window
+        # would also suppress a real user's hand while the agent is moving.
+        def mouse_filter(msg, data):
+            return not (data.flags & 0x01)
+
+        def keyboard_filter(msg, data):
+            return not (data.flags & 0x10)
+
+        ml = ms.Listener(on_move=on_move, on_click=on_click, on_scroll=on_scroll,
+                         win32_event_filter=mouse_filter)
+        kl = kb.Listener(on_press=on_press, win32_event_filter=keyboard_filter)
         ml.daemon = True
         kl.daemon = True
-        ml.start()
-        kl.start()
         _watchers["mouse"], _watchers["keyboard"] = ml, kl
+        for listener in (ml, kl):
+            listener.start()
+            ready = threading.Event()
+            def wait_ready(current=listener, event=ready):
+                current.wait()
+                event.set()
+            threading.Thread(target=wait_ready, daemon=True).start()
+            if not ready.wait(2) or not listener.is_alive():
+                raise RuntimeError('Listener readiness timeout')
+        _started = True
         return True
     except Exception:                                   # noqa: BLE001
+        stop_watcher()
         return False
 
 

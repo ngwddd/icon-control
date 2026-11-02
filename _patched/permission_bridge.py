@@ -23,12 +23,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import hmac
+import secrets
 import os
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+from computer_mcp import security
 
 DEFAULT_PORT = 18765
 ALLOW_ANY_PATH = "/state"
@@ -36,12 +39,12 @@ BEACON_PATH = "/beacon"
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     "..", "..", "..", ".."))
-STATE_DIR = os.path.join(ROOT, "state")
+STATE_DIR = str(security.data_home() / 'state')
 STATE_PATH = os.path.join(STATE_DIR, "mouse-permission.json")
 LOG_PATH = os.path.join(STATE_DIR, "bridge.log")
-TOKEN_PATH = os.path.join(STATE_DIR, "bridge-token.txt")
+TOKEN_PATH = str(security.token_path())
 
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 # 一旦收到过带 token 的请求，就再也不接受无 token 的请求（自动收紧）
 _token_seen = False
@@ -57,11 +60,7 @@ def log(line: str) -> None:
 
 
 def load_token() -> str:
-    try:
-        with open(TOKEN_PATH, encoding="utf-8") as fh:
-            return fh.read().strip()
-    except Exception:
-        return ""
+    return security.load_token()
 
 
 # ── 多窗口状态表（2026-11-02 修 bug）─────────────────────────────────
@@ -71,14 +70,21 @@ def load_token() -> str:
 # 现在按 client 分开记，并区分「用户动作」与「心跳」：
 #   动作（点按钮）能改变全局授权；心跳只表示「这个窗口还活着、它当前是什么值」。
 CLIENTS: dict[str, dict] = {}
+_last_action = None
+_revision = 0
+_session = secrets.token_hex(16)
 CLIENT_HB_TTL_S = 30.0          # 心跳多久内算这个窗口还活着
 CLIENT_ACTION_TTL_S = 1800.0    # 用户动作的有效期（30 分钟）
 
 
 def note_client(client: str, granted: bool, event: str) -> None:
+    global _last_action, _revision
     now = time.time()
     key = (client or "default")[:64]
     CLIENTS[key] = {"granted": bool(granted), "ts": now, "event": event}
+    if event == 'action':
+        _revision += 1
+        _last_action = (now, bool(granted), key)
     for k in list(CLIENTS):                    # 清掉陈旧条目，避免无限增长
         if now - CLIENTS[k]["ts"] > CLIENT_ACTION_TTL_S:
             CLIENTS.pop(k, None)
@@ -93,31 +99,34 @@ def effective_state() -> tuple:
       3. 都没有 → None（Host 会退回 OCR，读不到就 fail closed）
     """
     now = time.time()
-    actions = [(v["ts"], v["granted"]) for v in CLIENTS.values()
-               if v["event"] == "action" and now - v["ts"] <= CLIENT_ACTION_TTL_S]
-    if actions:
-        ts, granted = max(actions, key=lambda x: x[0])
-        return granted, "action@%ds" % int(now - ts)
-    hbs = [v["granted"] for v in CLIENTS.values()
-           if now - v["ts"] <= CLIENT_HB_TTL_S]
-    if hbs:
-        return any(hbs), "heartbeat"
-    return None, "none"
+    if _last_action is None:
+        return False, 'no-user-action'
+    ts, granted, client = _last_action
+    live = CLIENTS.get(client, {})
+    if now - ts > CLIENT_ACTION_TTL_S or now - live.get('ts', 0) > CLIENT_HB_TTL_S:
+        return False, 'expired'
+    return granted, 'action@%ds' % int(now - ts)
 
 
 def write_state(granted: bool, origin: str = "bridge",
                 client: str = None, event: str = None) -> None:
+    with _lock:
+        _write_state_locked(granted, origin, client, event)
+
+def _write_state_locked(granted, origin, client, event):
     now = time.time()
     if client is None and event is None:
-        # 兼容旧调用（测试 / CLI 直接写状态文件）：当成唯一客户端的动作
-        note_client("default", granted, "action")
-        eff, why = bool(granted), "action@0s"
+        # A legacy caller cannot establish new authority without a user action.
+        note_client("default", granted, "hb")
+        eff, why = effective_state()
     else:
         note_client(client or "default", granted, event or "hb")
         eff, why = effective_state()
         if eff is None:                        # 理论上不会走到
             eff, why = bool(granted), "single"
     payload = {
+        'session': _session,
+        "revision": _revision,
         "granted": bool(eff),
         "source": "bridge",
         "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -129,6 +138,10 @@ def write_state(granted: bool, origin: str = "bridge",
                         "age_s": round(now - v["ts"], 1)}
                     for k, v in list(CLIENTS.items())[:8]},
     }
+    token = load_token()
+    if not token:
+        raise RuntimeError('Permission bridge requires a provisioned token')
+    payload['signature'] = security.signature(payload, token)
     with _lock:
         os.makedirs(STATE_DIR, exist_ok=True)
         tmp = STATE_PATH + ".tmp"
@@ -152,7 +165,10 @@ class Handler(BaseHTTPRequestHandler):
         return
 
     def _cors(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get('Origin')
+        if origin and self._trusted_source(origin):
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
@@ -177,19 +193,22 @@ class Handler(BaseHTTPRequestHandler):
         referer = (self.headers.get("Referer") or "").strip().lower()
         if not origin and not referer:
             return True
-        for value in (origin, referer):
-            if not value:
-                continue
-            if (value.startswith("dsh-app://")
-                    or value.startswith("file://")
-                    or value.startswith("http://127.0.0.1")
-                    or value.startswith("http://localhost")):
-                return True
-        return False
+        return all(self._trusted_source(value) for value in (origin, referer) if value)
+
+    @staticmethod
+    def _trusted_source(value):
+        try:
+            parsed = urlparse(value)
+            return not parsed.username and not parsed.password and (
+                parsed.scheme == 'dsh-app' or
+                (parsed.scheme == 'file' and parsed.hostname in (None, '', 'localhost')) or
+                (parsed.scheme == 'http' and parsed.hostname in ('127.0.0.1', 'localhost')))
+        except ValueError:
+            return False
 
     def _authorized(self, parsed) -> bool:
         path = parsed.path
-        if path not in (ALLOW_ANY_PATH, BEACON_PATH) and not path.startswith("/s/"):
+        if path not in (ALLOW_ANY_PATH, BEACON_PATH):
             log(f"REJECT path={path}")
             return False
         if not self._source_ok():
@@ -198,18 +217,9 @@ class Handler(BaseHTTPRequestHandler):
             return False
         # 带 token 时校验 token；不带 token 但来源合格也接受
         # （Host 缓存的插件模块在 DSH 重启前不会更新，不能因为没 token 就把用户晾着）
-        global _token_seen
         expected = load_token()
         got = (parse_qs(parsed.query).get("k") or [""])[0]
-        if expected and got:
-            if got != expected:
-                log(f"REJECT bad-token path={path}")
-                return False
-            _token_seen = True          # 客户端已升级：从此只收带 token 的
-        elif expected and _token_seen:
-            log(f"REJECT missing-token path={path}")
-            return False
-        return True
+        return bool(expected and got and hmac.compare_digest(expected, got))
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -253,6 +263,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             n = int(self.headers.get("Content-Length") or 0)
+            if n < 1 or n > 4096:
+                self.send_error(413, 'Invalid body length')
+                return
             raw = self.rfile.read(n).decode("utf-8", "replace") if n else "{}"
         except Exception:
             raw = "{}"
@@ -260,12 +273,15 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(raw)
         except Exception:
             data = {}
-        if "granted" not in data:
+        if not isinstance(data, dict) or "granted" not in data:
             self.send_response(400)
             self._cors()
             self.end_headers()
             return
-        granted = bool(data.get("granted"))
+        if type(data.get('granted')) is not bool:
+            self.send_error(400, 'granted must be a boolean')
+            return
+        granted = data['granted']
         client = str(data.get("client") or "default")
         event = str(data.get("event") or "hb")
         if event not in ("action", "hb"):
@@ -284,7 +300,9 @@ def main() -> int:
     args = ap.parse_args()
     os.makedirs(STATE_DIR, exist_ok=True)
     if not load_token():
-        log("bridge: 没有 token 文件，将以「不校验 token」模式运行（只靠 Origin）")
+        print('Bridge token missing; run the installer first.', file=sys.stderr)
+        return 2
+    write_state(False, origin='startup', client='startup', event='action')
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     log(f"bridge listening on 127.0.0.1:{args.port}")
     print(f"permission bridge: http://127.0.0.1:{args.port}{BEACON_PATH}", flush=True)

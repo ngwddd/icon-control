@@ -278,6 +278,8 @@ def ui_invoke(name: str, hwnd: int | None = None, exact: bool = False, index: in
     if ctrl is None:
         return {"error": "control vanished before invoke"}
     try:
+        from computer_mcp.execution import check
+        check('ui_invoke')
         ctrl.GetInvokePattern().Invoke()
     except Exception as exc:
         return {"error": f"invoke failed: {exc}", "hint": "use ui_click instead"}
@@ -302,10 +304,13 @@ def ui_set_text(name: str, text: str, hwnd: int | None = None, exact: bool = Fal
             n = (c.Name or "").strip().casefold()
             if ((n == needle) if exact else (needle in n)) and n:
                 try:
+                    from computer_mcp.execution import check
+                    check('ui_set_text')
                     c.GetValuePattern().SetValue(text)
                     return {"ok": True, "set": text, "target": target["name"]}
                 except Exception:
                     try:
+                        check('ui_set_text')
                         c.GetValuePattern().SetValue(text)
                     except Exception as exc:
                         return {"error": f"value pattern failed: {exc}", "hint": "focus it and use type"}

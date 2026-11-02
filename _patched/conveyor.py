@@ -539,8 +539,9 @@ def text_landed(sent: str, got: str, min_lcs: float = 0.5) -> bool:
 
 def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> dict:
     """执行一个动作。返回 {"ok": bool, "detail": str}。"""
-    from pynput.keyboard import Controller as KB, Key
-    from pynput.mouse import Button, Controller as MS
+    from computer_mcp.input_guard import KeyboardController as KB, Key, Button, MouseController as MS
+    from computer_mcp.execution import check
+    check('run_script')
 
     kind = (action or {}).get("kind", "")
     try:
@@ -763,6 +764,7 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
             time.sleep(0.15)
             k = int(action.get("dy", -360))
             for _ in range(int(action.get("times", 1))):
+                check('mouse_move')
                 ctypes.windll.user32.mouse_event(0x0800, 0, 0, k, 0)
                 time.sleep(float(action.get("gap_ms", 300)) / 1000.0)
             return {"ok": True, "detail": f"scroll {k}×{action.get('times', 1)} at {pt}"}
@@ -773,8 +775,7 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
 
         if kind == "macro":
             from computer_mcp import macro_ext
-            from pynput.keyboard import Controller as KB2
-            from pynput.mouse import Controller as MS2
+            from computer_mcp.input_guard import KeyboardController as KB2, MouseController as MS2
 
             res = macro_ext.run_macro(str(action.get("name", "")),
                                       dict(action.get("params") or {}),

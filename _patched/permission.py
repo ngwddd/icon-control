@@ -34,8 +34,9 @@ import json
 import os
 import re
 import time
+from computer_mcp import security
 
-STATE_DIR = os.path.join(os.path.expanduser("~"), ".dsh", "tools", "desktop-mcp", "state")
+STATE_DIR = str(security.data_home() / 'state')
 STATE_PATH = os.environ.get("DSH_MOUSE_STATE") or os.path.join(STATE_DIR, "mouse-permission.json")
 CACHE_TTL_S = float(os.environ.get("DSH_MOUSE_TTL", "45"))
 
@@ -248,52 +249,32 @@ def _ttl_for(cached: dict) -> float:
 
 
 def status(force: bool = False) -> dict:
-    """当前授权状态。命中缓存时几乎是零成本。"""
+    """Only a fresh, signed bridge action is authority; OCR is diagnostic only."""
     now = time.time()
-    if _gate_disabled():
-        return {"granted": True, "source": "env-disabled", "age_s": 0.0,
-                "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"), "screen_text": ""}
-
     cached = _read_state_file()
-    if cached and not force:
-        age = now - float(cached.get("checked_at_ts") or 0)
-        if 0 <= age < _ttl_for(cached):
-            return {"granted": bool(cached["granted"]), "source": cached.get("source", "cache"),
-                    "age_s": round(age, 1), "checked_at": cached.get("checked_at"),
-                    "screen_text": cached.get("screen_text", ""),
-                    "effective_from": cached.get("effective_from", "")}
-
-    _ensure_bridge()
-    time.sleep(0.7)
-    refreshed = _read_state_file()
-    if refreshed:
-        age2 = time.time() - float(refreshed.get("checked_at_ts") or 0)
-        if 0 <= age2 < BRIDGE_TTL_S:
-            return {"granted": bool(refreshed["granted"]),
-                    "source": refreshed.get("source", "cache"),
-                    "age_s": round(age2, 1),
-                    "checked_at": refreshed.get("checked_at"),
-                    "screen_text": refreshed.get("screen_text", "")}
-
-    granted, snippet = _read_pill()
-    source = "screen" if granted is not None else "unknown"
-    stamp = time.time()                      # 修：原来用的是函数开头那个 now（早于 0.7s 等待）
-    payload = {
-        "granted": bool(granted),
-        "source": source,
-        "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "checked_at_ts": stamp,
-        "screen_text": snippet,
-    }
-    _write_state_file(payload)
-    return {"granted": bool(granted), "source": source, "age_s": 0.0,
-            "checked_at": payload["checked_at"], "screen_text": snippet}
+    try:
+        age = now - float(cached['checked_at_ts']) if cached else -1
+        if (cached and type(cached.get('granted')) is bool and
+                cached.get('source') == 'bridge' and security.authentic(cached) and
+                0 <= age < BRIDGE_TTL_S):
+            return dict(cached, age_s=round(age, 3))
+    except (ValueError, TypeError, KeyError):
+        pass
+    return dict(granted=False, source='unknown', age_s=0.0, screen_text='',
+                checked_at='', reason='Missing, expired or unauthenticated bridge state')
 
 
 def check_tool(name: str, arguments: dict | None = None) -> dict | None:
     """输入类工具的统一闸门。返回 None 表示放行，返回 dict 表示拒绝载荷。"""
-    if name not in INPUT_TOOLS:
+    from computer_mcp import tool_registry, panic
+    spec = tool_registry.get(name)
+    if spec is None or not tool_registry.allowed(name):
+        return dict(success=False, blocked=True, tool=name, error='Tool disabled or unknown')
+    if not spec.requires_authority:
         return None
+    emergency = panic.default()
+    if emergency.triggered or not emergency.ready:
+        return dict(success=False, blocked=True, tool=name, error='Emergency stop active or listener unavailable')
     st = status()
     if st["granted"]:
         # P0-1：授权之外还看「控制权是否在用户手上」（用户随时可以夺回）
@@ -310,8 +291,8 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
                     "control": _ctl.status(),
                     "hint": "用户动了鼠标/键盘即视为接管；闲置到期或 control_claim 后恢复。",
                 }
-        except Exception:                               # noqa: BLE001
-            pass
+        except Exception as exc:
+            return dict(success=False, blocked=True, tool=name, error=f'Control guard unavailable: {exc}')
         return None
     return {
         "success": False,
@@ -325,16 +306,13 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
 
 def require(tool: str = "unknown") -> None:
     """非 MCP 路径（脚本、宏、测试）用这个：未授权就抛异常。"""
-    st = status()
-    if not st["granted"]:
-        raise PermissionDenied(
-            f"鼠标接管未授权（tool={tool}, source={st['source']}）。"
-            "请在 DSH 界面点亮「鼠标·已授权」。"
-        )
+    denial = check_tool(tool)
+    if denial is not None:
+        raise PermissionDenied(denial['error'])
 
 
 def enabled() -> bool:
-    return not _gate_disabled()
+    return True
 
 
 def main() -> int:

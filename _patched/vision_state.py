@@ -271,7 +271,7 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
     if offset:
         cx += int(offset[0]); cy += int(offset[1])
     if mouse is None:
-        from pynput.mouse import Button as MB, Controller as MC
+        from computer_mcp.input_guard import Button as MB, MouseController as MC
         mouse = MC()
         _btn = MB.left
     else:
@@ -426,7 +426,7 @@ def hover_probe(x: int, y: int, region: Any = None, hwnd: int | None = None,
     op = "hover_probe"
     try:
         if mouse is None:
-            from pynput.mouse import Controller as MC
+            from computer_mcp.input_guard import MouseController as MC
             mouse = MC()
         reg = _norm_region(region)
         if reg is None:
