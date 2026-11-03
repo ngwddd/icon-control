@@ -140,12 +140,6 @@ class CaptureDaemon:
         self.owner_session = agent_session.current()
         if self._thread and self._thread.is_alive():
             return {"ok": True, "already": True, **self.status()}
-        # 启动时顺手清一次（自己目录 + %TEMP% 里的旧脚本），失败不影响采集
-        try:
-            from computer_mcp import retention
-            self.housekeeping = retention.sweep_all()
-        except Exception as exc:
-            self.housekeeping = {"error": f"{type(exc).__name__}: {exc}"}
         self._stop.clear()
         from contextvars import copy_context
         context = copy_context()

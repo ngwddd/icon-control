@@ -276,10 +276,31 @@ def mouse_button_left():
     return Button.left
 
 
+def _bound_window(hwnd):
+    import win32gui
+    window = hwnd or win32gui.GetForegroundWindow()
+    if not window:
+        raise ValueError('No target window')
+    return window
+
+
+def _check_control(control, hwnd):
+    import win32gui, win32process
+    from computer_mcp.capabilities import require_target
+    from computer_mcp.permission import PermissionDenied
+    top = control.GetTopLevelControl()
+    actual = int(top.NativeWindowHandle)
+    if (not actual or actual != win32gui.GetAncestor(hwnd, 2) or
+            int(control.ProcessId) != win32process.GetWindowThreadProcessId(actual)[1]):
+        raise PermissionDenied('Resolved UIA control belongs to a different target')
+    require_target(hwnd=actual)
+
+
 def ui_invoke(name: str, hwnd: int | None = None, exact: bool = False, index: int = 0) -> dict[str, Any]:
     """Trigger a control's Invoke pattern without moving the cursor."""
     if not _UIA_OK:
         return {"error": "uiautomation not installed in this venv"}
+    hwnd = _bound_window(hwnd)
     target, res = _resolve(hwnd, name, exact, index)
     if target is None:
         return res
@@ -307,8 +328,9 @@ def ui_invoke(name: str, hwnd: int | None = None, exact: bool = False, index: in
         from computer_mcp.execution import check
         check('ui_invoke')
         from computer_mcp.capabilities import require_target
-        require_target(hwnd=hwnd)
-        ctrl.GetInvokePattern().Invoke()
+        pattern = ctrl.GetInvokePattern()
+        _check_control(ctrl, hwnd)
+        pattern.Invoke()
     except Exception as exc:
         return {"error": f"invoke failed: {exc}", "hint": "use ui_click instead"}
     return {"ok": True, "invoked": target["name"]}
@@ -318,6 +340,7 @@ def ui_set_text(name: str, text: str, hwnd: int | None = None, exact: bool = Fal
     """Set a control's value through the Value pattern (no typing)."""
     if not _UIA_OK:
         return {"error": "uiautomation not installed in this venv"}
+    hwnd = _bound_window(hwnd)
     target, res = _resolve(hwnd, name, exact, index)
     if target is None:
         return res
@@ -338,16 +361,12 @@ def ui_set_text(name: str, text: str, hwnd: int | None = None, exact: bool = Fal
                     from computer_mcp.execution import check
                     check('ui_set_text')
                     from computer_mcp.capabilities import require_target
-                    require_target(hwnd=hwnd)
-                    c.GetValuePattern().SetValue(text)
+                    pattern = c.GetValuePattern()
+                    _check_control(c, hwnd)
+                    pattern.SetValue(text)
                     return {"ok": True, "set": text, "target": target["name"]}
-                except Exception:
-                    try:
-                        check('ui_set_text')
-                        require_target(hwnd=hwnd)
-                        c.GetValuePattern().SetValue(text)
-                    except Exception as exc:
-                        return {"error": f"value pattern failed: {exc}", "hint": "focus it and use type"}
+                except Exception as exc:
+                    return {"error": f"value pattern failed: {exc}"}
             queue.extend(c.GetChildren())
         except Exception:
             continue

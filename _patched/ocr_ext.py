@@ -64,6 +64,8 @@ def _engine(lang_tag: str | None = None):
 
 def _print_window(hwnd: int):
     """Grab a window's own pixels with PrintWindow (works when occluded)."""
+    from computer_mcp.permission import require
+    require('screenshot')
     import win32gui
     import win32ui
     from ctypes import windll
