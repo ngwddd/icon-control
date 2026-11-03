@@ -227,7 +227,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='type',
-        effects=('input','text_entry','clipboard_write',),
+        effects=('input','text_entry',),
         zone='Z3',
         description='Type the specified text',
         read_only=False,

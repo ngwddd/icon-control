@@ -134,6 +134,13 @@ class DeclaredEffectTests(unittest.TestCase):
         self.assertNotIn('file_write', spec.effects)
         self.assertIn('screen_read', spec.effects)
 
+    def test_typing_does_not_require_clipboard_access(self):
+        """Literal typing injects Unicode; it must not need clipboard scopes."""
+        from computer_mcp import tool_registry
+        spec = next(item for item in tool_registry.iter_specs() if item.name == 'type')
+        self.assertNotIn('clipboard_write', spec.effects)
+        self.assertEqual(capabilities.required(spec, {}), {'input', 'text_entry'})
+
 
 if __name__ == '__main__':
     unittest.main()

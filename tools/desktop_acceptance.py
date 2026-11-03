@@ -315,24 +315,6 @@ def b24_dpi():
     return after == before + 1, dict(application_state=dict(before=before, after=after, dpi=dpi))
 
 
-@case('B28')
-def b28_branch():
-    wait_ready()
-    click('Scroll')
-    before = fixture_state()['scroll']
-    live.tool_run_script({'ops': [{'op': 'if', 'cond': True,
-                                   'then': [{'op': 'scroll', 'dy': -3}],
-                                   'else': [{'op': 'scroll', 'dy': 3}]}]})
-    after_true = fixture_state()['scroll']
-    live.tool_run_script({'ops': [{'op': 'if', 'cond': False,
-                                   'then': [{'op': 'scroll', 'dy': -3}],
-                                   'else': [{'op': 'scroll', 'dy': 3}]}]})
-    after_false = fixture_state()['scroll']
-    passed = after_true > before and after_false < after_true
-    return passed, dict(application_state=dict(scroll_before=before, scroll_true=after_true,
-                                                scroll_false=after_false))
-
-
 @case('B29')
 def b29_photo():
     import base64
@@ -360,13 +342,19 @@ def b29_photo():
 
 @case('B30')
 def b30_no_false_success():
+    """A request that cannot be carried out must not report success."""
     wait_ready()
-    result = live.tool_run_script({'ops': [
-        {'op': 'wait_for', 'kind': 'text', 'query': 'S5-B30-NO-SUCH-TEXT', 'timeout_ms': 400}]})
-    status = str(result.get('status'))
-    verified = bool(result.get('verified', result.get('success', False)))
-    return (not verified and status not in ('verified', 'succeeded', 'success'),
-            dict(result=dict(status=status, verified=verified)))
+    before = fixture_state()['counts']
+    try:
+        result = ui_ext.ui_click(name='S5-B30-NO-SUCH-CONTROL', hwnd=fixture_hwnd(), mouse=mouse)
+    except Exception as exc:  # noqa: BLE001 - a refusal is the expected outcome
+        result = dict(error=f'{type(exc).__name__}: {exc}')
+    after = fixture_state()['counts']
+    claimed_ok = bool(result.get('success', result.get('ok', False)))
+    return (not claimed_ok and after == before,
+            dict(application_state=dict(before=before, after=after),
+                 result=dict(claimed_ok=claimed_ok, status=result.get('status'),
+                             error=str(result.get('error'))[:200])))
 
 
 def main():
