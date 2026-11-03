@@ -178,9 +178,13 @@ def capture_template(name: str, region: Any = None, hwnd: int | None = None,
             _bump(op, False)
             return {"success": False, "error": f"该区域几乎没有细节（std={std:.1f}），不适合当模板"}
 
-        cv2.imwrite(path, g)
+        from computer_mcp.execution import check
+        check('capture_template')
+        if not cv2.imwrite(path, g):
+            raise OSError('Template write failed')
         meta = {"name": nm, "region": reg, "hwnd": hwnd, "size": [int(g.shape[1]), int(g.shape[0])],
                 "std": round(std, 2), "created": time.strftime("%Y-%m-%d %H:%M:%S")}
+        check('capture_template')
         with open(os.path.join(TPL_DIR, f"{nm}.json"), "w", encoding="utf-8") as fh:
             json.dump(meta, fh, ensure_ascii=False, indent=2)
         _bump(op)
@@ -331,7 +335,10 @@ def set_baseline(name: str, region: Any = None, hwnd: int | None = None) -> dict
         _ensure_dirs()
         g = _gray(reg, hwnd)
         path = os.path.join(BAS_DIR, f"{nm}.png")
-        cv2.imwrite(path, g)
+        from computer_mcp.execution import check
+        check('capture_template')
+        if not cv2.imwrite(path, g):
+            raise OSError('Template write failed')
         meta = {"name": nm, "region": reg, "hwnd": hwnd, "size": [int(g.shape[1]), int(g.shape[0])],
                 "created": time.strftime("%Y-%m-%d %H:%M:%S"), "mean": round(float(g.mean()), 2)}
         with open(os.path.join(BAS_DIR, f"{nm}.json"), "w", encoding="utf-8") as fh:
