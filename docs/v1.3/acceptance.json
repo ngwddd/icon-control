@@ -1,6 +1,6 @@
 {
   "version": "1.3.6",
-  "source_commit": "0c18609139e256872beded251bfeb08674902623",
+  "source_commit": "da02cb93e71df55dc2fec14b20214a6743ce2133",
   "status": "blocked",
   "p0_review": "pending",
   "clean_windows_install": "pending",
@@ -77,8 +77,8 @@
     },
     {
       "id": "B11",
-      "status": "stale",
-      "elapsed_ms": 2336.758,
+      "status": "passed",
+      "elapsed_ms": 2368.153,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
         "version": "1.3.6",
@@ -91,13 +91,13 @@
       },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B11.json",
-        "sha256": "2570c15a1e5c3bc6724333de4229883599237224f048683884af44f576499eed"
+        "sha256": "3d696768d07d997858011a10875fa4e2dfe304373e361b84eade9769b8a4248f"
       }
     },
     {
       "id": "B12",
-      "status": "stale",
-      "elapsed_ms": 4189.982,
+      "status": "passed",
+      "elapsed_ms": 4340.976,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
         "version": "1.3.6",
@@ -110,7 +110,7 @@
       },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B12.json",
-        "sha256": "5b8b7532ee3794bc92f1ce254151351addc4719ff6ecf6fb0ff3d294c5f533a1"
+        "sha256": "de13a058cf70c74303a88cf23e0ede8a5c1add383a7739681487bcb41d97310a"
       }
     },
     {
@@ -277,8 +277,8 @@
     },
     {
       "id": "B20",
-      "status": "stale",
-      "elapsed_ms": 1956.149,
+      "status": "passed",
+      "elapsed_ms": 1981.975,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
         "version": "1.3.6",
@@ -288,18 +288,18 @@
       "application_state": {
         "before": 0,
         "after": 0,
-        "old_hwnd": 1704646,
-        "new_hwnd": 1770182
+        "old_hwnd": 1770182,
+        "new_hwnd": 1835718
       },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B20.json",
-        "sha256": "c9c94f611d6f7e1f943cfc715f017ace686057bc7188c6378d3167972f7290ac"
+        "sha256": "5e331c6f35055469f8e69bd41f5f704bc184c28e9aa9619705e31b1cff1c6d3f"
       }
     },
     {
       "id": "B21",
-      "status": "stale",
-      "elapsed_ms": 3050.364,
+      "status": "passed",
+      "elapsed_ms": 3131.132,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
         "version": "1.3.6",
@@ -312,13 +312,13 @@
       },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B21.json",
-        "sha256": "7350dd80a2bbb811cbd4c48c13a1291508b0ebb787edff9e603cb4a987bbaccc"
+        "sha256": "3814e4f43d024963be1dbab97b63c320d32eaf43bb07204d4c7eeb164f85c3d3"
       }
     },
     {
       "id": "B22",
-      "status": "stale",
-      "elapsed_ms": 2385.131,
+      "status": "failed",
+      "elapsed_ms": 2420.296,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
         "version": "1.3.6",
@@ -331,7 +331,7 @@
       },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B22.json",
-        "sha256": "0e89798e655fe9e66f19e79e8173ef52df367ab5a91f767b57caf4f53207ce62"
+        "sha256": "2d2f1cbcefc223921aa618c4b63fa019e3a7804d9ece414cebb52a803fb88d33"
       }
     },
     {
@@ -357,7 +357,7 @@
     {
       "id": "B26",
       "status": "passed",
-      "elapsed_ms": 1328.483,
+      "elapsed_ms": 1423.57,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
         "version": "1.3.6",
@@ -365,18 +365,18 @@
         "fixture_window_dpi": 144
       },
       "application_state": {
-        "before": 1,
-        "after": 2
+        "before": 2,
+        "after": 3
       },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B26.json",
-        "sha256": "4dbcb6b2cdaf955c7ad896f820be3e9853a355f35e18504ae796d17cba9b0293"
+        "sha256": "210877a4912a92044ec3e3fe9867802deff53d0ed223f15a652689a0181ccf2b"
       }
     },
     {
       "id": "B28",
       "status": "failed",
-      "elapsed_ms": 1835.714,
+      "elapsed_ms": 1880.982,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
         "version": "1.3.6",
@@ -404,7 +404,7 @@
       },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B28.json",
-        "sha256": "609ef2d0a6816f572787153620632de7c2440e1f77912bc1de7f27b9356241ba"
+        "sha256": "ea5448696f6f37acd5c126b7e673c2c7499e6aaf54915512915139575296dfe8"
       }
     },
     {
