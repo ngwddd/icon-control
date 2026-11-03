@@ -118,13 +118,20 @@ def dispatch(message, pid):
     from computer_mcp import permission_bridge as bridge
     command = message.get('command')
     if command == 'open':
-        # Remember who asked, so the window approves the caller rather than
-        # whichever session happened to register last.
+        # Remember who asked and what they want to touch, so the window approves
+        # the caller's target instead of whatever happens to be in front.
         prefer = message.get('prefer_session')
         if isinstance(prefer, str):
             try:
                 if any(a['id'] == prefer for a in agent_session.active()):
                     bridge._pending_agent = prefer
+            except Exception:
+                pass
+        app = message.get('prefer_app')
+        if isinstance(app, dict) and isinstance(app.get('pid'), int):
+            try:
+                if capabilities.process_record(app['pid']) == app:
+                    bridge._pending_app = app
             except Exception:
                 pass
         return open_native()
@@ -150,7 +157,8 @@ def dispatch(message, pid):
     owner = 'native-'+str(pid)+'-'+str(psutil.Process(pid).create_time())
     if command == 'status':
         return dict(state=bridge.current_state(), agents=list(agent_session.active()),
-                    pending=getattr(bridge, '_pending_agent', None))
+                    pending=getattr(bridge, '_pending_agent', None),
+                    pending_app=getattr(bridge, '_pending_app', None))
     if command == 'grant':
         session = message.get('agent_session')
         live = list(agent_session.active())

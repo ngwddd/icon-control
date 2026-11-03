@@ -258,7 +258,7 @@ _last_consent_request = 0.0
 CONSENT_POPUP_INTERVAL_S = 20.0
 
 
-def _request_consent() -> None:
+def _request_consent(arguments: dict | None = None) -> None:
     """A blocked call should bring up the approval window, not just an error."""
     global _last_consent_request
     if os.environ.get('ICON_CONTROL_AUTO_CONSENT') == '0':
@@ -267,10 +267,22 @@ def _request_consent() -> None:
     if now - _last_consent_request < CONSENT_POPUP_INTERVAL_S:
         return
     _last_consent_request = now
+    prefer_app = None
+    try:
+        hwnd = (arguments or {}).get('hwnd')
+        if hwnd:
+            import win32process
+            from computer_mcp import capabilities
+            _, pid = win32process.GetWindowThreadProcessId(int(hwnd))
+            if pid:
+                prefer_app = capabilities.process_record(pid)
+    except Exception:
+        prefer_app = None
     try:
         from computer_mcp import agent_session, consent_ipc
         consent_ipc.request('open', timeout_ms=300,
-                            prefer_session=agent_session.current())
+                            prefer_session=agent_session.current(),
+                            prefer_app=prefer_app)
     except Exception:
         pass
 
@@ -288,7 +300,7 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         from computer_mcp import capabilities
         why = capabilities.check_scope(st, spec, arguments)
         if why:
-            _request_consent()
+            _request_consent(arguments)
             return dict(success=False, blocked=True, tool=name, error=why)
         if set(spec.effects_for(arguments)) <= {'screen_read','observe'}:
             return None
@@ -317,7 +329,7 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         except Exception as exc:
             return dict(success=False, blocked=True, tool=name, error=f'Control guard unavailable: {exc}')
         return None
-    _request_consent()
+    _request_consent(arguments)
     return {
         "success": False,
         "blocked": True,

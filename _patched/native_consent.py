@@ -157,8 +157,11 @@ class ConsentHost:
             return
 
         pending = None
+        pending_app = None
         try:
-            pending = (self.ipc('status') or {}).get('pending')
+            status = self.ipc('status') or {}
+            pending = status.get('pending')
+            pending_app = status.get('pending_app')
         except Exception:
             pass
         agent = self._pick_agent(pending)
@@ -166,7 +169,15 @@ class ConsentHost:
             native_dialog.ask_notice('没有活跃的 Agent 会话',
                                      '先在宿主里发起一次操作，再按热键或点托盘打开授权窗口。')
             return
-        app = self._foreground_app()
+        app = None
+        if pending_app:
+            try:
+                if capabilities.process_record(pending_app['pid']) == pending_app:
+                    app = dict(pending_app)
+            except Exception:
+                app = None
+        if app is None:
+            app = self._foreground_app()
         if app is None:
             native_dialog.ask_notice('找不到前台应用',
                                      '先把要操作的应用切到前台，再按热键或点托盘打开授权窗口。')
