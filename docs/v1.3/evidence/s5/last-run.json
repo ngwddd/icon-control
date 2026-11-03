@@ -1,12 +1,22 @@
 {
-  "timestamp": "2026-11-04T03:19:14",
+  "timestamp": "2026-11-04T03:20:11",
   "cases": [
     "B11",
     "B12",
+    "B14",
+    "B15",
+    "B16",
+    "B17",
+    "B18",
+    "B19",
     "B20",
     "B21",
     "B22",
-    "B26"
+    "B24",
+    "B26",
+    "B28",
+    "B29",
+    "B30"
   ],
   "runs": [
     {
@@ -32,6 +42,100 @@
           }
         },
         {
+          "case": "B14",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "status": "executed_unverified"
+          },
+          "application_state": {
+            "before": 0,
+            "after": 15
+          }
+        },
+        {
+          "case": "B15",
+          "status": "passed",
+          "kind": "passed",
+          "result": {},
+          "application_state": {
+            "before": {
+              "IconTarget": 0,
+              "OcrTarget": 5,
+              "Counter": 0,
+              "Confirm1": 0,
+              "Confirm2": 0
+            },
+            "after": {
+              "IconTarget": 0,
+              "OcrTarget": 5,
+              "Counter": 0,
+              "Confirm1": 1,
+              "Confirm2": 0
+            }
+          }
+        },
+        {
+          "case": "B16",
+          "status": "passed",
+          "kind": "passed",
+          "result": {},
+          "application_state": {
+            "before": {
+              "IconTarget": 0,
+              "OcrTarget": 5,
+              "Counter": 0,
+              "Confirm1": 1,
+              "Confirm2": 0
+            },
+            "after": {
+              "IconTarget": 0,
+              "OcrTarget": 5,
+              "Counter": 0,
+              "Confirm1": 1,
+              "Confirm2": 1
+            }
+          }
+        },
+        {
+          "case": "B17",
+          "status": "passed",
+          "kind": "passed",
+          "result": {},
+          "application_state": {
+            "before": 0,
+            "after": 1
+          }
+        },
+        {
+          "case": "B18",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "refused": true
+          },
+          "application_state": {
+            "before": 1,
+            "after": 1
+          }
+        },
+        {
+          "case": "B19",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "refused": true
+          },
+          "application_state": {
+            "before": 1,
+            "after": 1,
+            "moved_to": [
+              120,
+              100
+            ]
+          }
+        },
+        {
           "case": "B20",
           "status": "passed",
           "kind": "passed",
@@ -39,10 +143,10 @@
             "refused": true
           },
           "application_state": {
-            "before": 0,
-            "after": 0,
-            "old_hwnd": 1901254,
-            "new_hwnd": 1966790
+            "before": 1,
+            "after": 1,
+            "old_hwnd": 2032326,
+            "new_hwnd": 2097862
           }
         },
         {
@@ -53,8 +157,8 @@
             "refused": true
           },
           "application_state": {
-            "before": 0,
-            "after": 0
+            "before": 1,
+            "after": 1
           }
         },
         {
@@ -63,7 +167,7 @@
           "kind": "passed",
           "result": {
             "refused": true,
-            "cover_hwnd": 19925450,
+            "cover_hwnd": 3736942,
             "covered": [
               80,
               80,
@@ -72,8 +176,19 @@
             ]
           },
           "application_state": {
-            "before": 0,
-            "after": 0
+            "before": 1,
+            "after": 1
+          }
+        },
+        {
+          "case": "B24",
+          "status": "passed",
+          "kind": "passed",
+          "result": {},
+          "application_state": {
+            "before": 1,
+            "after": 2,
+            "dpi": 144
           }
         },
         {
@@ -82,17 +197,90 @@
           "kind": "passed",
           "result": {
             "ok": true,
-            "response": "{'result': {'ok': True, 'clicked_text': 'CANITY TEST TARGET', 'x': 204, 'y': 684, 'ms': 371.8}, 'screenshot_data': {'error': 'intentionally skipped'}}"
+            "response": "{'result': {'ok': True, 'clicked_text': 'CANITY TEST TARGET', 'x': 204, 'y': 684, 'ms': 377.2}, 'screenshot_data': {'error': 'intentionally skipped'}}"
           },
           "application_state": {
-            "before": 4,
-            "after": 5
+            "before": 5,
+            "after": 6
+          }
+        },
+        {
+          "case": "B28",
+          "status": "failed",
+          "kind": "harness",
+          "result": {},
+          "application_state": {
+            "scroll_before": 0,
+            "scroll_true": 0,
+            "scroll_false": 0,
+            "boxes": {
+              "text": [
+                121,
+                673,
+                240,
+                30
+              ],
+              "blank": [
+                441,
+                673,
+                150,
+                30
+              ]
+            }
+          }
+        },
+        {
+          "case": "B29",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "sha256": "8ebb2f2da844ac8972b9870e3d4d4a00849c50b4a22bf7b4e23bd22a59250c98",
+            "path": "C:\\Users\\ggg\\Desktop\\deepseek development\\icon-control-v131\\docs\\v1.3\\evidence\\s5\\B29-capture.png",
+            "encoded_bytes": 16106
+          },
+          "application_state": {
+            "region": [
+              80,
+              80,
+              902,
+              786
+            ],
+            "width": 411,
+            "height": 353
+          }
+        },
+        {
+          "case": "B30",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "claimed_ok": false,
+            "status": null,
+            "error": "no control named 'S5-B30-NO-SUCH-CONTROL'"
+          },
+          "application_state": {
+            "before": {
+              "IconTarget": 0,
+              "OcrTarget": 6,
+              "Counter": 2,
+              "Confirm1": 1,
+              "Confirm2": 1
+            },
+            "after": {
+              "IconTarget": 0,
+              "OcrTarget": 6,
+              "Counter": 2,
+              "Confirm1": 1,
+              "Confirm2": 1
+            }
           }
         }
       ],
-      "passed": 6,
-      "total": 6,
-      "harness": [],
+      "passed": 15,
+      "total": 16,
+      "harness": [
+        "B28"
+      ],
       "product": []
     }
   ],
