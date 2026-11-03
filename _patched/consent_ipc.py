@@ -200,8 +200,9 @@ def request(command, timeout_ms=200, **fields):
         if not response.get('ok'): raise PermissionError(response.get('error','Consent request failed'))
         return response['result']
     finally:
-        if pipe is not None:win32file.CloseHandle(pipe)
-        _request_lock.release()
+        try:
+            if pipe is not None:win32file.CloseHandle(pipe)
+        finally:_request_lock.release()
 
 def live_valid(state, identity):
     try:

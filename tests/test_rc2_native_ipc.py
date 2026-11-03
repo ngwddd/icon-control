@@ -74,6 +74,17 @@ class NativeIpcTests(unittest.TestCase):
             with self.assertRaises(pywintypes.error):consent_ipc.request('authority')
             self.assertEqual(create.call_count,1)
 
+    def test_handle_cleanup_failure_does_not_poison_the_client_connection_lock(self):
+        import win32file
+        original=win32file.CloseHandle
+        def close_then_fail(handle):
+            original(handle)
+            raise OSError('Synthetic post-close failure')
+        with patch.object(win32file,'CloseHandle',side_effect=close_then_fail):
+            with self.assertRaises(OSError):
+                consent_ipc.request('authority',agent_session='a'*48,session='',revision=0)
+        self.assertFalse(consent_ipc.request('authority',agent_session='a'*48,session='',revision=0)['granted'])
+
     def test_second_bridge_different_port_cannot_replace_authority(self):
         with socket.socket() as listener:
             listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
