@@ -492,13 +492,19 @@ def b22_occluded():
     candidate = next((n for n in tree.get('nodes', []) if n.get('name') == 'Counter' and n.get('ref')), None)
     if not candidate:
         raise RuntimeError('Counter snapshot ref unavailable')
-    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    # Cover the button itself, not the whole fixture: a full-size black panel
+    # looked to the user like the display had gone black.
+    pad = 12
+    cover_x = int(candidate['x']) - pad
+    cover_y = int(candidate['y']) - pad
+    cover_w = int(candidate['w']) + pad * 2
+    cover_h = int(candidate['h']) + pad * 2
     cover = subprocess.Popen(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
                               '-WindowStyle', 'Hidden', '-File',
                               str(ROOT / 'tests' / 'manual' / 'cover_window.ps1'),
-                              '-X', str(left), '-Y', str(top),
-                              '-W', str(right - left), '-H', str(bottom - top),
-                              '-Seconds', '60'])
+                              '-X', str(cover_x), '-Y', str(cover_y),
+                              '-W', str(cover_w), '-H', str(cover_h),
+                              '-Seconds', '30'])
     try:
         time.sleep(1.5)
         covered = win32gui.FindWindow(None, 'Icon Control cover')
@@ -514,7 +520,7 @@ def b22_occluded():
         return (refused and after == before and bool(covered),
                 dict(application_state=dict(before=before, after=after),
                      result=dict(refused=refused, cover_hwnd=covered,
-                                 covered=[left, top, right, bottom])))
+                                 covered=[cover_x, cover_y, cover_w, cover_h])))
     finally:
         cover.terminate()
         try:
