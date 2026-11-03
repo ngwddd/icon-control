@@ -21,7 +21,13 @@ class NativeIpcTests(unittest.TestCase):
         with socket.socket() as listener:
             listener.bind(('127.0.0.1',0));cls.port=listener.getsockname()[1]
         cls.log=open(Path(cls.temp.name)/'bridge-test.log','w',encoding='utf-8')
-        cls.child=subprocess.Popen([sys.executable,'-m','computer_mcp.permission_bridge','--port',str(cls.port)],
+        # Real pipes and peer validation, with a small dispatch delay to model
+        # disk/process identity work and expose client queue starvation.
+        server_code=("import sys,time\nfrom computer_mcp import consent_ipc,permission_bridge\n"
+            "original=consent_ipc.dispatch\ndef delayed(message,pid):\n time.sleep(.003)\n return original(message,pid)\n"
+            "consent_ipc.dispatch=delayed\nsys.argv=['native-pipe-fixture','--port',"+repr(str(cls.port))+"]\n"
+            "raise SystemExit(permission_bridge.main())\n")
+        cls.child=subprocess.Popen([sys.executable,'-c',server_code],
             env=dict(os.environ),stdout=cls.log,stderr=cls.log,creationflags=subprocess.CREATE_NO_WINDOW)
         for _ in range(60):
             if cls.child.poll() is not None: break

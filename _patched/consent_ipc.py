@@ -11,6 +11,7 @@ import sys
 import threading
 import subprocess
 import time
+from collections import deque
 import psutil
 from computer_mcp import security, agent_session, capabilities
 
@@ -19,7 +20,29 @@ def pipe_name():
     return r'\\.\pipe\IconControl-Consent-' + digest
 
 _native_instances = {}
-_request_lock = threading.Lock()
+
+class _ConnectionQueue:
+    """FIFO prevents a busy caller repeatedly overtaking an older permission check."""
+    def __init__(self):
+        self.condition=threading.Condition();self.pending=deque()
+    def acquire(self,deadline):
+        ticket=object()
+        with self.condition:
+            self.pending.append(ticket)
+            try:
+                while self.pending[0] is not ticket:
+                    remaining=deadline-time.monotonic()
+                    if remaining<=0:raise TimeoutError('Permission IPC connection deadline exceeded')
+                    self.condition.wait(remaining)
+                return ticket
+            except BaseException:
+                self.pending.remove(ticket);self.condition.notify_all()
+                raise
+    def release(self,ticket):
+        with self.condition:
+            self.pending.remove(ticket);self.condition.notify_all()
+
+_request_queue=_ConnectionQueue()
 
 def _native_instance(pid):
     try:
@@ -178,8 +201,7 @@ def request(command, timeout_ms=200, **fields):
         milliseconds=int((deadline-time.monotonic())*1000)
         if milliseconds<=0:raise TimeoutError('Permission IPC deadline exceeded')
         return milliseconds
-    if not _request_lock.acquire(timeout=max(0,deadline-time.monotonic())):
-        raise TimeoutError('Permission IPC connection deadline exceeded')
+    ticket=_request_queue.acquire(deadline)
     pipe=None
     try:
         while pipe is None:
@@ -202,7 +224,7 @@ def request(command, timeout_ms=200, **fields):
     finally:
         try:
             if pipe is not None:win32file.CloseHandle(pipe)
-        finally:_request_lock.release()
+        finally:_request_queue.release(ticket)
 
 def live_valid(state, identity):
     try:
