@@ -123,9 +123,11 @@ def stop_latch_clear() -> bool:
 
 def approval() -> bool:
     env = dict(os.environ, ICON_CONTROL_HOME=str(HOME))
-    code = ('from computer_mcp import permission;'
-            's=permission.status();'
-            'print(1 if s.get("granted") else 0)')
+    # A bare interpreter has no registered session and the authority
+    # round-trip requires one, so the probe must register like a real agent.
+    code = ('from computer_mcp import agent_session, permission;'
+            'agent_session.register("preflight approval probe");'
+            'print(1 if permission.status().get("granted") else 0)')
     out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, env=env)
     if out.stdout.strip().endswith('1'):
         say('ok', '授权有效')
