@@ -516,8 +516,17 @@ def main():
     if 'B01' not in requested and not permission.status().get('granted') and args.wait_grant:
         print('Waiting for human authorization; no input sent yet', flush=True)
         deadline = time.monotonic() + args.wait_grant
+        next_request = 0.0
         while time.monotonic() < deadline and not permission.status().get('granted'):
-            time.sleep(0.3)
+            # Ask through a gated call on the fixture, so the window that pops
+            # up is bound to the fixture instead of whatever is in front.
+            if time.monotonic() >= next_request:
+                next_request = time.monotonic() + 25
+                try:
+                    permission.require('click', {'hwnd': fixture_hwnd(), 'x': 0, 'y': 0})
+                except Exception:
+                    pass
+            time.sleep(0.5)
         if not permission.status().get('granted'):
             raise SystemExit('Authorization not received')
         time.sleep(12)
