@@ -48,6 +48,32 @@ class NativeIpcTests(unittest.TestCase):
     def test_real_pipe_authority_is_false_without_human_approval(self):
         self.assertFalse(consent_ipc.request('authority',agent_session='a'*48,session='',revision=0)['granted'])
 
+    def test_concurrent_authority_queries_do_not_fail_on_pipe_connect_race(self):
+        from concurrent.futures import ThreadPoolExecutor
+        def query(_):
+            return consent_ipc.request('authority',timeout_ms=80,agent_session='a'*48,session='',revision=0)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            responses=list(pool.map(query,range(80)))
+        self.assertEqual(len(responses),80)
+        self.assertTrue(all(result=={'granted':False} for result in responses))
+
+    def test_permanently_busy_connection_keeps_the_original_deadline_and_releases_lock(self):
+        import pywintypes,win32file,win32pipe
+        started=time.monotonic()
+        with patch.object(win32pipe,'WaitNamedPipe'),patch.object(win32file,'CreateFile',
+                side_effect=pywintypes.error(231,'CreateFile','busy')) as create:
+            with self.assertRaises(TimeoutError):consent_ipc.request('authority',timeout_ms=20)
+            self.assertGreater(create.call_count,1)
+        self.assertLess(time.monotonic()-started,.5)
+        self.assertFalse(consent_ipc.request('authority',agent_session='a'*48,session='',revision=0)['granted'])
+
+    def test_access_denied_is_not_retried_as_a_connection_race(self):
+        import pywintypes,win32file,win32pipe
+        with patch.object(win32pipe,'WaitNamedPipe'),patch.object(win32file,'CreateFile',
+                side_effect=pywintypes.error(5,'CreateFile','denied')) as create:
+            with self.assertRaises(pywintypes.error):consent_ipc.request('authority')
+            self.assertEqual(create.call_count,1)
+
     def test_second_bridge_different_port_cannot_replace_authority(self):
         with socket.socket() as listener:
             listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]

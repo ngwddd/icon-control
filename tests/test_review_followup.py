@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import Mock,patch
 import numpy as np
 from authority_fixture import AuthorityCase,approval
-from computer_mcp import capture_daemon,conveyor,launcher,live,panic_watch,permission,permission_bridge
+from computer_mcp import capture_daemon,conveyor,launcher,live,panic_watch,permission,permission_bridge,capabilities
 
 class FollowupTests(AuthorityCase,unittest.TestCase):
     fixture_authorized=True
@@ -58,6 +58,47 @@ class FollowupTests(AuthorityCase,unittest.TestCase):
             namespace['grant']()
             self.assertEqual(desired,[granted])
             self.assertEqual('后端已确认：已授权' in status.set.call_args.args[0],granted)
+
+    def test_input_grant_requires_an_explicit_application_selection(self):
+        from computer_mcp import consent
+        tree=ast.parse(Path(consent.__file__).read_text(encoding='utf-8'))
+        handler=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='grant')
+        ipc=Mock();status=Mock()
+        namespace=dict(desired=[False],agents=Mock(current=lambda:0),options={'input':Mock(get=lambda:True)},
+            agent_ids=['fixture'],records=[],applications=Mock(curselection=lambda:[]),launches=[],ipc=ipc,status=status)
+        exec(compile(ast.Module(body=[handler],type_ignores=[]),consent.__file__,'exec'),namespace)
+        namespace['grant']();ipc.assert_not_called()
+        self.assertIn('蓝色高亮',status.set.call_args.args[0])
+
+    def test_initial_preferences_only_prefill_prior_human_scope_and_never_grant(self):
+        from computer_mcp import consent
+        import win32gui,win32process
+        tree=ast.parse(Path(consent.__file__).read_text(encoding='utf-8'))
+        handler=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='refresh')
+        app={'pid':555,'created':1,'exe':'fixture.exe'}
+        auth=dict(approval(),applications=[app],scopes=['input','screen_read'])
+        class Combo:
+            index=-1
+            def current(self,index=None):
+                if index is None:return self.index
+                self.index=index
+            def __setitem__(self,key,value):setattr(self,key,value)
+            def set(self,value):self.index=-1
+        combo=Combo();apps=Mock(curselection=lambda:[]);status=Mock()
+        ipc=Mock(return_value={'state':{'granted':True,'authorization':auth},
+            'agents':[{'id':auth['agent_session'],'label':'approved actor'}]})
+        options={scope:Mock() for scope in capabilities.SCOPES}
+        namespace=dict(agents=combo,agent_ids=[],records=[],applications=apps,options=options,
+            status=status,desired=[False],capabilities=capabilities,ipc=ipc)
+        with patch.object(win32gui,'EnumWindows',side_effect=lambda callback,_:callback(10,None)), \
+             patch.object(win32gui,'IsWindowVisible',return_value=True),patch.object(win32gui,'GetWindowText',return_value='Fixture'), \
+             patch.object(win32process,'GetWindowThreadProcessId',return_value=(1,555)),patch.object(capabilities,'process_record',return_value=app):
+            exec(compile(ast.Module(body=[handler],type_ignores=[]),consent.__file__,'exec'),namespace)
+            namespace['refresh'](True)
+        self.assertEqual(combo.index,0);apps.selection_set.assert_called_once_with(0)
+        for scope,var in options.items():var.set.assert_called_once_with(scope in auth['scopes'])
+        ipc.assert_called_once_with('status');self.assertEqual(namespace['desired'],[False])
+        self.assertIn('已预填',status.set.call_args.args[0])
 
     def test_panic_callback_survives_broken_stderr(self):
         from computer_mcp import panic,input_guard

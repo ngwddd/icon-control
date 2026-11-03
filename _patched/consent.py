@@ -47,14 +47,23 @@ def main():
     launches = []
     desired = [False]
 
-    def refresh():
+    def refresh(initial=False):
         try:
+            previous_id=agent_ids[agents.current()] if 0<=agents.current()<len(agent_ids) else None
+            previous_apps=[records[i] for i in applications.curselection()]
             result = ipc('status')
-            previous = agents.get()
+            state=result['state']
+            prior=state.get('authorization',{}) if initial and state.get('granted') else {}
+            if prior and not capabilities.validate(prior):prior={}
+            wanted_id=prior.get('agent_session') or previous_id
+            wanted_apps=prior.get('applications',[]) if prior else previous_apps
             agent_ids[:] = [a['id'] for a in result['agents']]
             agents['values'] = [a['label']+' · '+a['id'][:10] for a in result['agents']]
-            if previous in agents['values']: agents.set(previous)
-            elif agent_ids: agents.current(0)
+            if wanted_id in agent_ids:agents.current(agent_ids.index(wanted_id))
+            elif initial and agent_ids:agents.current(0)
+            else:agents.set('')
+            if prior:
+                for scope,var in options.items():var.set(scope in prior.get('scopes',[]))
             import win32gui, win32process, os
             records.clear(); applications.delete(0,'end')
             seen = set()
@@ -67,9 +76,10 @@ def main():
                 except Exception: return
                 seen.add(pid); records.append(record)
                 applications.insert('end', f'{pid} · {title[:70]}')
+                if record in wanted_apps:applications.selection_set(len(records)-1)
             win32gui.EnumWindows(add,None)
-            state = result['state']
             status.set('后端已确认：'+('已授权（仅所选会话及能力）' if state.get('granted') else '未授权'))
+            if prior:status.set('已预填后端原有授权范围；请点击“授权所选范围”确认本窗口续期。')
         except Exception:
             desired[0] = False
             status.set('状态未知：连接失败。助手不接受新授权，请检查权限服务。')
@@ -81,6 +91,8 @@ def main():
             if index < 0: raise ValueError('请先启动 MCP 客户端并刷新会话列表')
             selected = [scope for scope,var in options.items() if var.get()]
             if not selected: raise ValueError('请至少选择一种能力')
+            if set(selected)&{'input','text_entry','window_close'} and not applications.curselection():
+                raise ValueError('请在应用列表选中允许操作的应用（蓝色高亮）')
             result = ipc('grant', agent_session=agent_ids[index], scopes=selected,
                                         applications=[records[i] for i in applications.curselection()], launches=launches)
             if result.get('granted') is not True:raise RuntimeError('后端尚未确认授权')
@@ -127,6 +139,6 @@ def main():
         before=applications,side='bottom',anchor='w',pady=(8,0))
     def close(): revoke(); root.destroy()
     root.protocol('WM_DELETE_WINDOW',close)
-    refresh(); root.after(4000,heartbeat); root.mainloop()
+    refresh(True); root.after(4000,heartbeat); root.mainloop()
 
 if __name__ == '__main__': main()

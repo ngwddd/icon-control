@@ -10,6 +10,7 @@ import secrets
 import sys
 import threading
 import subprocess
+import time
 import psutil
 from computer_mcp import security, agent_session, capabilities
 
@@ -18,6 +19,7 @@ def pipe_name():
     return r'\\.\pipe\IconControl-Consent-' + digest
 
 _native_instances = {}
+_request_lock = threading.Lock()
 
 def _native_instance(pid):
     try:
@@ -170,19 +172,36 @@ def serve(ready=None, failures=None):
     finally: win32file.CloseHandle(pipe)
 
 def request(command, timeout_ms=200, **fields):
-    import win32con, win32file, win32pipe
-    win32pipe.WaitNamedPipe(pipe_name(), timeout_ms)
-    pipe = win32file.CreateFile(pipe_name(), win32con.GENERIC_READ | win32con.GENERIC_WRITE,
-                               0, None, win32con.OPEN_EXISTING, win32con.FILE_FLAG_OVERLAPPED, None)
+    import pywintypes,win32con,win32file,win32pipe
+    deadline=time.monotonic()+max(1,timeout_ms)/1000
+    def remaining():
+        milliseconds=int((deadline-time.monotonic())*1000)
+        if milliseconds<=0:raise TimeoutError('Permission IPC deadline exceeded')
+        return milliseconds
+    if not _request_lock.acquire(timeout=max(0,deadline-time.monotonic())):
+        raise TimeoutError('Permission IPC connection deadline exceeded')
+    pipe=None
     try:
+        while pipe is None:
+            win32pipe.WaitNamedPipe(pipe_name(),remaining())
+            try:
+                pipe=win32file.CreateFile(pipe_name(),win32con.GENERIC_READ|win32con.GENERIC_WRITE,
+                    0,None,win32con.OPEN_EXISTING,win32con.FILE_FLAG_OVERLAPPED,None)
+            except pywintypes.error as exc:
+                if exc.winerror!=231:raise
+                # WaitNamedPipe is advisory: another client can win CreateFile.
+                # Retry only that connection race, within the original deadline.
+                time.sleep(min(.001,remaining()/1000))
         win32pipe.SetNamedPipeHandleState(pipe, win32pipe.PIPE_READMODE_MESSAGE, None, None)
-        _io(pipe, json.dumps(dict(command=command, **fields)).encode('utf-8'),timeout_ms)
-        raw = _io(pipe,timeout_ms=timeout_ms)
-        _io(pipe,b'ACK',timeout_ms)
+        _io(pipe,json.dumps(dict(command=command,**fields)).encode('utf-8'),remaining())
+        raw=_io(pipe,timeout_ms=remaining())
+        _io(pipe,b'ACK',remaining())
         response = json.loads(raw.decode('utf-8'))
         if not response.get('ok'): raise PermissionError(response.get('error','Consent request failed'))
         return response['result']
-    finally: win32file.CloseHandle(pipe)
+    finally:
+        if pipe is not None:win32file.CloseHandle(pipe)
+        _request_lock.release()
 
 def live_valid(state, identity):
     try:
