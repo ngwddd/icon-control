@@ -4,7 +4,9 @@ Add-Type -AssemblyName System.Drawing
 Add-Type 'public static class FixtureDpi { [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr value); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr value); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr hwnd); }'
 [void][FixtureDpi]::SetProcessDpiAwarenessContext([IntPtr](-4))
 [void][FixtureDpi]::SetThreadDpiAwarenessContext([IntPtr](-4))
-$script:fixtureHash=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$fixtureHasher=[Security.Cryptography.SHA256]::Create()
+try {$script:fixtureHash=([BitConverter]::ToString($fixtureHasher.ComputeHash([IO.File]::ReadAllBytes($PSCommandPath)))).Replace('-','').ToLowerInvariant()}
+finally {$fixtureHasher.Dispose()}
 $script:counts = @{Confirm1=0;Confirm2=0;Counter=0;OcrTarget=0;IconTarget=0}
 $script:dragging=$false
 $script:dragMoves=0

@@ -13,8 +13,12 @@ class TestE2E(unittest.TestCase):
     observations=[]
     def fixture_state(self):
         path=Path(os.environ['ICON_CONTROL_E2E_STATE'])
-        self.assertLess(time.time()-path.stat().st_mtime,3,'Fixture state is stale')
-        return json.loads(path.read_text(encoding='utf-8-sig'))
+        for _ in range(20):
+            try:
+                self.assertLess(time.time()-path.stat().st_mtime,3,'Fixture state is stale')
+                return json.loads(path.read_text(encoding='utf-8-sig'))
+            except (OSError,ValueError):time.sleep(.05)
+        self.fail('Fixture state could not be read')
 
     def setUp(self):
         from computer_mcp import permission,control,appkit,ui_ext
@@ -55,20 +59,30 @@ class TestE2E(unittest.TestCase):
         import win32clipboard
         from clipboard_fixture import preserve_clipboard
         text='IconControl-clipboard-'+str(time.time_ns())
-        with preserve_clipboard():
+        with preserve_clipboard() as preserved:
             state=self.enter(text)
-            self.combo('a');self.combo('c');time.sleep(.3)
+            self.combo('a');preserved.before_copy();self.combo('c');time.sleep(.3)
             win32clipboard.OpenClipboard()
             try: copied=win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
             finally: win32clipboard.CloseClipboard()
             self.assertEqual(copied,text)
+            preserved.claim_test_text(text,self.fixture_state()['pid'])
             self.combo('a')
             from computer_mcp.actions import keyboard
             keyboard.key_press('backspace')
-            self.combo('v');time.sleep(.3)
-            self.assertEqual(self.fixture_state()['text'],text)
-            self.observations.append(dict(test=self.id(),application_state=state,
-                clipboard_matches=True,pasted_text_matches=True))
+            for _ in range(30):
+                cleared=self.fixture_state()
+                if cleared['text']=='':break
+                time.sleep(.1)
+            self.assertEqual(cleared['text'],'','Clear must actually change the fixture before testing paste')
+            self.combo('v')
+            for _ in range(30):
+                pasted=self.fixture_state()
+                if pasted['text']==text:break
+                time.sleep(.1)
+            self.assertEqual(pasted['text'],text)
+            self.observations.append(dict(test=self.id(),application_state=pasted,
+                state_before_clear=state,state_after_clear=cleared,clipboard_matches=True,pasted_text_matches=True))
 
     def test_2_window_enumeration(self):
         import win32gui
