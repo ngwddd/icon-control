@@ -27,3 +27,6 @@ vision/baselines/
 build/
 dist/
 *.egg-info/
+
+docs/v1.3/evidence/
+
