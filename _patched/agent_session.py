@@ -17,6 +17,26 @@ _context = ContextVar('icon_agent_session', default=None)
 def current():
     return _context.get() or _stdio_id
 
+
+def identity(pid=None) -> str:
+    """Stable agent identity: installation home + workspace.
+
+    A restart keeps the same identity, so a time-boxed lease can cover a whole
+    work session instead of one process. The workspace is the process cwd, which
+    is what the host sets for an MCP child.
+    """
+    import hashlib
+    home = str(security.data_home().resolve()).lower()
+    workspace = ''
+    try:
+        workspace = str(Path(psutil.Process(pid or os.getpid()).cwd()).resolve()).lower()
+    except (psutil.Error, OSError):
+        try:
+            workspace = str(Path.cwd().resolve()).lower()
+        except OSError:
+            workspace = ''
+    return hashlib.sha256((home + '|' + workspace).encode('utf-8')).hexdigest()[:32]
+
 @contextmanager
 def bind(identity):
     token = _context.set(identity)

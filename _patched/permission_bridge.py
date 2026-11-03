@@ -78,7 +78,7 @@ _authorization = {}
 _client_sequences = {}
 _last_event_stamp = int(time.time()*1000)
 CLIENT_HB_TTL_S = 30.0          # 心跳多久内算这个窗口还活着
-CLIENT_ACTION_TTL_S = 1800.0    # 用户动作的有效期（30 分钟）
+CLIENT_ACTION_TTL_S = 3600.0    # 用户动作的有效期（60 分钟租约）
 STATE_LEASE_S = 15.0
 
 def _expire(now):
@@ -95,6 +95,8 @@ def _expire(now):
                 owner_dead = True
         if (owner_dead or now-timestamp >= CLIENT_ACTION_TTL_S or
                 now-CLIENTS.get(owner,{}).get('ts',0) >= min(CLIENT_HB_TTL_S,STATE_LEASE_S) or
+                (_authorization.get('lease_expires_at') and
+                 now >= float(_authorization['lease_expires_at'])) or
                 security.stopped({'session':_session,'revision':_revision,'authorized_at':timestamp})):
             _revision += 1
             _last_action = (now,False,owner)

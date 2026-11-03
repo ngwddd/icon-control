@@ -13,16 +13,21 @@ LABELS = {'file_read':'读取专用目录中的文件', 'screen_read':'读取整
           'file_write':'写入 Icon Control 专用目录', 'file_delete':'清理专用目录文件',
           'config_write':'修改助手运行设置', 'process':'启动已批准的应用'}
 
-def main():
+def main(argv=None):
     import argparse
     parser=argparse.ArgumentParser()
     parser.add_argument('--broker-session')
-    args=parser.parse_args()
+    parser.add_argument('--tk', action='store_true', help='force the old Tk control center')
+    args=parser.parse_args(argv)
     from computer_mcp import permission
     permission._ensure_bridge()
     if not args.broker_session:
         consent_ipc.request('open')
         return
+    if not args.tk:
+        from computer_mcp import native_consent, native_dialog
+        if native_dialog.available():
+            return native_consent.main(['--broker-session', args.broker_session])
     def ipc(command,**fields):
         return consent_ipc.request(command,ui_nonce=args.broker_session,**fields)
     root = tk.Tk(); root.title('Icon Control — Permissions')

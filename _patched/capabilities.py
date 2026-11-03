@@ -27,7 +27,10 @@ def validate(authorization):
             len(authorization['agent_session']) == 48 and
             isinstance(authorization.get('scopes'), list) and
             set(authorization['scopes']) <= SCOPES and
-            isinstance(authorization.get('applications'), list))
+            isinstance(authorization.get('applications'), list) and
+            (authorization.get('agent_id') is None or
+             (isinstance(authorization['agent_id'], str) and
+              len(authorization['agent_id']) == 32)))
 
 def launch_record(executable, arguments=''):
     path = Path(executable).resolve(strict=True)
@@ -48,8 +51,13 @@ def require_launch(executable, arguments=''):
 
 def check_scope(state, spec, args):
     auth = state.get('authorization', {})
-    if not validate(auth) or auth['agent_session'] != agent_session.current():
-        return 'Approval belongs to a different Agent session; open the native control center'
+    if not validate(auth):
+        return 'Approval is missing or invalid; open the native control center'
+    if auth['agent_session'] != agent_session.current():
+        # A time-boxed lease covers every new process of the same identity.
+        leased = auth.get('agent_id') and auth['agent_id'] == agent_session.identity()
+        if not leased:
+            return 'Approval belongs to a different Agent session; open the native control center'
     missing = required(spec, args) - set(auth['scopes'])
     if missing: return 'Human approval required for: '+', '.join(sorted(missing))
     return None

@@ -122,6 +122,23 @@ def claim(reason: str = "agent") -> dict:
     return status()
 
 
+def handover(reason: str = "human approved this session") -> dict:
+    """A human just granted authority: hand control over instead of penalising it.
+
+    Without this the approval click itself counts as user input, so the next ten
+    seconds of tool calls fail with "control is with the user".
+    """
+    global _generation
+    with _lock:
+        _reset_mouse_motion_locked()
+        _generation += 1
+        STATE["owner"] = "ai"
+        STATE["since"] = _now()
+        STATE["reason"] = reason
+        STATE["last_user"] = 0.0
+    return status()
+
+
 def release(reason: str = "agent released") -> dict:
     global _generation
     with _lock:
@@ -177,6 +194,21 @@ def blocking_reason() -> str | None:
         return 'Takeover monitoring unavailable; execution is blocked'
     st = status()
     if st["owner"] == "user":
+        # A human approval that is newer than the last physical input hands
+        # control back: the click on the grant dialog is not a takeover.
+        try:
+            from computer_mcp import permission as _permission
+            approved = float(_permission.status().get('authorized_at') or 0)
+        except Exception:
+            approved = 0.0
+        if approved > float(STATE.get('last_user') or 0):
+            global _generation
+            with _lock:
+                _reset_mouse_motion_locked()
+                _generation += 1
+                STATE['last_user'] = 0.0
+                _set('ai', 'human approval handed control over')
+            return None
         return (f"用户已接管控制权（{st['idle_s']}s 前），"
                 f"再闲置 {max(0, round(st['idle_resume_s'] - st['idle_s']))}s 才恢复")
     return None

@@ -106,9 +106,14 @@ def dispatch(message, pid):
     if command == 'authority':
         with bridge._lock:
             granted, _ = bridge.effective_state()
-            matches = agent_session.lookup(message.get('agent_session'), pid) is not None
-            return dict(granted=bool(granted and matches and
-                bridge._authorization.get('agent_session') == message.get('agent_session') and
+            ident = message.get('agent_session')
+            matches = agent_session.lookup(ident, pid) is not None
+            auth = bridge._authorization or {}
+            same_session = auth.get('agent_session') == ident
+            # A lease follows the identity, which is derived from the caller's
+            # own process, never asserted by it.
+            same_identity = bool(auth.get('agent_id')) and auth.get('agent_id') == agent_session.identity(pid)
+            return dict(granted=bool(granted and matches and (same_session or same_identity) and
                 message.get('session') == bridge._session and
                 message.get('revision') == bridge._revision))
     if command == 'emergency':
@@ -141,7 +146,9 @@ def dispatch(message, pid):
         return dict(state=bridge.current_state(), agents=list(agent_session.active()))
     if command == 'grant':
         session = message.get('agent_session')
-        if not any(a['id'] == session for a in agent_session.active()):
+        live = list(agent_session.active())
+        record = next((a for a in live if a['id'] == session), None)
+        if record is None:
             raise ValueError('Agent session is no longer active')
         scopes = message.get('scopes')
         applications = message.get('applications')
@@ -153,11 +160,19 @@ def dispatch(message, pid):
         read_files = message.get('read_files', [])
         if not isinstance(read_files, list) or len(read_files) > 20:
             raise ValueError('Invalid file approvals')
-        for record in read_files:
-            if capabilities.file_record(record['path']) != record:
+        for record_file in read_files:
+            if capabilities.file_record(record_file['path']) != record_file:
                 raise ValueError('External file changed; approve again')
         auth = dict(agent_session=session, scopes=scopes, applications=applications,
                     launches=launches, read_files=read_files)
+        lease_minutes = message.get('lease_minutes')
+        if lease_minutes is not None:
+            if not isinstance(lease_minutes, int) or not 1 <= lease_minutes <= 240:
+                raise ValueError('Invalid lease length')
+            # Derive the identity from the granted process itself: a new process
+            # in the same workspace inherits the lease without another prompt.
+            auth['agent_id'] = agent_session.identity(record['pid'])
+            auth['lease_expires_at'] = time.time() + lease_minutes * 60
         if not capabilities.validate(auth): raise ValueError('Invalid scope selection')
         # Validate actual PID/create-time/executable, not caller supplied display names.
         for app in applications:
