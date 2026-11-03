@@ -22,6 +22,7 @@ BUTTON_CANCEL = 101
 BUTTON_ADVANCED = 102
 BUTTON_RENEW = 103
 BUTTON_REVOKE = 104
+BUTTON_QUIT = 105
 
 PRESETS = (
     ('常用', '读取整个桌面 + 鼠标键盘 + 文字输入',
@@ -111,6 +112,32 @@ def available() -> bool:
     return bool(_common_controls())
 
 
+def _force_foreground(timeout: float = 2.5) -> None:
+    """A background process' dialog can open behind the active window.
+
+    Windows only grants foreground rights after real user input, so ask for the
+    window as soon as it exists and let the OS decide whether to honour it.
+    """
+    import threading
+    import time
+
+    def work():
+        import win32gui
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            hwnd = win32gui.FindWindow(None, 'Icon Control')
+            if hwnd:
+                try:
+                    win32gui.BringWindowToTop(hwnd)
+                    win32gui.SetForegroundWindow(hwnd)
+                except Exception:
+                    pass
+                return
+            time.sleep(0.05)
+
+    threading.Thread(target=work, daemon=True).start()
+
+
 def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
               lease_minutes: int = 60, note: str = '') -> dict | None:
     """Show the single approval window. Returns None when unavailable."""
@@ -157,6 +184,7 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
     config.pszExpandedControlText = '说明'
     config.pszCollapsedControlText = '说明'
 
+    _force_foreground()
     button = ctypes.c_int(BUTTON_CANCEL)
     radio = ctypes.c_int(200 + default_preset)
     checked = wintypes.BOOL(1)
@@ -180,9 +208,10 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
         ctypes.POINTER(TASKDIALOGCONFIG), ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
     library.TaskDialogIndirect.restype = ctypes.c_long
-    buttons = (TASKDIALOG_BUTTON * 3)(
+    buttons = (TASKDIALOG_BUTTON * 4)(
         TASKDIALOG_BUTTON(BUTTON_RENEW, '续 60 分钟'),
         TASKDIALOG_BUTTON(BUTTON_REVOKE, '立即撤销'),
+        TASKDIALOG_BUTTON(BUTTON_QUIT, '退出 Icon Control'),
         TASKDIALOG_BUTTON(BUTTON_CANCEL, '关闭'),
     )
     config = TASKDIALOGCONFIG()
@@ -195,6 +224,7 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
     config.cButtons = len(buttons)
     config.pButtons = buttons
     config.nDefaultButton = BUTTON_CANCEL
+    _force_foreground()
     button = ctypes.c_int(BUTTON_CANCEL)
     radio = ctypes.c_int(0)
     checked = wintypes.BOOL(0)
@@ -202,7 +232,7 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
                                         ctypes.byref(radio), ctypes.byref(checked))
     if result != 0:
         raise OSError(result, 'TaskDialogIndirect failed')
-    action = {BUTTON_RENEW: 'renew', BUTTON_REVOKE: 'revoke'}.get(button.value, 'close')
+    action = {BUTTON_RENEW: 'renew', BUTTON_REVOKE: 'revoke', BUTTON_QUIT: 'quit'}.get(button.value, 'close')
     return dict(button=button.value, action=action)
 
 

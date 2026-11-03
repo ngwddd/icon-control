@@ -136,6 +136,9 @@ class ConsentHost:
                 self.revoke()
             elif answer['action'] == 'renew':
                 self._renew()
+            elif answer['action'] == 'quit':
+                self.revoke()
+                self.user32.DestroyWindow(self.hwnd)
             return
 
         agent = self._pick_agent()
@@ -241,24 +244,8 @@ class ConsentHost:
         self._refresh_tray()
 
     def _menu(self):
-        user32 = self.user32
-        menu = user32.CreatePopupMenu()
-        user32.AppendMenuW(menu, 0x0000, ID_OPEN, '打开授权窗口')
-        user32.AppendMenuW(menu, 0x0000, ID_REVOKE, '立即撤销')
-        user32.AppendMenuW(menu, 0x0000, ID_QUIT, '退出')
-        point = POINT()
-        user32.GetCursorPos(ctypes.byref(point))
-        user32.SetForegroundWindow(self.hwnd)
-        user32.PostMessageW(self.hwnd, 0, 0, 0)      # lets the menu take focus
-        choice = user32.TrackPopupMenu(menu, 0x0100 | 0x0002, point.x, point.y, 0, self.hwnd, None)
-        user32.DestroyMenu(menu)
-        if choice == ID_OPEN:
-            self.show()
-        elif choice == ID_REVOKE:
-            self.revoke()
-        elif choice == ID_QUIT:
-            self.revoke()
-            self.user32.DestroyWindow(self.hwnd)
+        """Tray click opens the same window: grant, or the live lease actions."""
+        self.show()
 
     # -- lifecycle --------------------------------------------------------
     def run(self) -> int:
