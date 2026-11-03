@@ -21,8 +21,10 @@ def type_text(text: str, controller: Controller | None = None) -> dict[str, Any]
     if controller is None:
         controller = Controller()
     
-    controller.type(text)
-    return {"success": True, "action": "type", "text": text}
+    injected = controller.type(text)
+    return {"success": True, "action": "type", "text": text,
+            "injected_characters": injected, "requested_characters": len(text),
+            "status": "executed_unverified", "verified": False}
 
 
 def key_down(key: str, controller: Controller | None = None) -> dict[str, Any]:

@@ -27,6 +27,38 @@ class InjectedMouse(RawMouse):
         else:
             super()._position_set(point)
 
+class UnicodeKey(KeyCode):
+    """Marker separating literal text from physical shortcut keys."""
+
+
+class InjectedKeyboard(RawKeyboard):
+    def __init__(self):
+        super().__init__()
+        self._edit_keys = set()
+
+    def _resolve(self, key):
+        if isinstance(key, UnicodeKey):
+            return key
+        return super()._resolve(key)
+
+    def _handle(self, key, is_press):
+        from computer_mcp.native_keyboard import send_unicode, send_key, edit_shortcut
+        if isinstance(key, UnicodeKey):
+            send_unicode(key.char, is_press)
+            return
+        char = (key.char or '').lower()
+        if not is_press and key in self._edit_keys:
+            self._edit_keys.discard(key)
+            return
+        if is_press and self.ctrl_pressed and not self.shift_pressed and not self.alt_pressed:
+            if edit_shortcut(char):
+                self._edit_keys.add(key)
+                return
+        # Special keys and ordinary key actions retain virtual-key semantics.
+        parameters = key._parameters(is_press)
+        send_key(vk=parameters['wVk'], scan=parameters['wScan'], flags=parameters['dwFlags'])
+
+
 def _watch_held():
     import time
     while True:
@@ -160,7 +192,7 @@ class MouseController(_Held):
 class KeyboardController(_Held):
     up_tool = 'key_up'
     def __init__(self, raw=None):
-        self._init(raw if raw is not None else RawKeyboard())
+        self._init(InjectedKeyboard() if sys.platform == "win32" and (raw is None or type(raw) is RawKeyboard) else (raw if raw is not None else RawKeyboard()))
 
     def press(self, key):
         with self._mutex:
@@ -172,10 +204,22 @@ class KeyboardController(_Held):
             self.raw.press(key)
 
     def type(self, text):
+        if not isinstance(text, str):
+            raise TypeError('Text must be a string')
+        # Validate the whole string before emitting a partial invalid surrogate.
+        text.encode('utf-16-le')
+        injected = 0
         for character in text:
             check('type')
-            self.press(character)
-            self.release(character)
+            key = UnicodeKey.from_char(character) if isinstance(self.raw, InjectedKeyboard) else character
+            try:
+                self.press(key)
+                self.release(key)
+                injected += 1
+            except BaseException:
+                self.cleanup()
+                raise
+        return injected
 
     @contextmanager
     def pressed(self, *keys):
