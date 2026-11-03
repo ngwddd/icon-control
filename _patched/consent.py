@@ -4,9 +4,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 from computer_mcp import consent_ipc, capabilities
 
-LABELS = {'file_read':'读取专用目录中的文件', 'screen_read':'读取屏幕、OCR 和窗口信息', 'input':'鼠标、切换窗口',
+LABELS = {'file_read':'读取专用目录中的文件', 'screen_read':'读取整个桌面（含未授权窗口）、OCR 和窗口信息',
+          'input':'鼠标、切换窗口',
           'input_observe':'读取物理鼠标及按键状态（可选）',
           'text_entry':'在所选应用中输入文本（可能修改或保存文档）', 'window_close':'关闭所选应用窗口',
+          'clipboard_read':'读取剪贴板内容（可能包含其他程序的复制内容）',
+          'clipboard_write':'写入剪贴板（会覆盖你当前复制的内容）',
           'file_write':'写入 Icon Control 专用目录', 'file_delete':'清理专用目录文件',
           'config_write':'修改助手运行设置', 'process':'启动已批准的应用'}
 
@@ -183,7 +186,11 @@ def main():
         shown_plan[0] = plan
         if plan.get('status') == 'ready':
             app = plan['applications'][0]
-            caption.set(f"{plan['label']} · {plan['agent_session'][:10]}\n{app['exe']} · PID {app['pid']}\n屏幕读取、鼠标与文字输入 · 最长 30 分钟")
+            caption.set(f"{plan['label']} · {plan['agent_session'][:10]}\n{app['exe']} · PID {app['pid']}\n屏幕读取（整个桌面）、鼠标与文字输入 · 最长 30 分钟")
+        elif plan.get('reason') == 'saved_agent_inactive':
+            caption.set('已保存的目标已失效（原 Agent 已退出），请重新绑定')
+        elif plan.get('status') == 'denied':
+            caption.set('已保存的目标已失效，请重新绑定')
         else:
             caption.set('请先在设置中绑定一个 Agent 和目标应用')
         return plan

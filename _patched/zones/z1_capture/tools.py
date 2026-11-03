@@ -20,7 +20,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='capture_daemon',
-        effects=('file_write',),
+        effects=('screen_read',),
         read_actions=('status',),
         action_default='status',
         zone='Z1',

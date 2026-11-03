@@ -40,10 +40,12 @@ class QuickGrantPolicy:
             pref = json.loads(self.path.read_text(encoding='utf8'))
             if not security.authentic(pref):
                 return dict(status='denied')
+            # A saved preference only ever applies to the agent it was bound to.
+            # Being the sole live session is not an identity: it must be rebound.
             active = list(agent_session.active())
-            agents = active if len(active) == 1 else [a for a in active if a['id'] == pref['agent']]
+            agents = [a for a in active if a['id'] == pref['agent']]
             if len(agents) != 1:
-                return dict(status='ambiguous')
+                return dict(status='ambiguous', reason='saved_agent_inactive')
             app = capabilities.process_record(pref['app']['pid'])
             if app != pref['app']:
                 return dict(status='denied')

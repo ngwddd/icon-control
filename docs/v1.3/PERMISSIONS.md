@@ -4,6 +4,25 @@
 每项 effects 显式声明；read_actions/read_when_absent 的参数规则见 tool-permissions.json。
 ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝。
 
+## 作用域（12 项）
+
+`screen_read` `input` `input_observe` `text_entry` `window_close`
+`clipboard_read` `clipboard_write` `file_read` `file_write` `file_delete` `config_write` `process`
+
+## 宏动作的剪贴板权限（v1.3.1）
+
+宏动作不经过工具级 effects，按动作单独检查（`_patched/macro_ext.py::_MACRO_SCOPES`）：
+
+| 宏动作 | 需要的作用域 | 说明 |
+|---|---|---|
+| `clipboard_get` / `assert_clipboard` | `clipboard_read` | 只返回长度与是否匹配，**日志与错误不回显剪贴板内容** |
+| `clipboard_set` | `clipboard_write` | 覆盖系统剪贴板，属于全局副作用 |
+| `paste`（带 `text`） | `text_entry` + `clipboard_write` | 内部临时写入；粘贴完成后若剪贴板未被其他程序改写，会恢复原内容 |
+| `paste`（不带 `text`） | `text_entry` | 只发送 Ctrl+V，不写入剪贴板 |
+
+一键授权的常用模式（`quick_grant.COMMON`）是 `screen_read` / `input` / `text_entry`，
+**不含**剪贴板读写；需要读写剪贴板的用户必须在控制中心单独勾选。
+
 | 工具 | 分区 | 声明副作用 | 需要用户授权 |
 |---|---|---|---|
 | act_until | Z4 | compose | 是 |

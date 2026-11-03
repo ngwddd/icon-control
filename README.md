@@ -1,10 +1,10 @@
 # 图标控制 · Icon Control
 
-> **Icon Control v1.3 稳定性重构计划 · 1.3.0 正式版**
+> **Icon Control v1.3 稳定性重构计划 · 1.3.1 安全修补版**
 >
 > 当前保留 89 个工具，优先修复权限执行、控制权、假成功与安装问题。
-> 本轮修复 RC2 安全审计及独立复审问题，授权迁移至按 Agent、能力和应用隔离的原生控制中心。
-> 完整真机验收和最终独立复审尚未签收，不能作为正式稳定版发布。修复与证据状态见 [安全整改](docs/v1.3/SECURITY-REMEDIATION.md)。
+> 1.3.0 已正式发布；1.3.1 修复独立审计发现的剪贴板权限与快捷授权身份问题。
+> 完整真机验收与最终独立复审仍未签收，`docs/v1.3/acceptance.json` 保持 blocked。修复与证据状态见 [安全整改](docs/v1.3/SECURITY-REMEDIATION.md) 与 [v1.3.1 整改记录](docs/v1.3/AUDIT-1.3.1.md)。
 > 安装与回滚见 [INSTALL](docs/v1.3/INSTALL.md)，迁移见 [MIGRATION](docs/v1.3/MIGRATION.md)，
 > 阶段要求见 [PLAN](docs/v1.3/PLAN.md)，验收见 [DESKTOP-BENCHMARKS](docs/v1.3/DESKTOP-BENCHMARKS.md)。
 > 下文历史性能数据来自 v1.2，尚未在 v1.3 真机环境复测。
@@ -16,7 +16,7 @@
 
 | 事实 | 当前值 |
 |---|---|
-| 版本 | **v1.3.0**；回滚基线 v1.2.0 / `98b38b4` |
+| 版本 | **v1.3.1**；回滚基线 v1.2.0 / `98b38b4` |
 | 工具数 | **89**（底座 31 + 本项目补丁 58，全部按 7 个分区归位） |
 | 测试 | 以 docs/v1.3/VALIDATION.md 和完整回归报告为准；跳过项不算通过 |
 | 平台 | Windows 11 · 2560×1440 @150% |

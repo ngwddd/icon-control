@@ -6,7 +6,8 @@ from pathlib import Path
 import psutil
 from computer_mcp import agent_session
 
-SCOPES = frozenset({'screen_read','input_observe','input','text_entry','window_close','file_write',
+SCOPES = frozenset({'screen_read','input_observe','input','text_entry','window_close',
+                    'clipboard_read','clipboard_write','file_write',
                     'file_delete','file_read','config_write','process'})
 
 def required(spec, args):

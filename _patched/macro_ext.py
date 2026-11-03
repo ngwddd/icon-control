@@ -448,7 +448,9 @@ def window_metrics(hwnd: int) -> dict[str, Any]:
 # Read capabilities from substituted on-disk steps, never from caller-supplied metadata.
 _MACRO_SCOPES = {
     **dict.fromkeys("move click double_click right_click sleep".split(), ()),
-    **dict.fromkeys("type key hotkey paste clipboard_set clipboard_get assert_clipboard".split(), ('text_entry',)),
+    **dict.fromkeys("type key hotkey paste".split(), ('text_entry',)),
+    **dict.fromkeys("clipboard_set".split(), ('clipboard_write',)),
+    **dict.fromkeys("clipboard_get assert_clipboard".split(), ('clipboard_read',)),
     **dict.fromkeys("wait_change screen_state ui_click ui_invoke anchor_click page_check ensure_page click_text find_text verify_text wait_window assert_template assert_baseline wait_template sample_stable hover_probe assert_text assert_title".split(), ('screen_read',)),
     **dict.fromkeys("type_verified ensure_chat".split(), ('screen_read','text_entry')),
     **dict.fromkeys("learn_region learn_item capture_template set_baseline".split(), ('screen_read','file_write')),
@@ -463,6 +465,58 @@ def _check_macro_action(action):
     for scope in _MACRO_SCOPES[action]:
         if not capabilities.has_scope(scope):
             raise permission.PermissionDenied('Macro action requires ' + scope)
+
+
+def _clipboard_text():
+    """Current clipboard text, or None. Never raises for a non-text clipboard."""
+    import win32clipboard as clipboard
+    clipboard.OpenClipboard()
+    try:
+        try:
+            return str(clipboard.GetClipboardData(clipboard.CF_UNICODETEXT))
+        except Exception:
+            return None
+    finally:
+        clipboard.CloseClipboard()
+
+
+def _clipboard_sequence():
+    import win32clipboard as clipboard
+    return int(clipboard.GetClipboardSequenceNumber())
+
+
+def _write_clipboard(text):
+    """Replace the clipboard and return the sequence number of our own write."""
+    import win32clipboard as clipboard
+    clipboard.OpenClipboard()
+    try:
+        clipboard.EmptyClipboard()
+        clipboard.SetClipboardText(str(text))
+    finally:
+        clipboard.CloseClipboard()
+    return _clipboard_sequence()
+
+
+def _restore_clipboard(previous, written_sequence):
+    """Restore only when nobody else wrote after us; never clobber newer content."""
+    if previous is None:
+        return False
+    if _clipboard_sequence() != written_sequence:
+        return False
+    _write_clipboard(previous)
+    return True
+
+
+def _clipboard_observation(value, need):
+    """Report match/size only: clipboard content must never reach a log."""
+    value = '' if value is None else str(value)
+    ok = (str(need) in value) if need else True
+    entry = {'chars': len(value)}
+    sub = {'ok': ok}
+    if not ok:
+        sub['error'] = 'clipboard does not contain the required text'
+    return entry, sub
+
 
 
 def run_macro(
@@ -1046,39 +1100,30 @@ def run_macro(
 
             elif action in ("clipboard_set", "clipboard_get", "paste",
                             "assert_title", "assert_file", "assert_text"):
-                import win32clipboard as _wcb
 
                 if action == "clipboard_set":
                     txt = str(step.get("text", ""))
                     _execution.checkpoint('macro_run')
-                    _wcb.OpenClipboard(); _wcb.EmptyClipboard()
-                    _execution.checkpoint('macro_run')
-                    _wcb.SetClipboardText(txt); _wcb.CloseClipboard()
+                    _write_clipboard(txt)
                     entry["chars"] = len(txt)
                     sub = {"ok": True}
 
                 elif action == "clipboard_get":
-                    _wcb.OpenClipboard()
-                    try:
-                        val = str(_wcb.GetClipboardData())
-                    except Exception:
-                        val = ""
-                    _wcb.CloseClipboard()
+                    val = _clipboard_text() or ''
                     need = step.get("contains")
-                    entry["chars"] = len(val)
-                    entry["preview"] = val[:120]
-                    ok_c = (str(need) in val) if need else True
-                    sub = {"ok": ok_c}
-                    if not ok_c:
-                        sub["error"] = f"clipboard does not contain {need!r} (got {val[:40]!r})"
+                    entry, sub = _clipboard_observation(val, need)
 
                 elif action == "paste":
+                    from computer_mcp import permission, capabilities
                     txt = str(step.get("text", ""))
+                    previous = None
+                    sequence = None
                     if txt:
+                        if not capabilities.has_scope('clipboard_write'):
+                            raise permission.PermissionDenied('Macro action requires clipboard_write')
                         _execution.checkpoint('macro_run')
-                        _wcb.OpenClipboard(); _wcb.EmptyClipboard()
-                        _execution.checkpoint('macro_run')
-                        _wcb.SetClipboardText(txt); _wcb.CloseClipboard()
+                        previous = _clipboard_text()
+                        sequence = _write_clipboard(txt)
                         _execution.sleep(0.15)
                     _ctrl = ui_ext.resolve_key("ctrl")
                     _v = ui_ext.resolve_key("v")
@@ -1086,6 +1131,8 @@ def run_macro(
                     keyboard.release(_v); keyboard.release(_ctrl)
                     _execution.sleep(float(step.get("settle_ms", 700)) / 1000.0)
                     entry["chars"] = len(txt)
+                    if txt and sequence is not None:
+                        entry["clipboard_restored"] = _restore_clipboard(previous, sequence)
                     sub = {"ok": True}
 
                 elif action == "assert_title":

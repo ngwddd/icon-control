@@ -1,3 +1,16 @@
+## [1.3.1] - 2026-11-04
+
+安全修补版，对应独立审计 v1.3.0 的 P0 与 P1 项。
+
+- 修复快捷授权身份漂移：保存的 Agent 退出后，即使它是唯一在线会话也不再沿用旧目标，必须重新绑定（P1-01）。
+- 新增 `clipboard_read` 作用域：宏里的 `clipboard_get` / `assert_clipboard` 不能再凭 `text_entry` 读取系统剪贴板；执行日志与错误只记录长度与是否匹配，不回显内容（P1-02）。
+- 新增 `clipboard_write` 作用域：`clipboard_set` 与带文本的 `paste` 需要显式授权；内部临时粘贴在剪贴板未被其他程序改写时恢复原内容（P1-03）。
+- 一键授权界面写明"读取整个桌面（含未授权窗口）"，并补上剪贴板读写两项的人类可读说明（P1-04）。
+- `capture_daemon` 不再声明未使用的 `file_write`，只要求 `screen_read`（P2-01）。
+- 发布流程接入 Release Gate：正式版必须通过 `tools/release_gate.py` 的 SHA 绑定证据校验，未通过时只能发布预发布版（P0）。
+- 回归：536 项运行、0 失败、0 错误、3 跳过；89 个 MCP 工具与 stdio/HTTP 协议自检不变。
+- 真机验收（DESKTOP-BENCHMARKS 32 项）仍未签收，`docs/v1.3/acceptance.json` 保持 `blocked`。
+
 ## [1.3.0] - 2026-11-04
 
 - Windows 原生一键授权胶囊，按 Agent 会话、能力和应用进程身份授权，常用模式授予屏幕读取、鼠标与文字输入。
