@@ -176,8 +176,11 @@ def main():
         root.lift()
         refresh()
 
+    shown_plan = [None]
+
     def preview():
         plan = ipc('quick_preview')
+        shown_plan[0] = plan
         if plan.get('status') == 'ready':
             app = plan['applications'][0]
             caption.set(f"{plan['label']} · {plan['agent_session'][:10]}\n{app['exe']} · PID {app['pid']}\n屏幕读取、鼠标与文字输入 · 最长 30 分钟")
@@ -198,7 +201,7 @@ def main():
 
     def quick():
         try:
-            result = ipc('quick_grant')
+            result = ipc('quick_grant', expected=shown_plan[0])
             state = result.get('state', {})
             if result.get('status') == 'granted' and state.get('granted') is True:
                 desired[0] = True

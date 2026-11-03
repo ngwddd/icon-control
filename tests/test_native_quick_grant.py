@@ -23,7 +23,7 @@ class NativeQuickGrantTests(AuthorityCase, unittest.TestCase):
 
     def test_only_saved_agent_can_match(self):
         self.policy.remember(self.identity, self.app)
-        with patch.object(agent_session, 'active', return_value=[{'id':'other'}]):
+        with patch.object(agent_session, 'active', return_value=[{'id':'other'}, {'id':'another'}]):
             self.assertEqual(self.policy.resolve()['status'], 'ambiguous')
 
     def test_untrusted_request_rejected(self):

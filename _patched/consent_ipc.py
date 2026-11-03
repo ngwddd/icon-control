@@ -129,6 +129,8 @@ def dispatch(message, pid):
         plan = policy.resolve()
         if command != 'quick_grant' or plan['status'] != 'ready':
             return plan
+        if 'expected' in message and message['expected'] != plan:
+            return dict(status='ambiguous')
         if _native_instance(plan['applications'][0]['pid']):
             return dict(status='denied')
         state = dispatch(dict(command='grant', ui_nonce=message.get('ui_nonce'),
