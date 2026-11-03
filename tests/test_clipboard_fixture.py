@@ -1,5 +1,6 @@
 """Clipboard failure must not erase user data or suppress a failed desktop test."""
 import unittest
+from contextlib import nullcontext
 from unittest.mock import patch
 import clipboard_fixture as fixture
 
@@ -17,5 +18,14 @@ class ClipboardFixtureTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'test failed'):
                 with fixture.preserve_clipboard():raise RuntimeError('test failed')
             restore.assert_called_once_with(saved)
+
+    def test_added_ansi_terminator_preserves_payload_but_changed_bytes_fail(self):
+        with patch.object(fixture,'opened',return_value=nullcontext()), \
+             patch.object(fixture.clip,'EmptyClipboard'),patch.object(fixture.clip,'SetClipboardData'), \
+             patch.object(fixture,'memory_data',return_value=b'payload\0\0') as read:
+            fixture.restore([(1,b'payload\0')])
+            read.return_value=b'changed\0'
+            with self.assertRaisesRegex(RuntimeError,'restoration mismatch'):
+                fixture.restore([(1,b'payload\0')])
 
 if __name__=='__main__':unittest.main()

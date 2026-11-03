@@ -66,7 +66,10 @@ def restore(saved):
             if fmt==13:
                 if actual.decode('utf-16-le','surrogatepass').rstrip('\x00')!=data.decode('utf-16-le','surrogatepass').rstrip('\x00'):
                     raise RuntimeError('Clipboard text restoration mismatch')
-            elif actual!=data:raise RuntimeError('Clipboard restoration mismatch')
+            # pywin32 may append a terminator (CF_TEXT). Require the entire
+            # original allocation to remain intact; extra storage is harmless.
+            elif len(actual)<len(data) or actual[:len(data)]!=data:
+                raise RuntimeError('Clipboard format '+str(fmt)+' restoration mismatch ('+str(len(data))+' / '+str(len(actual))+' bytes)')
 
 @contextmanager
 def preserve_clipboard():
