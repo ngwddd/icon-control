@@ -5,6 +5,7 @@ from contextvars import ContextVar
 import json
 import os
 import secrets
+import re
 import time
 import psutil
 from computer_mcp import security
@@ -41,3 +42,18 @@ def active():
                 yield record
         except (OSError, ValueError, KeyError, psutil.Error):
             continue
+
+def lookup(identity, pid):
+    """Fresh verification of one peer; historical sessions cannot slow each event."""
+    if not isinstance(identity, str) or not re.fullmatch(r'[0-9a-f]{48}', identity):
+        return None
+    try:
+        path = security.data_home()/'state'/'sessions'/(identity+'.json')
+        record = json.loads(path.read_text(encoding='utf-8'))
+        if (record.get('id') == identity and record.get('pid') == pid and
+                security.authentic(record) and
+                psutil.Process(pid).create_time() == record['created']):
+            return record
+    except (OSError, ValueError, KeyError, TypeError, psutil.Error):
+        pass
+    return None

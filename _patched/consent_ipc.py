@@ -106,8 +106,7 @@ def dispatch(message, pid):
     if command == 'authority':
         with bridge._lock:
             granted, _ = bridge.effective_state()
-            matches = any(a['id'] == message.get('agent_session') and a['pid'] == pid
-                          for a in agent_session.active())
+            matches = agent_session.lookup(message.get('agent_session'), pid) is not None
             return dict(granted=bool(granted and matches and
                 bridge._authorization.get('agent_session') == message.get('agent_session') and
                 message.get('session') == bridge._session and

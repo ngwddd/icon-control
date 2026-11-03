@@ -29,23 +29,31 @@ class InjectedMouse(RawMouse):
 
 def _watch_held():
     import time
-    from computer_mcp import permission, control, panic
     while True:
         time.sleep(.02)
-        with _lock:
-            pending=list(_held_controllers)
-        if not pending:
-            continue
-        try:
-            generation=control.status()['generation']
-            stopped=bool(panic._DEFAULT and panic._DEFAULT.triggered)
-            for controller in pending:
+        _check_held()
+
+def _check_held():
+    from computer_mcp import permission, control, panic
+    with _lock:
+        pending=list(_held_controllers)
+    try:
+        for controller in pending:
+            with controller._mutex:
+                if not controller.held:
+                    continue
                 state=permission.status(agent_session_id=controller.agent_session)
                 revision=(state.get('session'),state.get('revision'))
-                if not state.get('granted') or stopped or controller.authority!=(revision,generation):
-                    controller.cleanup()
-        except Exception:
-            release_all()
+                generation=control.status()['generation']
+                stopped=bool(panic._DEFAULT and panic._DEFAULT.triggered)
+                invalid=not state.get('granted') or stopped or controller.authority!=(revision,generation)
+            if invalid:
+                # Losing a modifier must cancel the remaining input too; merely
+                # releasing Ctrl would let the next letter become ordinary text.
+                control.note_physical('Held-input authority lost; operation cancelled')
+                return
+    except Exception:
+        control.note_physical('Held-input monitor failed; operation cancelled')
 
 def _retain(controller, tool, *, point=None, hwnd=None):
     global _monitor_thread

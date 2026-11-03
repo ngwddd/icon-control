@@ -1,6 +1,7 @@
 """Window management actions."""
 
 from computer_mcp.core.platform import IS_DARWIN, IS_LINUX, IS_WINDOWS
+from computer_mcp import execution as _execution
 
 import subprocess
 from typing import Any

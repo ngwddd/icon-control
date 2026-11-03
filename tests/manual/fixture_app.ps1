@@ -101,5 +101,5 @@ $timer.Add_Tick({
   [IO.File]::WriteAllText($StatePath,($data|ConvertTo-Json -Depth 5),(New-Object Text.UTF8Encoding($false)))
 })
 $timer.Start()
-[void]$form.ShowDialog()
+[System.Windows.Forms.Application]::Run($form)
 $timer.Dispose()
