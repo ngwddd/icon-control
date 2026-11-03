@@ -52,22 +52,23 @@ class TestE2E(unittest.TestCase):
         return self.fixture_state()
 
     def test_1_clipboard_roundtrip(self):
-        import pythoncom,win32clipboard
-        pythoncom.OleInitialize()
-        original=pythoncom.OleGetClipboard()
+        import win32clipboard
+        from clipboard_fixture import preserve_clipboard
         text='IconControl-clipboard-'+str(time.time_ns())
-        try:
+        with preserve_clipboard():
             state=self.enter(text)
             self.combo('a');self.combo('c');time.sleep(.3)
             win32clipboard.OpenClipboard()
             try: copied=win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
             finally: win32clipboard.CloseClipboard()
             self.assertEqual(copied,text)
-            self.observations.append(dict(test=self.id(),application_state=state,clipboard_matches=True))
-        finally:
-            pythoncom.OleSetClipboard(original)
-            pythoncom.OleFlushClipboard()
-            __import__('ctypes').windll.ole32.OleUninitialize()
+            self.combo('a')
+            from computer_mcp.actions import keyboard
+            keyboard.key_press('backspace')
+            self.combo('v');time.sleep(.3)
+            self.assertEqual(self.fixture_state()['text'],text)
+            self.observations.append(dict(test=self.id(),application_state=state,
+                clipboard_matches=True,pasted_text_matches=True))
 
     def test_2_window_enumeration(self):
         import win32gui
