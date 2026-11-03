@@ -137,27 +137,23 @@ class TestGatePrefersBridge(AuthorityCase,unittest.TestCase):
 
 
 class TestClientReportsToBridge(unittest.TestCase):
+    """The renderer no longer holds an authority client: consent moved native."""
+
     def _client_src(self) -> str:
         path = pathlib.Path(HERE) / 'plugin' / 'client.js'
         self.assertTrue(path.is_file(), 'Repository permission client is required')
         return path.read_text(encoding='utf-8')
 
-    def test_has_bridge_url_and_heartbeat(self) -> None:
+    def test_renderer_has_no_bridge_or_token(self) -> None:
         src = self._client_src()
-        self.assertIn("const BRIDGE", src)
-        self.assertIn("setInterval", src)
-        self.assertNotIn("/beacon", src, "长期凭据不得通过信标 URL 发送")
-        self.assertIn("127.0.0.1:__BRIDGE_PORT__", src)
-        self.assertRegex(src, r"method:\s*'GET'")
-        self.assertNotIn('Authorization', src)
-        self.assertNotIn('__BRIDGE_TOKEN__', src)
-        self.assertIn("mode: 'cors'", src)
+        self.assertIn('@local/dsh-mouse-permission', src)
+        for forbidden in ('fetch(', 'Authorization', '__BRIDGE_TOKEN__', '127.0.0.1', '/status'):
+            self.assertNotIn(forbidden, src, '渲染端不再持有权限客户端: ' + forbidden)
 
-    def test_reports_on_mount_and_click(self) -> None:
+    def test_renderer_registers_no_slot(self) -> None:
         src = self._client_src()
-        self.assertIn('/status',src)
-        self.assertNotIn("method: 'POST'",src,'The renderer cannot mutate authority')
-        self.assertIn('icon-control://permissions',src)
+        self.assertNotIn('ctx.slots.register', src)
+        self.assertIn('apply() {}', src)
 
 
 class TestCliUsesGate(unittest.TestCase):

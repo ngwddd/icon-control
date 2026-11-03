@@ -170,77 +170,11 @@ def main(argv=None):
             messagebox.showerror('文件无法批准', str(exc), parent=root)
 
     ttk.Button(buttons, text='批准单个文件读取', command=choose_read_file).pack(side='left')
-    capsule = tk.Toplevel(root)
-    capsule.title('Icon Control — Permissions · 快捷授权')
-    capsule.attributes('-topmost', True)
-    capsule.resizable(False, False)
-    caption = tk.StringVar(value='正在核对常用目标…')
-    ttk.Label(capsule, textvariable=caption, wraplength=360).pack(padx=12, pady=6)
-    lamp = tk.Label(capsule, textvariable=status, wraplength=360)
-    lamp.pack(fill='x')
-
-    def show_settings():
-        root.deiconify()
-        root.lift()
-        refresh()
-
-    shown_plan = [None]
-
-    def preview():
-        plan = ipc('quick_preview')
-        shown_plan[0] = plan
-        if plan.get('status') == 'ready':
-            app = plan['applications'][0]
-            caption.set(f"{plan['label']} · {plan['agent_session'][:10]}\n{app['exe']} · PID {app['pid']}\n屏幕读取（整个桌面）、鼠标与文字输入 · 最长 30 分钟")
-        elif plan.get('reason') == 'saved_agent_inactive':
-            caption.set('已保存的目标已失效（原 Agent 已退出），请重新绑定')
-        elif plan.get('status') == 'denied':
-            caption.set('已保存的目标已失效，请重新绑定')
-        else:
-            caption.set('请先在设置中绑定一个 Agent 和目标应用')
-        return plan
-
-    def bind_target():
-        try:
-            selected = applications.curselection()
-            if agents.current() < 0 or len(selected) != 1:
-                raise ValueError('请选择一个 Agent 和一个应用')
-            ipc('quick_bind', agent_session=agent_ids[agents.current()], app=records[selected[0]])
-            if preview().get('status') == 'ready':
-                root.withdraw()
-        except Exception as exc:
-            messagebox.showerror('绑定失败', str(exc), parent=root)
-
-    def quick():
-        try:
-            result = ipc('quick_grant', expected=shown_plan[0])
-            state = result.get('state', {})
-            if result.get('status') == 'granted' and state.get('granted') is True:
-                desired[0] = True
-                confirmed_agent[0] = state['authorization']['agent_session']
-                status.set('后端已确认：常用操作已授权')
-                lamp.configure(fg='green')
-            else:
-                desired[0] = False
-                status.set('目标需要重新确认')
-                lamp.configure(fg='darkorange')
-                show_settings()
-        except Exception:
-            desired[0] = False
-            status.set('状态未知：连接失败')
-            lamp.configure(fg='darkorange')
-
-    ttk.Button(capsule,text='一键授权常用操作',command=quick).pack(fill='x')
-    ttk.Button(capsule,text='一键撤销',command=revoke).pack(fill='x')
-    ttk.Button(capsule,text='绑定目标与高级设置',command=show_settings).pack(fill='x')
-    ttk.Button(buttons,text='保存常用目标',command=bind_target).pack(side='left')
     def close(): revoke(); root.destroy()
     root.protocol('WM_DELETE_WINDOW',close)
-    capsule.protocol('WM_DELETE_WINDOW',close)
+    root.deiconify()
+    root.lift()
     refresh(True)
-    root.withdraw()
-    try: preview()
-    except Exception: status.set('状态未知：连接失败')
     root.after(4000,heartbeat)
     root.mainloop()
 

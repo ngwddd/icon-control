@@ -65,11 +65,11 @@ jobs:
           gh release view "${{ github.ref_name }}" *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload "${{ github.ref_name }}" dist/* --clobber
-            gh release edit "${{ github.ref_name }}" --notes-file docs/v1.3/RELEASE-v1.3.1.md
+            gh release edit "${{ github.ref_name }}" --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md
           } else {
             gh release create "${{ github.ref_name }}" dist/* `
               --title "Icon Control ${{ github.ref_name }}" `
-              --notes-file docs/v1.3/RELEASE-v1.3.1.md
+              --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md
           }
       - name: Publish pre-release
         if: steps.gate.outcome != 'success'
@@ -80,10 +80,10 @@ jobs:
           gh release view "${{ github.ref_name }}" *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload "${{ github.ref_name }}" dist/* --clobber
-            gh release edit "${{ github.ref_name }}" --notes-file docs/v1.3/RELEASE-v1.3.1.md --prerelease
+            gh release edit "${{ github.ref_name }}" --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md --prerelease
           } else {
             gh release create "${{ github.ref_name }}" dist/* `
               --prerelease `
               --title "Icon Control ${{ github.ref_name }} (pre-release)" `
-              --notes-file docs/v1.3/RELEASE-v1.3.1.md
+              --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md
           }

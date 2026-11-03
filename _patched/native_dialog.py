@@ -20,6 +20,8 @@ TD_INFORMATION_ICON = 65533
 BUTTON_GRANT = 100
 BUTTON_CANCEL = 101
 BUTTON_ADVANCED = 102
+BUTTON_RENEW = 103
+BUTTON_REVOKE = 104
 
 PRESETS = (
     ('常用', '读取整个桌面 + 鼠标键盘 + 文字输入',
@@ -120,10 +122,9 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
         ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
     library.TaskDialogIndirect.restype = ctypes.c_long
 
-    buttons = (TASKDIALOG_BUTTON * 3)(
+    buttons = (TASKDIALOG_BUTTON * 2)(
         TASKDIALOG_BUTTON(BUTTON_GRANT, '一键授权'),
         TASKDIALOG_BUTTON(BUTTON_CANCEL, '取消'),
-        TASKDIALOG_BUTTON(BUTTON_ADVANCED, '高级…'),
     )
     radios = (TASKDIALOG_BUTTON * len(PRESETS))(
         *[TASKDIALOG_BUTTON(200 + index, f'{name}：{detail}')
@@ -136,7 +137,7 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
     )
     verification = f'{lease_minutes} 分钟内，本工作区的新进程自动沿用这次授权'
     expanded = ('目标不对？先关掉这个窗口，把要操作的应用切到前台，再按热键重新打开。\r\n'
-                '「高级…」打开逐项勾选（旧的 Tk 控制中心）。')
+                '授权只覆盖这一次列出的范围；60 分钟到期或托盘撤销后立即失效。')
 
     config = TASKDIALOGCONFIG()
     config.cbSize = ctypes.sizeof(TASKDIALOGCONFIG)
@@ -168,6 +169,41 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
                 scopes=list(PRESETS[chosen][2]),
                 lease_minutes=lease_minutes if checked.value else None,
                 accepted=button.value == BUTTON_GRANT)
+
+
+def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | None:
+    """Show the lease that is currently in force, with renew/revoke actions."""
+    if not available():
+        return None
+    library = _common_controls()
+    library.TaskDialogIndirect.argtypes = [
+        ctypes.POINTER(TASKDIALOGCONFIG), ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
+    library.TaskDialogIndirect.restype = ctypes.c_long
+    buttons = (TASKDIALOG_BUTTON * 3)(
+        TASKDIALOG_BUTTON(BUTTON_RENEW, '续 60 分钟'),
+        TASKDIALOG_BUTTON(BUTTON_REVOKE, '立即撤销'),
+        TASKDIALOG_BUTTON(BUTTON_CANCEL, '关闭'),
+    )
+    config = TASKDIALOGCONFIG()
+    config.cbSize = ctypes.sizeof(TASKDIALOGCONFIG)
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_SIZE_TO_CONTENT
+    config.pszWindowTitle = 'Icon Control'
+    config.pszMainIcon = ctypes.c_void_p(TD_INFORMATION_ICON)
+    config.pszMainInstruction = headline
+    config.pszContent = detail + (f'\r\n\r\n{remaining}' if remaining else '')
+    config.cButtons = len(buttons)
+    config.pButtons = buttons
+    config.nDefaultButton = BUTTON_CANCEL
+    button = ctypes.c_int(BUTTON_CANCEL)
+    radio = ctypes.c_int(0)
+    checked = wintypes.BOOL(0)
+    result = library.TaskDialogIndirect(ctypes.byref(config), ctypes.byref(button),
+                                        ctypes.byref(radio), ctypes.byref(checked))
+    if result != 0:
+        raise OSError(result, 'TaskDialogIndirect failed')
+    action = {BUTTON_RENEW: 'renew', BUTTON_REVOKE: 'revoke'}.get(button.value, 'close')
+    return dict(button=button.value, action=action)
 
 
 def _probe() -> int:

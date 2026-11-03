@@ -90,5 +90,25 @@ class PresetTests(unittest.TestCase):
         self.assertNotIn('process', scopes)
 
 
+class TrayHostTests(unittest.TestCase):
+    """The window procedure must resolve every message constant it compares."""
+
+    def test_hotkey_and_show_messages_open_the_dialog(self):
+        from computer_mcp import native_consent as nc
+        host = nc.ConsentHost('nonce')
+        shown = []
+        host.show = lambda: shown.append(True)
+        host._on_message(0, nc.WM_HOTKEY, 1, 0)
+        host._on_message(0, nc.WM_SHOW, 0, 0)
+        self.assertEqual(len(shown), 2)
+
+    def test_hotkey_chain_has_fallbacks(self):
+        from computer_mcp import native_consent as nc
+        self.assertGreaterEqual(len(nc.HOTKEYS), 2)
+        first = nc.HOTKEYS[0]
+        self.assertIn('F9', first[0])
+        self.assertEqual(first[1], nc.MOD_CONTROL | nc.MOD_ALT | nc.MOD_SHIFT)
+
+
 if __name__ == '__main__':
     unittest.main()

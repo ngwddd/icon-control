@@ -65,9 +65,24 @@ def _native_client(pid,nonce=None):
     actual = _native_instance(pid)
     return bool(actual and isinstance(nonce,str) and __import__('hmac').compare_digest(actual,nonce))
 
+def _post_show():
+    """Wake a running consent host instead of spawning a second one."""
+    try:
+        import win32gui
+        hwnd = win32gui.FindWindow('IconControlConsentHost', None)
+        if hwnd:
+            win32gui.PostMessage(hwnd, 0x8000 + 2, 0, 0)      # WM_APP+2: show
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def open_native():
     for nonce, record in list(_native_instances.items()):
-        if record['process'].is_running(): return {'opened':True}
+        if record['process'].is_running():
+            _post_show()
+            return {'opened':True}
         _native_instances.pop(nonce,None)
     nonce=secrets.token_urlsafe(32)
     interpreter=Path(sys.executable).with_name('pythonw.exe')
@@ -123,25 +138,6 @@ def dispatch(message, pid):
     if not _native_client(pid,message.get('ui_nonce')):
         raise PermissionError('Broker-launched native consent instance required')
     owner = 'native-'+str(pid)+'-'+str(psutil.Process(pid).create_time())
-    if command in ('quick_bind', 'quick_preview', 'quick_grant'):
-        from computer_mcp.quick_grant import QuickGrantPolicy
-        policy = QuickGrantPolicy()
-        if command == 'quick_bind':
-            app = message['app']
-            if _native_instance(app['pid']):
-                raise PermissionError('Permission UI is never a target')
-            policy.remember(message['agent_session'], app)
-        plan = policy.resolve()
-        if command != 'quick_grant' or plan['status'] != 'ready':
-            return plan
-        if 'expected' in message and message['expected'] != plan:
-            return dict(status='ambiguous')
-        if _native_instance(plan['applications'][0]['pid']):
-            return dict(status='denied')
-        state = dispatch(dict(command='grant', ui_nonce=message.get('ui_nonce'),
-            agent_session=plan['agent_session'], applications=plan['applications'],
-            scopes=plan['scopes'], launches=[]), pid)
-        return dict(status='granted' if state.get('granted') else 'denied', state=state)
     if command == 'status':
         return dict(state=bridge.current_state(), agents=list(agent_session.active()))
     if command == 'grant':

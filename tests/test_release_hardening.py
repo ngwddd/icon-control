@@ -65,12 +65,6 @@ class NativeMovementTests(unittest.TestCase):
             self.assertEqual(InjectedMouse().position,(2400,300))
 
 class PolicyFaultTests(unittest.TestCase):
-    def test_client_factory_reload_replaces_legacy_heartbeat(self):
-        root=Path(__file__).resolve().parents[1]
-        result=subprocess.run(['node',str(root/'tests/manual/client_protocol_test.cjs')],
-                              cwd=root,capture_output=True,text=True,timeout=10)
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertIn('client protocol and hot reload passed',result.stdout)
     def test_every_mcp_policy_exception_blocks_composite_dispatch(self):
         from computer_mcp import mcp
         state=Mock(config={'observe_mouse_position':False,'observe_mouse_button_states':False,'observe_keyboard_key_states':False})

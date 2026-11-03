@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from authority_fixture import AuthorityCase
-from computer_mcp import agent_session, capabilities, consent, macro_ext, permission, quick_grant
+from computer_mcp import agent_session, capabilities, consent, macro_ext, permission
 
 
 class ClipboardScopeTests(AuthorityCase, unittest.TestCase):
@@ -79,38 +79,6 @@ class ClipboardRestoreTests(unittest.TestCase):
                 patch.object(macro_ext, '_write_clipboard') as write:
             self.assertFalse(macro_ext._restore_clipboard(None, 7))
             write.assert_not_called()
-
-
-class QuickGrantIdentityTests(AuthorityCase, unittest.TestCase):
-    fixture_authorized = True
-
-    def _write_pref(self, agent, app):
-        policy = quick_grant.QuickGrantPolicy()
-        policy.path.parent.mkdir(parents=True, exist_ok=True)
-        policy.path.write_text(json.dumps(dict(agent=agent, app=app, signature='x')), encoding='utf8')
-        return policy
-
-    def test_saved_agent_must_match_even_when_it_is_the_only_one_online(self):
-        app = dict(pid=os.getpid(), created=1.0, exe='C:/x.exe')
-        policy = self._write_pref('a' * 48, app)
-        other = [dict(id='b' * 48, label='另一个 Agent', pid=os.getpid())]
-        with patch.object(quick_grant.security, 'authentic', return_value=True), \
-                patch.object(quick_grant.agent_session, 'active', return_value=other), \
-                patch.object(quick_grant.capabilities, 'process_record', return_value=app):
-            result = policy.resolve()
-        self.assertNotEqual(result.get('status'), 'ready')
-        self.assertNotEqual(result.get('agent_session'), 'b' * 48)
-
-    def test_saved_agent_still_resolves_when_it_is_online(self):
-        app = dict(pid=os.getpid(), created=1.0, exe='C:/x.exe')
-        policy = self._write_pref('a' * 48, app)
-        active = [dict(id='a' * 48, label='保存的 Agent', pid=os.getpid())]
-        with patch.object(quick_grant.security, 'authentic', return_value=True), \
-                patch.object(quick_grant.agent_session, 'active', return_value=active), \
-                patch.object(quick_grant.capabilities, 'process_record', return_value=app):
-            result = policy.resolve()
-        self.assertEqual(result['status'], 'ready')
-        self.assertEqual(result['agent_session'], 'a' * 48)
 
 
 class ConsentLabelTests(unittest.TestCase):
