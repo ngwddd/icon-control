@@ -38,6 +38,8 @@ def launch_record(executable, arguments=''):
 def require_launch(executable, arguments=''):
     from computer_mcp import permission
     permission.require('run_script')
+    if not has_scope('process'):
+        raise permission.PermissionDenied('Process launch approval required')
     record = launch_record(executable, arguments)
     if record not in permission.status().get('authorization',{}).get('launches',[]):
         raise permission.PermissionDenied('Executable and arguments require exact human approval')

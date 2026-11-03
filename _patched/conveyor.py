@@ -975,13 +975,17 @@ class Runner:
         jpg = encode_jpeg(img, 75)
         path = ""
         try:
-            if write_artifact:
+            from computer_mcp.capabilities import has_scope
+            if write_artifact and has_scope('file_write'):
                 _execution.checkpoint('track')
                 from computer_mcp import security,workspace
                 import uuid
                 draw=security.data_home()/'_draw'
                 target=workspace.owned_path(draw,'track_'+uuid.uuid4().hex+'.jpg')
                 target.parent.mkdir(parents=True,exist_ok=True)
+                _execution.checkpoint('track')
+                if not has_scope('file_write'):
+                    raise PermissionDenied('Track artifact write permission was revoked')
                 with target.open('xb') as fh:fh.write(jpg)
                 path=str(target)
         except PermissionDenied:

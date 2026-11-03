@@ -87,6 +87,8 @@ def boundary(tool):
                                 if isinstance(bound.arguments.get(n),dict)), None)
             if tool == 'run_script' and 'ops' in bound.arguments:
                 policy_args = {'ops': bound.arguments['ops']}
+            if tool == 'batch' and 'steps' in bound.arguments:
+                policy_args = {'steps': bound.arguments['steps']}
             with operation(tool, policy_args):
                 from computer_mcp import capabilities, tool_registry
                 spec = tool_registry.get(tool)

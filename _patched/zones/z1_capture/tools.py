@@ -62,7 +62,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='track',
-        effects=('compose','input','clipboard_write','window','file_write',),
+        effects=('compose','input','screen_read',),
         zone='Z1',
         description="列车：三轮回转（入帧 30fps / 处理差分状态机 / 输出摘要+拼图）+ 看门狗。action=start 后列车常驻后台跑，随时用 status 取新鲜摘要（含一张拼图路径）；action=run 阻塞跑到结束；stop 停车；selfcheck 短跑报 fps/内存。track={'name':..,'window':{'process':..},'steps':[{name,expect,action,budget_ms}]}",
         read_only=False,

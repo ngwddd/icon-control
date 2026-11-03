@@ -451,7 +451,7 @@ _MACRO_SCOPES = {
     **dict.fromkeys("wait_change screen_state ui_click ui_invoke anchor_click page_check ensure_page click_text find_text verify_text wait_window assert_template assert_baseline wait_template sample_stable hover_probe assert_text assert_title".split(), ('screen_read',)),
     **dict.fromkeys("type_verified ensure_chat".split(), ('screen_read','text_entry')),
     **dict.fromkeys("learn_region learn_item capture_template set_baseline".split(), ('screen_read','file_write')),
-    'launch': ('process',), 'close_windows': ('window_close',), 'exit_app': ('window_close',),
+    'anchor_click': ('screen_read','file_write'), 'launch': ('process',), 'close_windows': ('window_close',), 'exit_app': ('window_close',),
     'assert_file': ('file_read',),
 }
 

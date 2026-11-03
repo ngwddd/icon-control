@@ -66,6 +66,27 @@ class ToolSpec:
             return ('screen_read', 'file_write')
         if self.name == 'run_script' and ('ops' in arguments or 'steps' in arguments):
             return micro_effects(arguments.get('ops') or arguments.get('steps') or [])
+        if self.name in ('batch','navigate') and ('steps' in arguments or 'plan' in arguments):
+            batch = self.name == 'batch'
+            steps = arguments.get('steps' if batch else 'plan')
+            if not isinstance(steps,list):
+                raise ValueError('Expected a step array')
+            effects = {'compose'}
+            for step in steps:
+                if not isinstance(step,dict):
+                    raise ValueError('Invalid step')
+                kind = str(step.get('action' if batch else 'kind','')).strip().lower()
+                if batch and kind in ('move','click','right_click','double_click','sleep'):
+                    effects.add('input')
+                elif batch and kind in ('type','key'):
+                    effects.add('text_entry')
+                elif batch and kind in ('ui_click','wait_change','screen_state'):
+                    effects.add('screen_read')
+                elif not batch and kind in ('goto','search','face','key','wait'):
+                    effects.update(('screen_read','text_entry'))
+                else:
+                    raise ValueError('Unknown step: ' + kind)
+            return tuple(sorted(effects))
         if self.parameter_effects:
             chosen = tuple(dict.fromkeys(effect for key,effects in self.parameter_effects
                 if arguments.get(key) for effect in effects))

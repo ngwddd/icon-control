@@ -97,7 +97,7 @@ class WorkspaceTests(unittest.TestCase):
         owned = self.root / 'home' / 'tmp' / 'owned.tmp'
         owned.parent.mkdir(parents=True); owned.write_text('owned'); os.utime(owned,(1,1))
         with patch.object(retention,'DRAW_ROOT',self.root/'home'), \
-             patch('tempfile.gettempdir',return_value=str(system_temp)):
+             patch('tempfile.gettempdir',return_value=str(system_temp)), patch('computer_mcp.capabilities.has_scope',side_effect=lambda scope: scope=='file_delete'):
             retention.sweep_temp()
         self.assertTrue(all(f.exists() for f in files))
         self.assertFalse(owned.exists())
