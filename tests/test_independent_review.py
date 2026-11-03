@@ -58,9 +58,16 @@ class ReviewTests(AuthorityCase,unittest.TestCase):
                 creationflags=subprocess.CREATE_NO_WINDOW)
             try:
                 deadline=time.monotonic()+3
-                while not (Path(folder)/'ready').exists() and time.monotonic()<deadline:time.sleep(.02)
-                self.assertTrue((Path(folder)/'ready').exists())
-                peer=int((Path(folder)/'ready').read_text())
+                peer=None
+                while time.monotonic()<deadline:
+                    try:
+                        text=(Path(folder)/'ready').read_text().strip()
+                        if text:
+                            peer=int(text);break
+                    except (OSError,ValueError):
+                        pass
+                    time.sleep(.02)
+                self.assertIsNotNone(peer,'ready file never reported a pid')
                 self.assertFalse(consent_ipc._native_client(peer))
             finally:
                 children=psutil.Process(process.pid).children(recursive=True)
