@@ -12,16 +12,33 @@ _current = ContextVar('icon_execution', default=None)
 _operation_lock = threading.RLock()
 _UNSET = object()
 
+def authority_stamp(state):
+    """Validate a final authority snapshot before committing an input event."""
+    from computer_mcp import permission, control
+    if not state.get('granted'):
+        raise permission.PermissionDenied('Live authority unavailable or revoked')
+    stamp = ((state.get('session'), state.get('revision')), control.status()['generation'])
+    task = _current.get()
+    if task and stamp != (task['revision'], task['generation']):
+        raise permission.PermissionDenied('Execution cancelled by takeover or authority change')
+    return stamp
+
 def check(tool, arguments=_UNSET):
     from computer_mcp import permission, control
     task = _current.get()
     if arguments is _UNSET:
         arguments = task.get('arguments') if task and task['tool']==tool else None
     permission.require(tool, arguments)
-    authority = permission.status() if task else {}
-    if task and (control.status()['generation'] != task['generation'] or
-                 (authority.get('session'), authority.get('revision')) != task['revision']):
-        raise permission.PermissionDenied('Execution cancelled by takeover or authority change')
+    if task:
+        authority = permission.status()
+        # Read-only operations can legitimately have no control grant.
+        from computer_mcp import tool_registry
+        spec = tool_registry.get(tool)
+        if spec and spec.needs_authority(arguments):
+            authority_stamp(authority)
+        elif (control.status()['generation'] != task['generation'] or
+              (authority.get('session'), authority.get('revision')) != task['revision']):
+            raise permission.PermissionDenied('Execution cancelled by takeover or authority change')
 
 @contextmanager
 def operation(tool, arguments=None):

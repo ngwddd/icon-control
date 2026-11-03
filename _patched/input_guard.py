@@ -47,13 +47,19 @@ def _watch_held():
         except Exception:
             release_all()
 
-def _retain(controller):
+def _retain(controller, tool, *, point=None, hwnd=None):
     global _monitor_thread
-    from computer_mcp import permission, control
+    from computer_mcp import permission, capabilities, tool_registry, execution
     state=permission.status()
+    stamp = execution.authority_stamp(state)
+    why = capabilities.check_scope(state, tool_registry.get(tool), None)
+    if not why:
+        why = capabilities.check_target(state, point=point, hwnd=hwnd)
+    if why:
+        raise permission.PermissionDenied(why)
     from computer_mcp import agent_session
     controller.agent_session = agent_session.current()
-    controller.authority=((state.get('session'),state.get('revision')),control.status()['generation'])
+    controller.authority=stamp
     with _lock:
         _held_controllers.add(controller)
         if _monitor_thread is None or not _monitor_thread.is_alive():
@@ -127,8 +133,8 @@ class MouseController(_Held):
             check('button_down')
             from computer_mcp.capabilities import require_target
             require_target(point=self.raw.position)
+            _retain(self, 'button_down', point=self.raw.position)
             self.held.add(button)
-            _retain(self)
             self.raw.press(button)
 
     def click(self, button, count=1):
@@ -153,8 +159,8 @@ class KeyboardController(_Held):
             check('key_down')
             from computer_mcp.capabilities import require_target
             require_target(hwnd=getattr(self.raw,'hwnd',None))
+            _retain(self, 'key_down', hwnd=getattr(self.raw,'hwnd',None))
             self.held.add(key)
-            _retain(self)
             self.raw.press(key)
 
     def type(self, text):
