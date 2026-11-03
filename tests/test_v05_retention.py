@@ -39,7 +39,8 @@ def _touch(p: Path, size: int = 32, age_hours: float = 0.0) -> Path:
 
 
 @NEED
-class TestPruneTool(unittest.TestCase):
+class TestPruneTool(AuthorityCase, unittest.TestCase):
+    fixture_authorized=True
     def test_files_cap_keeps_newest(self) -> None:
         with tempfile.TemporaryDirectory() as t:
             root = Path(t)
@@ -105,7 +106,8 @@ class TestPruneTool(unittest.TestCase):
 
 
 @NEED
-class TestTempSweep(unittest.TestCase):
+class TestTempSweep(AuthorityCase, unittest.TestCase):
+    fixture_authorized=True
     def test_own_prefixes_removed(self) -> None:
         private = tempfile.TemporaryDirectory()
         self.addCleanup(private.cleanup)

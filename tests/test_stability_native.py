@@ -91,7 +91,8 @@ class NativeTests(AuthorityCase, unittest.TestCase):
     def test_track_timeout_is_not_success(self):
         result=self._track_result('timeout')
         self.assertFalse(result['success'])
-        self.assertEqual(result['status'],'timeout')
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['engine_status'],'timeout')
 
 
 spec = importlib.util.spec_from_file_location('release_gate',Path(__file__).resolve().parents[1]/'tools'/'release_gate.py')

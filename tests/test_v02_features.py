@@ -125,10 +125,14 @@ class TestPermissionGate(AuthorityCase,unittest.TestCase):
             perm.STATE_PATH = old_state
 
 
-class TestVerifyFlow(unittest.TestCase):
+class TestVerifyFlow(AuthorityCase, unittest.TestCase):
+    fixture_authorized = True
     @NEED
     def test_pass_then_fail_stops(self) -> None:
         d = tempfile.mkdtemp()
+        from computer_mcp.security import data_home
+        d = data_home() / "workspace" / "files"
+        d.mkdir(parents=True)
         good = os.path.join(d, "ok.txt")
         with open(good, "w", encoding="utf-8") as fh:
             fh.write("hello world")

@@ -87,6 +87,13 @@ def usage(root: Path | None = None) -> dict:
             "root": str(root)}
 
 
+def _require_delete():
+    from computer_mcp.capabilities import has_scope
+    from computer_mcp.permission import PermissionDenied
+    if not has_scope('file_delete'):
+        raise PermissionDenied('Deleting retained files requires file_delete')
+
+
 def _prune_one(path: Path, rule: dict, now: float) -> tuple[list[str], int]:
     """按策略删一个目录里的文件，返回 (删掉的, 释放字节)。只删最老的。"""
     removed: list[str] = []
@@ -102,6 +109,7 @@ def _prune_one(path: Path, rule: dict, now: float) -> tuple[list[str], int]:
     def _del(f: Path) -> None:
         nonlocal freed
         if not _contained(f,path): return
+        _require_delete()
         try:
             size = f.stat().st_size
             f.unlink()
@@ -163,6 +171,8 @@ def _prune_one(path: Path, rule: dict, now: float) -> tuple[list[str], int]:
 
 def sweep(root: Path | None = None, dry_run: bool = False) -> dict:
     """按 POLICY 清扫工具自己的目录。资产目录不在 POLICY 里，永远不碰。"""
+    if not dry_run:
+        _require_delete()
     root = Path(root or DRAW_ROOT)
     now = time.time()
     removed: list[str] = []
@@ -193,6 +203,8 @@ def sweep(root: Path | None = None, dry_run: bool = False) -> dict:
 
 def sweep_temp(max_age_hours: float = 6.0, dry_run: bool = False) -> dict:
     """Only sweep the dedicated private temp directory, never the system TEMP."""
+    if not dry_run:
+        _require_delete()
     base = DRAW_ROOT / 'tmp'
     cutoff = time.time() - max_age_hours * 3600
     removed: list[str] = []
@@ -216,6 +228,7 @@ def sweep_temp(max_age_hours: float = 6.0, dry_run: bool = False) -> dict:
             else:
                 size = entry.stat().st_size
             if not dry_run:
+                _require_delete()
                 if entry.is_dir(): shutil.rmtree(entry)
                 else: entry.unlink()
             removed.append(entry.name)
@@ -230,6 +243,7 @@ def sweep_temp(max_age_hours: float = 6.0, dry_run: bool = False) -> dict:
                     continue
                 size = f.stat().st_size
                 if not dry_run:
+                    _require_delete()
                     f.unlink(missing_ok=True)
                 removed.append(f.name)
                 freed += size
