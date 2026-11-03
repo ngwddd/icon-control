@@ -235,6 +235,9 @@ def status(force: bool = False, agent_session_id=None) -> dict:
             auth = cached.get('authorization', {})
             if cached.get('granted') and not capabilities.validate(auth):
                 return dict(granted=False, source='bridge', reason='Approval record is invalid')
+            if cached.get('granted') and auth.get('lease_expires_at') and \
+                    now >= float(auth['lease_expires_at']):
+                return dict(granted=False, source='bridge', reason='Lease expired')
             if cached.get('granted') and auth['agent_session'] != (agent_session_id or agent_session.current()):
                 # A time-boxed lease covers every new process of the same identity.
                 leased = auth.get('agent_id') and auth['agent_id'] == agent_session.identity()

@@ -1,6 +1,7 @@
 """v1.3.2 单窗口授权的模型回归：身份租约、授权即交接、预设范围。"""
 import json
 import time
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -73,6 +74,38 @@ class HandoverTests(unittest.TestCase):
                 patch('computer_mcp.permission.status', return_value=dict(granted=True, authorized_at=1.0)):
             self.assertIn('用户已接管控制权', control.blocking_reason())
         self.assertEqual(control.STATE['owner'], 'user')
+
+
+class LeaseExpiryTests(AuthorityCase, unittest.TestCase):
+    fixture_authorized = True
+
+    def _signed_state(self, authorization):
+        from computer_mcp import permission, security
+        payload = dict(session='s', revision=1, granted=True, source='bridge',
+                       authorization=authorization, checked_at='now',
+                       checked_at_ts=time.time(), authorized_at=time.time() - 10,
+                       expires_at=time.time() + 15)
+        payload['signature'] = security.signature(payload, security.load_token())
+        Path(permission.STATE_PATH).write_text(json.dumps(payload), encoding='utf-8')
+
+    def test_expired_lease_is_rejected_even_if_the_file_is_fresh(self):
+        from computer_mcp import permission
+        auth = dict(agent_session=agent_session.current(), scopes=['screen_read'], applications=[],
+                    agent_id=agent_session.identity(), lease_expires_at=time.time() - 5)
+        self._signed_state(auth)
+        with patch('computer_mcp.consent_ipc.live_valid', return_value=True):
+            state = permission.status(force=True)
+        self.assertFalse(state['granted'])
+        self.assertIn('Lease expired', state.get('reason', ''))
+
+    def test_live_lease_still_passes(self):
+        from computer_mcp import permission
+        auth = dict(agent_session=agent_session.current(), scopes=['screen_read'], applications=[],
+                    agent_id=agent_session.identity(), lease_expires_at=time.time() + 600)
+        self._signed_state(auth)
+        with patch('computer_mcp.consent_ipc.live_valid', return_value=True):
+            state = permission.status(force=True)
+        self.assertTrue(state['granted'])
 
 
 class PresetTests(unittest.TestCase):
