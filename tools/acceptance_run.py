@@ -77,17 +77,23 @@ def single_host() -> bool:
     if not pids:
         say('fail', '没有授权宿主：掉托盘和热键了，跑一次 python -m computer_mcp.consent')
         return False
-    keep = min(pids)
-    say('healed', f'发现 {len(pids)} 个宿主，保留 {keep}，其余关掉 {pids}')
-    import psutil
-    for pid in pids:
-        if pid != keep:
-            try:
-                psutil.Process(pid).terminate()
-            except psutil.Error:
-                pass
-    time.sleep(1.5)
-    return len(consent_hosts()) == 1
+    owner = host_window_owner()
+    if owner and owner in pids:
+        say('fail', f'有 {len(pids)} 个授权宿主（窗口属于 {owner}，另 {sorted(set(pids) - {owner})} 个多余）。'
+                    '多余宿主会叠窗口；结束多余的那个，保留带窗口的')
+    else:
+        say('fail', f'有 {len(pids)} 个授权宿主 {sorted(pids)}，分不清哪个带窗口；全部结束再重开一个')
+    return False
+
+
+def host_window_owner() -> int | None:
+    import win32gui
+    import win32process
+    hwnd = win32gui.FindWindow('IconControlConsentHost', None)
+    if not hwnd:
+        return None
+    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+    return pid or None
 
 
 def stop_latch_clear() -> bool:
