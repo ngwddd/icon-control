@@ -118,6 +118,23 @@ def dispatch(message, pid):
     if not _native_client(pid,message.get('ui_nonce')):
         raise PermissionError('Broker-launched native consent instance required')
     owner = 'native-'+str(pid)+'-'+str(psutil.Process(pid).create_time())
+    if command in ('quick_bind', 'quick_preview', 'quick_grant'):
+        from computer_mcp.quick_grant import QuickGrantPolicy
+        policy = QuickGrantPolicy()
+        if command == 'quick_bind':
+            app = message['app']
+            if _native_instance(app['pid']):
+                raise PermissionError('Permission UI is never a target')
+            policy.remember(message['agent_session'], app)
+        plan = policy.resolve()
+        if command != 'quick_grant' or plan['status'] != 'ready':
+            return plan
+        if _native_instance(plan['applications'][0]['pid']):
+            return dict(status='denied')
+        state = dispatch(dict(command='grant', ui_nonce=message.get('ui_nonce'),
+            agent_session=plan['agent_session'], applications=plan['applications'],
+            scopes=plan['scopes'], launches=[]), pid)
+        return dict(status='granted' if state.get('granted') else 'denied', state=state)
     if command == 'status':
         return dict(state=bridge.current_state(), agents=list(agent_session.active()))
     if command == 'grant':

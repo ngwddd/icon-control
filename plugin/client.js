@@ -48,7 +48,7 @@ window.__ModuleLoader__.load({
         },
         'aria-label': label,
         'data-mouse-permission': state === null ? 'unknown' : state ? 'granted' : 'denied',
-        title: '打开原生权限中心，选择 Agent、能力和应用。胶囊只显示后端已确认状态。',
+        title: '打开原生快捷授权胶囊。首次使用请绑定 Agent 和应用。胶囊只显示后端已确认状态。',
         style: { borderRadius: 999, padding: '3px 10px', cursor: 'pointer',
                  color: state === true ? '#2ea043' : state === null ? '#b87c14' : '#8b949e' },
       }, label);
