@@ -106,21 +106,36 @@ class ConsentHost:
         try:
             import win32gui
             import win32process
-            hwnd = win32gui.GetForegroundWindow()
-            if not hwnd:
-                return None
-            if win32gui.GetWindowText(hwnd).startswith('Icon Control'):
-                return None
-            _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            record = capabilities.process_record(pid)
-            record['title'] = win32gui.GetWindowText(hwnd)[:80]
-            return record
+            candidates = []
+            front = win32gui.GetForegroundWindow()
+            if front:
+                candidates.append(front)
+            hwnd = win32gui.GetTopWindow(None)
+            while hwnd:
+                candidates.append(hwnd)
+                hwnd = win32gui.GetWindow(hwnd, 2)      # GW_HWNDNEXT
+            for hwnd in candidates:
+                title = win32gui.GetWindowText(hwnd)
+                if not title or title.startswith('Icon Control'):
+                    continue
+                if not win32gui.IsWindowVisible(hwnd):
+                    continue
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                if not pid or pid == os.getpid():
+                    continue
+                record = capabilities.process_record(pid)
+                record['title'] = title[:80]
+                return record
         except Exception:
-            return None
+            pass
+        return None
 
-    def _pick_agent(self):
+    def _pick_agent(self, pending=None):
         live = [a for a in agent_session.active() if a.get('pid') != os.getpid()]
-        return max(live, key=lambda a: a.get('created', 0)) if live else None
+        if not live:
+            return None
+        preferred = next((a for a in live if a.get('id') == pending), None)
+        return preferred or max(live, key=lambda a: a.get('created', 0))
 
     def show(self):
         if self.granted:
@@ -141,13 +156,20 @@ class ConsentHost:
                 self.user32.DestroyWindow(self.hwnd)
             return
 
-        agent = self._pick_agent()
+        pending = None
+        try:
+            pending = (self.ipc('status') or {}).get('pending')
+        except Exception:
+            pass
+        agent = self._pick_agent(pending)
         if agent is None:
-            native_dialog.ask_grant('没有活跃的 Agent 会话', '先在宿主里发起一次操作再授权')
+            native_dialog.ask_notice('没有活跃的 Agent 会话',
+                                     '先在宿主里发起一次操作，再按热键或点托盘打开授权窗口。')
             return
         app = self._foreground_app()
         if app is None:
-            native_dialog.ask_grant('找不到前台应用', '先把要操作的应用切到前台，再打开授权窗口')
+            native_dialog.ask_notice('找不到前台应用',
+                                     '先把要操作的应用切到前台，再按热键或点托盘打开授权窗口。')
             return
         answer = native_dialog.ask_grant(
             agent_label=f"{agent.get('label', 'Agent')} · {agent['id'][:10]}",

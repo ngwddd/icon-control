@@ -117,7 +117,17 @@ def _io(pipe, payload=None, timeout_ms=200):
 def dispatch(message, pid):
     from computer_mcp import permission_bridge as bridge
     command = message.get('command')
-    if command == 'open': return open_native()
+    if command == 'open':
+        # Remember who asked, so the window approves the caller rather than
+        # whichever session happened to register last.
+        prefer = message.get('prefer_session')
+        if isinstance(prefer, str):
+            try:
+                if any(a['id'] == prefer for a in agent_session.active()):
+                    bridge._pending_agent = prefer
+            except Exception:
+                pass
+        return open_native()
     if command == 'authority':
         with bridge._lock:
             granted, _ = bridge.effective_state()
@@ -139,7 +149,8 @@ def dispatch(message, pid):
         raise PermissionError('Broker-launched native consent instance required')
     owner = 'native-'+str(pid)+'-'+str(psutil.Process(pid).create_time())
     if command == 'status':
-        return dict(state=bridge.current_state(), agents=list(agent_session.active()))
+        return dict(state=bridge.current_state(), agents=list(agent_session.active()),
+                    pending=getattr(bridge, '_pending_agent', None))
     if command == 'grant':
         session = message.get('agent_session')
         live = list(agent_session.active())

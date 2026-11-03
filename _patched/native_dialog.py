@@ -199,6 +199,34 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
                 accepted=button.value == BUTTON_GRANT)
 
 
+def ask_notice(title: str, message: str) -> None:
+    """Plain native notice: no presets, no grant button."""
+    if not available():
+        return
+    library = _common_controls()
+    library.TaskDialogIndirect.argtypes = [
+        ctypes.POINTER(TASKDIALOGCONFIG), ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
+    library.TaskDialogIndirect.restype = ctypes.c_long
+    buttons = (TASKDIALOG_BUTTON * 1)(TASKDIALOG_BUTTON(BUTTON_CANCEL, '知道了'))
+    config = TASKDIALOGCONFIG()
+    config.cbSize = ctypes.sizeof(TASKDIALOGCONFIG)
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_SIZE_TO_CONTENT
+    config.pszWindowTitle = 'Icon Control'
+    config.pszMainIcon = ctypes.c_void_p(TD_INFORMATION_ICON)
+    config.pszMainInstruction = title
+    config.pszContent = message
+    config.cButtons = 1
+    config.pButtons = buttons
+    config.nDefaultButton = BUTTON_CANCEL
+    _force_foreground()
+    button = ctypes.c_int(BUTTON_CANCEL)
+    radio = ctypes.c_int(0)
+    checked = wintypes.BOOL(0)
+    library.TaskDialogIndirect(ctypes.byref(config), ctypes.byref(button),
+                               ctypes.byref(radio), ctypes.byref(checked))
+
+
 def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | None:
     """Show the lease that is currently in force, with renew/revoke actions."""
     if not available():

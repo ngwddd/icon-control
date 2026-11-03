@@ -254,6 +254,27 @@ def status(force: bool = False, agent_session_id=None) -> dict:
                 checked_at='', reason='Missing, expired or unauthenticated bridge state')
 
 
+_last_consent_request = 0.0
+CONSENT_POPUP_INTERVAL_S = 20.0
+
+
+def _request_consent() -> None:
+    """A blocked call should bring up the approval window, not just an error."""
+    global _last_consent_request
+    if os.environ.get('ICON_CONTROL_AUTO_CONSENT') == '0':
+        return
+    now = time.time()
+    if now - _last_consent_request < CONSENT_POPUP_INTERVAL_S:
+        return
+    _last_consent_request = now
+    try:
+        from computer_mcp import agent_session, consent_ipc
+        consent_ipc.request('open', timeout_ms=300,
+                            prefer_session=agent_session.current())
+    except Exception:
+        pass
+
+
 def check_tool(name: str, arguments: dict | None = None) -> dict | None:
     """输入类工具的统一闸门。返回 None 表示放行，返回 dict 表示拒绝载荷。"""
     from computer_mcp import tool_registry, panic
@@ -267,6 +288,7 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         from computer_mcp import capabilities
         why = capabilities.check_scope(st, spec, arguments)
         if why:
+            _request_consent()
             return dict(success=False, blocked=True, tool=name, error=why)
         if set(spec.effects_for(arguments)) <= {'screen_read','observe'}:
             return None
@@ -295,13 +317,14 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         except Exception as exc:
             return dict(success=False, blocked=True, tool=name, error=f'Control guard unavailable: {exc}')
         return None
+    _request_consent()
     return {
         "success": False,
         "blocked": True,
-        "error": "鼠标接管未授权：GUI 上的开关是灰色的。请让用户在界面上点亮「鼠标·已授权」后重试。",
+        "error": "桌面助手未授权：按 Ctrl+Alt+Shift+F9（或点托盘图标）打开授权窗口，点「一键授权」后重试。",
         "tool": name,
         "permission": st,
-        "hint": "这是硬闸门（v0.2）：未授权时任何输入类工具都在执行前被拦下，不会产生任何鼠标/键盘动作。",
+        "hint": "授权只由人触发；60 分钟内同一工作区的新进程自动沿用。",
     }
 
 

@@ -108,6 +108,37 @@ class LeaseExpiryTests(AuthorityCase, unittest.TestCase):
         self.assertTrue(state['granted'])
 
 
+class AutoConsentTests(unittest.TestCase):
+    """A blocked tool call should surface the approval window by itself."""
+
+    def test_blocked_tool_requests_the_window_once(self):
+        from computer_mcp import permission
+        with patch.object(permission, "status", return_value=dict(granted=False, reason="no")), \
+                patch("computer_mcp.consent_ipc.request", return_value={"opened": True}) as request, \
+                patch.object(permission, "_last_consent_request", 0.0):
+            first = permission.check_tool("screenshot", {})
+            second = permission.check_tool("screenshot", {})
+        self.assertTrue(first and first.get("blocked"))
+        self.assertTrue(second and second.get("blocked"))
+        self.assertEqual(request.call_count, 1)
+
+    def test_missing_scope_also_opens_the_window(self):
+        from computer_mcp import permission
+        state = dict(granted=True, authorization=dict(
+            agent_session=agent_session.current(), scopes=["screen_read"], applications=[]))
+        spec = type("Spec", (), {
+            "effects_for": lambda self, args: ("input",),
+            "needs_authority": lambda self, args: True})()
+        with patch.object(permission, "status", return_value=state), \
+                patch("computer_mcp.tool_registry.get", return_value=spec), \
+                patch("computer_mcp.tool_registry.allowed", return_value=True), \
+                patch("computer_mcp.consent_ipc.request") as request, \
+                patch.object(permission, "_last_consent_request", 0.0):
+            denial = permission.check_tool("click", {})
+        self.assertIn("input", denial["error"])
+        request.assert_called_once()
+
+
 class PresetTests(unittest.TestCase):
     def test_three_presets_are_declared_with_valid_scopes(self):
         self.assertEqual(len(native_dialog.PRESETS), 3)
