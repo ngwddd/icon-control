@@ -268,6 +268,7 @@ class ConsentHost:
                 break
         self.tray = native_tray.add(self.hwnd, 1, WM_TRAY, self._tip())
         self.user32.SetTimer(self.hwnd, WM_TIMER_HEARTBEAT, TIMER_MS, None)
+        self._write_status()
         self.show()
         message = MSG()
         while self.user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
