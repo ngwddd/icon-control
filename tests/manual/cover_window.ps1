@@ -10,6 +10,7 @@ param(
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $form = New-Object System.Windows.Forms.Form
+$form.Text = 'Icon Control cover'
 $form.FormBorderStyle = 'None'
 $form.StartPosition = 'Manual'
 $form.Bounds = New-Object System.Drawing.Rectangle($X, $Y, $W, $H)

@@ -540,11 +540,24 @@ def main():
     results = {}
     for name in requested:
         started = time.perf_counter()
-        try:
-            passed, evidence = CASES[name]()
-        except Exception as exc:  # noqa: BLE001
-            passed, evidence = False, dict(application_state={},
-                                           result=dict(error=f'{type(exc).__name__}: {exc}'))
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                passed, evidence = CASES[name]()
+                break
+            except Exception as exc:  # noqa: BLE001
+                text = str(exc)
+                # A human touching the machine engages the takeover guard mid-case.
+                # That is a timing accident, not a product verdict: wait it out once.
+                if attempts == 1 and ('接管' in text or 'takeover' in text.lower()):
+                    time.sleep(12)
+                    continue
+                passed, evidence = False, dict(application_state={},
+                                               result=dict(error=f'{type(exc).__name__}: {exc}'))
+                break
+        if attempts > 1:
+            evidence.setdefault('result', {})['attempts'] = attempts
         evidence['elapsed_ms'] = round((time.perf_counter() - started) * 1000, 3)
         results[name] = record(name, passed, **evidence)
     print(json.dumps(dict(passed=sum(results.values()), total=len(results)), ensure_ascii=False), flush=True)

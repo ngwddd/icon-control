@@ -1,12 +1,12 @@
 {
   "kind": "real_desktop",
   "simulated": false,
-  "source_commit": "da02cb93e71df55dc2fec14b20214a6743ce2133",
+  "source_commit": "6f5cc7a2f3e75875e975106c9b12b540b9dc4d2c",
   "source_dirty": false,
   "case_id": "B20",
   "status": "passed",
-  "timestamp": 1793733080.496398,
-  "elapsed_ms": 1981.975,
+  "timestamp": 1793733479.1200683,
+  "elapsed_ms": 1927.266,
   "environment": {
     "os": "Windows-11-10.0.26200-SP0",
     "version": "1.3.6",
@@ -16,8 +16,8 @@
   "application_state": {
     "before": 0,
     "after": 0,
-    "old_hwnd": 1770182,
-    "new_hwnd": 1835718
+    "old_hwnd": 1835718,
+    "new_hwnd": 1901254
   },
   "result": {
     "refused": true
