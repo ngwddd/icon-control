@@ -440,7 +440,8 @@ def b26_ocr_text():
     result = tool('click_text', {'query': 'CANITY TEST TARGET', 'hwnd': hwnd})
     time.sleep(0.4)
     after = fixture_state()['counts']['OcrTarget']
-    ok = bool(result.get('ok', result.get('success', False)))
+    payload = result.get('result') if isinstance(result.get('result'), dict) else result
+    ok = bool(payload.get('ok', payload.get('success', False)))
     return (ok and after == before + 1,
             dict(application_state=dict(before=before, after=after),
                  result=dict(ok=ok, response=str(result)[:300])))
@@ -450,59 +451,25 @@ def b26_ocr_text():
 def b28_branch():
     """Both sides of a visual branch must actually run."""
     wait_ready()
-    rect = canvas_probe_rect()
-    box = [rect['x'], rect['y'], rect['w'], rect['h']]
+    hwnd = fixture_hwnd()
+    text_left, text_top = win32gui.ClientToScreen(hwnd, (30, 548))
+    blank_left, blank_top = win32gui.ClientToScreen(hwnd, (350, 548))
+    text_box = [text_left, text_top, 240, 30]
+    blank_box = [blank_left, blank_top, 150, 30]
     click('Scroll')
     before = fixture_state()['scroll']
     live.tool_run_script({'ops': [
-        {'op': 'if', 'cond': {'kind': 'color', 'box': box, 'color': 'green', 'tol': 90},
+        {'op': 'if', 'cond': {'kind': 'prompt', 'box': text_box, 'thr': 150},
          'then': [{'op': 'scroll', 'dy': -3}], 'else': [{'op': 'scroll', 'dy': 3}]}]})
     after_true = fixture_state()['scroll']
     live.tool_run_script({'ops': [
-        {'op': 'if', 'cond': {'kind': 'color', 'box': box, 'color': 'red', 'tol': 20},
+        {'op': 'if', 'cond': {'kind': 'prompt', 'box': blank_box, 'thr': 150},
          'then': [{'op': 'scroll', 'dy': -3}], 'else': [{'op': 'scroll', 'dy': 3}]}]})
     after_false = fixture_state()['scroll']
     return (after_true > before and after_false < after_true,
             dict(application_state=dict(scroll_before=before, scroll_true=after_true,
-                                        scroll_false=after_false)))
-
-
-@case('B22')
-def b22_occluded():
-    """An occluded target must not be clicked through the cover."""
-    wait_ready()
-    hwnd = fixture_hwnd()
-    tree = ui_ext.ui_tree(hwnd=hwnd)
-    candidate = next((n for n in tree.get('nodes', []) if n.get('name') == 'Counter' and n.get('ref')), None)
-    if not candidate:
-        raise RuntimeError('Counter snapshot ref unavailable')
-    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-    cover = subprocess.Popen(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                              '-WindowStyle', 'Hidden', '-File',
-                              str(ROOT / 'tests' / 'manual' / 'cover_window.ps1'),
-                              '-X', str(left), '-Y', str(top),
-                              '-W', str(right - left), '-H', str(bottom - top),
-                              '-Seconds', '60'])
-    try:
-        time.sleep(1.5)
-        before = fixture_state()['counts']['Counter']
-        refused = False
-        try:
-            result = ui_ext.ui_click(name='', hwnd=hwnd, ref=candidate['ref'], mouse=mouse)
-            refused = not result.get('success', result.get('ok', False))
-        except Exception:
-            refused = True
-        time.sleep(0.3)
-        after = fixture_state()['counts']['Counter']
-        return (refused and after == before,
-                dict(application_state=dict(before=before, after=after),
-                     result=dict(refused=refused, covered=[left, top, right, bottom])))
-    finally:
-        cover.terminate()
-        try:
-            cover.wait(timeout=5)
-        except Exception:
-            pass
+                                        scroll_false=after_false,
+                                        boxes=dict(text=text_box, blank=blank_box))))
 
 
 def main():

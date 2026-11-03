@@ -1,21 +1,26 @@
 {
   "kind": "real_desktop",
   "simulated": false,
-  "source_commit": "82d450699a7d64d8ec3fc38464db0f6829ebdd54",
+  "source_commit": "987a81c560dd80526c5d7f0ed96a1fd858344d68",
   "source_dirty": false,
   "case_id": "B20",
-  "status": "failed",
-  "timestamp": 1793732345.5109081,
-  "elapsed_ms": 0.367,
+  "status": "passed",
+  "timestamp": 1793732980.718218,
+  "elapsed_ms": 1956.149,
   "environment": {
     "os": "Windows-11-10.0.26200-SP0",
-    "version": "1.3.5",
+    "version": "1.3.6",
     "monitor_dpi": 144,
     "fixture_window_dpi": 144
   },
-  "application_state": {},
+  "application_state": {
+    "before": 0,
+    "after": 0,
+    "old_hwnd": 1704646,
+    "new_hwnd": 1770182
+  },
   "result": {
-    "error": "PermissionDenied: Human approval required for this session"
+    "refused": true
   },
   "extra": {}
 }
