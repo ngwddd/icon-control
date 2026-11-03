@@ -69,6 +69,7 @@ class ConsentHost:
         self.lease_until = 0.0
         self.authorization: dict = {}
         self.hotkey = ''
+        self._stopping = False
         self._wndproc = WNDPROC(self._on_message)
 
     # -- plumbing ---------------------------------------------------------
@@ -137,7 +138,24 @@ class ConsentHost:
         preferred = next((a for a in live if a.get('id') == pending), None)
         return preferred or max(live, key=lambda a: a.get('created', 0))
 
+    def _sync(self):
+        """Trust the bridge, never the local flag, before showing anything."""
+        try:
+            state = (self.ipc('status') or {}).get('state') or {}
+        except Exception:
+            return
+        if state.get('granted') and state.get('authorization'):
+            self.granted = True
+            self.authorization = state['authorization']
+            self.lease_until = float(state['authorization'].get('lease_expires_at')
+                                     or self.lease_until)
+        elif not state.get('granted'):
+            self.granted = False
+            self.authorization = {}
+            self.lease_until = 0.0
+
     def show(self):
+        self._sync()
         if self.granted:
             left = max(0, int(self.lease_until - time.time()))
             answer = native_dialog.ask_status(
@@ -259,6 +277,15 @@ class ConsentHost:
             return 0
         return self.user32.DefWindowProcW(hwnd, message, wparam, lparam)
 
+    def _heartbeat_loop(self):
+        """A modal dialog blocks WM_TIMER, so the lease is kept alive off-thread."""
+        while not self._stopping:
+            time.sleep(TIMER_MS / 1000.0)
+            try:
+                self._heartbeat()
+            except Exception:
+                pass
+
     def _heartbeat(self):
         if not self.granted:
             return
@@ -304,7 +331,8 @@ class ConsentHost:
                 self.hotkey = name
                 break
         self.tray = native_tray.add(self.hwnd, 1, WM_TRAY, self._tip())
-        self.user32.SetTimer(self.hwnd, WM_TIMER_HEARTBEAT, TIMER_MS, None)
+        import threading
+        threading.Thread(target=self._heartbeat_loop, daemon=True).start()
         self._write_status()
         self.show()
         message = MSG()

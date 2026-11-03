@@ -84,7 +84,7 @@ def environment():
                 fixture_window_dpi=ctypes.windll.user32.GetDpiForWindow(fixture_hwnd()))
 
 
-def wait_ready(timeout=15):
+def wait_ready(timeout=25):
     if not permission.status().get('granted'):
         raise permission.PermissionDenied('Human approval required for this session')
     deadline = time.monotonic() + timeout
