@@ -451,28 +451,34 @@ def b26_ocr_text():
 def b28_branch():
     """Both sides of a visual branch must actually run.
 
-    The listbox is seeded away from its floor first: a -dy scroll at position 0
-    clamps to 0 and would look like "the branch never ran" even when it did.
+    The branches act through clicks rather than the wheel: a wheel scroll only
+    reaches a list the cursor happens to be over, which made this case drift.
     """
     wait_ready()
     hwnd = fixture_hwnd()
+    tree = ui_ext.ui_tree(hwnd=hwnd)
+    counter = next((n for n in tree.get('nodes') or [] if n.get('name') == 'Counter'), None)
+    if not counter:
+        raise RuntimeError('Counter control missing')
+    cx = int(counter['x'] + counter['w'] / 2)
+    cy = int(counter['y'] + counter['h'] / 2)
     text_left, text_top = win32gui.ClientToScreen(hwnd, (30, 545))
     blank_left, blank_top = win32gui.ClientToScreen(hwnd, (400, 545))
     text_box = [text_left, text_top, 240, 40]
     blank_box = [blank_left, blank_top, 150, 40]
-    click('Scroll')
-    live.tool_run_script({'ops': [{'op': 'scroll', 'dy': 4}]})
-    seeded = fixture_state()['scroll']
+    one = [{'op': 'move', 'x': cx, 'y': cy}, {'op': 'click'}]
+    two = one + [{'op': 'sleep', 'ms': 200}] + one
+    before = fixture_state()['counts']['Counter']
     live.tool_run_script({'ops': [
         {'op': 'if', 'cond': {'kind': 'prompt', 'box': text_box, 'thr': 150},
-         'then': [{'op': 'scroll', 'dy': -3}], 'else': [{'op': 'scroll', 'dy': 3}]}]})
-    after_true = fixture_state()['scroll']
+         'then': one, 'else': two}]})
+    after_true = fixture_state()['counts']['Counter']
     live.tool_run_script({'ops': [
         {'op': 'if', 'cond': {'kind': 'prompt', 'box': blank_box, 'thr': 150},
-         'then': [{'op': 'scroll', 'dy': -3}], 'else': [{'op': 'scroll', 'dy': 3}]}]})
-    after_false = fixture_state()['scroll']
-    return (seeded > 0 and after_true < seeded and after_false > after_true,
-            dict(application_state=dict(seeded=seeded, after_true=after_true,
+         'then': one, 'else': two}]})
+    after_false = fixture_state()['counts']['Counter']
+    return (after_true == before + 1 and after_false == after_true + 2,
+            dict(application_state=dict(before=before, after_true=after_true,
                                         after_false=after_false,
                                         boxes=dict(text=text_box, blank=blank_box))))
 

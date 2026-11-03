@@ -1,12 +1,12 @@
 {
   "kind": "real_desktop",
   "simulated": false,
-  "source_commit": "31f19a0ddb92766c0b26b128359a90f5320b449f",
+  "source_commit": "6030a50b43e5ce7932f28c1309c77f6ecc9db817",
   "source_dirty": false,
   "case_id": "B26",
   "status": "passed",
-  "timestamp": 1793733608.929499,
-  "elapsed_ms": 1369.279,
+  "timestamp": 1793733686.047551,
+  "elapsed_ms": 1345.628,
   "environment": {
     "os": "Windows-11-10.0.26200-SP0",
     "version": "1.3.6",
@@ -14,12 +14,12 @@
     "fixture_window_dpi": 144
   },
   "application_state": {
-    "before": 5,
-    "after": 6
+    "before": 6,
+    "after": 7
   },
   "result": {
     "ok": true,
-    "response": "{'result': {'ok': True, 'clicked_text': 'CANITY TEST TARGET', 'x': 204, 'y': 684, 'ms': 377.2}, 'screenshot_data': {'error': 'intentionally skipped'}}"
+    "response": "{'result': {'ok': True, 'clicked_text': 'CANITY TEST TARGET', 'x': 204, 'y': 684, 'ms': 367.7}, 'screenshot_data': {'error': 'intentionally skipped'}}"
   },
   "extra": {}
 }

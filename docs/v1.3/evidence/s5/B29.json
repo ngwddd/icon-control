@@ -1,12 +1,12 @@
 {
   "kind": "real_desktop",
   "simulated": false,
-  "source_commit": "31f19a0ddb92766c0b26b128359a90f5320b449f",
+  "source_commit": "6030a50b43e5ce7932f28c1309c77f6ecc9db817",
   "source_dirty": false,
   "case_id": "B29",
   "status": "passed",
-  "timestamp": 1793733610.5289402,
-  "elapsed_ms": 402.343,
+  "timestamp": 1793733687.628891,
+  "elapsed_ms": 408.336,
   "environment": {
     "os": "Windows-11-10.0.26200-SP0",
     "version": "1.3.6",
@@ -24,9 +24,9 @@
     "height": 353
   },
   "result": {
-    "sha256": "8ebb2f2da844ac8972b9870e3d4d4a00849c50b4a22bf7b4e23bd22a59250c98",
+    "sha256": "eaf9d112f512dbd5197e2c6f395096fb1870a177be17abf02e398963e34f6de9",
     "path": "C:\\Users\\ggg\\Desktop\\deepseek development\\icon-control-v131\\docs\\v1.3\\evidence\\s5\\B29-capture.png",
-    "encoded_bytes": 16106
+    "encoded_bytes": 16150
   },
   "extra": {}
 }

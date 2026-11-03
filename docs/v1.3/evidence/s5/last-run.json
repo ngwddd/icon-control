@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-04T03:20:11",
+  "timestamp": "2026-11-04T03:21:28",
   "cases": [
     "B11",
     "B12",
@@ -61,17 +61,17 @@
           "application_state": {
             "before": {
               "IconTarget": 0,
-              "OcrTarget": 5,
-              "Counter": 0,
-              "Confirm1": 0,
-              "Confirm2": 0
+              "OcrTarget": 6,
+              "Counter": 2,
+              "Confirm1": 1,
+              "Confirm2": 1
             },
             "after": {
               "IconTarget": 0,
-              "OcrTarget": 5,
-              "Counter": 0,
-              "Confirm1": 1,
-              "Confirm2": 0
+              "OcrTarget": 6,
+              "Counter": 2,
+              "Confirm1": 2,
+              "Confirm2": 1
             }
           }
         },
@@ -83,17 +83,17 @@
           "application_state": {
             "before": {
               "IconTarget": 0,
-              "OcrTarget": 5,
-              "Counter": 0,
-              "Confirm1": 1,
-              "Confirm2": 0
+              "OcrTarget": 6,
+              "Counter": 2,
+              "Confirm1": 2,
+              "Confirm2": 1
             },
             "after": {
               "IconTarget": 0,
-              "OcrTarget": 5,
-              "Counter": 0,
-              "Confirm1": 1,
-              "Confirm2": 1
+              "OcrTarget": 6,
+              "Counter": 2,
+              "Confirm1": 2,
+              "Confirm2": 2
             }
           }
         },
@@ -103,8 +103,8 @@
           "kind": "passed",
           "result": {},
           "application_state": {
-            "before": 0,
-            "after": 1
+            "before": 2,
+            "after": 3
           }
         },
         {
@@ -115,8 +115,8 @@
             "refused": true
           },
           "application_state": {
-            "before": 1,
-            "after": 1
+            "before": 3,
+            "after": 3
           }
         },
         {
@@ -127,8 +127,8 @@
             "refused": true
           },
           "application_state": {
-            "before": 1,
-            "after": 1,
+            "before": 3,
+            "after": 3,
             "moved_to": [
               120,
               100
@@ -143,10 +143,10 @@
             "refused": true
           },
           "application_state": {
-            "before": 1,
-            "after": 1,
-            "old_hwnd": 2032326,
-            "new_hwnd": 2097862
+            "before": 3,
+            "after": 3,
+            "old_hwnd": 2163398,
+            "new_hwnd": 2228934
           }
         },
         {
@@ -157,8 +157,8 @@
             "refused": true
           },
           "application_state": {
-            "before": 1,
-            "after": 1
+            "before": 3,
+            "after": 3
           }
         },
         {
@@ -167,7 +167,7 @@
           "kind": "passed",
           "result": {
             "refused": true,
-            "cover_hwnd": 3736942,
+            "cover_hwnd": 8587952,
             "covered": [
               80,
               80,
@@ -176,8 +176,8 @@
             ]
           },
           "application_state": {
-            "before": 1,
-            "after": 1
+            "before": 3,
+            "after": 3
           }
         },
         {
@@ -186,8 +186,8 @@
           "kind": "passed",
           "result": {},
           "application_state": {
-            "before": 1,
-            "after": 2,
+            "before": 3,
+            "after": 4,
             "dpi": 144
           }
         },
@@ -197,11 +197,11 @@
           "kind": "passed",
           "result": {
             "ok": true,
-            "response": "{'result': {'ok': True, 'clicked_text': 'CANITY TEST TARGET', 'x': 204, 'y': 684, 'ms': 377.2}, 'screenshot_data': {'error': 'intentionally skipped'}}"
+            "response": "{'result': {'ok': True, 'clicked_text': 'CANITY TEST TARGET', 'x': 204, 'y': 684, 'ms': 367.7}, 'screenshot_data': {'error': 'intentionally skipped'}}"
           },
           "application_state": {
-            "before": 5,
-            "after": 6
+            "before": 6,
+            "after": 7
           }
         },
         {
@@ -210,21 +210,21 @@
           "kind": "harness",
           "result": {},
           "application_state": {
-            "scroll_before": 0,
-            "scroll_true": 0,
-            "scroll_false": 0,
+            "seeded": 0,
+            "after_true": 0,
+            "after_false": 0,
             "boxes": {
               "text": [
                 121,
-                673,
+                670,
                 240,
-                30
+                40
               ],
               "blank": [
-                441,
-                673,
+                491,
+                670,
                 150,
-                30
+                40
               ]
             }
           }
@@ -234,9 +234,9 @@
           "status": "passed",
           "kind": "passed",
           "result": {
-            "sha256": "8ebb2f2da844ac8972b9870e3d4d4a00849c50b4a22bf7b4e23bd22a59250c98",
+            "sha256": "eaf9d112f512dbd5197e2c6f395096fb1870a177be17abf02e398963e34f6de9",
             "path": "C:\\Users\\ggg\\Desktop\\deepseek development\\icon-control-v131\\docs\\v1.3\\evidence\\s5\\B29-capture.png",
-            "encoded_bytes": 16106
+            "encoded_bytes": 16150
           },
           "application_state": {
             "region": [
@@ -261,17 +261,17 @@
           "application_state": {
             "before": {
               "IconTarget": 0,
-              "OcrTarget": 6,
-              "Counter": 2,
-              "Confirm1": 1,
-              "Confirm2": 1
+              "OcrTarget": 7,
+              "Counter": 4,
+              "Confirm1": 2,
+              "Confirm2": 2
             },
             "after": {
               "IconTarget": 0,
-              "OcrTarget": 6,
-              "Counter": 2,
-              "Confirm1": 1,
-              "Confirm2": 1
+              "OcrTarget": 7,
+              "Counter": 4,
+              "Confirm1": 2,
+              "Confirm2": 2
             }
           }
         }
