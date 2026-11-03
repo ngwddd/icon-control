@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-11-04T03:19:14",
+  "cases": [
+    "B11",
+    "B12",
+    "B20",
+    "B21",
+    "B22",
+    "B26"
+  ],
+  "runs": [
+    {
+      "cases": [
+        {
+          "case": "B11",
+          "status": "passed",
+          "kind": "passed",
+          "result": {},
+          "application_state": {
+            "target": "S5-B11 hello 123",
+            "actual": "S5-B11 hello 123"
+          }
+        },
+        {
+          "case": "B12",
+          "status": "passed",
+          "kind": "passed",
+          "result": {},
+          "application_state": {
+            "target": "S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复",
+            "actual": "S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复"
+          }
+        },
+        {
+          "case": "B20",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "refused": true
+          },
+          "application_state": {
+            "before": 0,
+            "after": 0,
+            "old_hwnd": 1901254,
+            "new_hwnd": 1966790
+          }
+        },
+        {
+          "case": "B21",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "refused": true
+          },
+          "application_state": {
+            "before": 0,
+            "after": 0
+          }
+        },
+        {
+          "case": "B22",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "refused": true,
+            "cover_hwnd": 19925450,
+            "covered": [
+              80,
+              80,
+              902,
+              786
+            ]
+          },
+          "application_state": {
+            "before": 0,
+            "after": 0
+          }
+        },
+        {
+          "case": "B26",
+          "status": "passed",
+          "kind": "passed",
+          "result": {
+            "ok": true,
+            "response": "{'result': {'ok': True, 'clicked_text': 'CANITY TEST TARGET', 'x': 204, 'y': 684, 'ms': 371.8}, 'screenshot_data': {'error': 'intentionally skipped'}}"
+          },
+          "application_state": {
+            "before": 4,
+            "after": 5
+          }
+        }
+      ],
+      "passed": 6,
+      "total": 6,
+      "harness": [],
+      "product": []
+    }
+  ],
+  "repeat": 1
+}

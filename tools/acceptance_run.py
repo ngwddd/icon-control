@@ -296,6 +296,9 @@ def main() -> int:
         summary['drift'] = drift
         print('\ndrift:', json.dumps(drift, ensure_ascii=False) if drift else '没有漂移')
 
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    print(f'\n证据绑定到提交 {commit[:8]}；发布时 tag 必须打在这个提交上，'
+          '否则闸门会判 stale。')
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     (EVIDENCE / 'last-run.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
