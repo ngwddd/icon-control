@@ -150,8 +150,17 @@ class Runner:
             self.kb.release(k)
 
     # ---------- 执行 ----------
-    @_execution.boundary('run_script')
     def run(self, ops: list, depth: int = 0) -> None:
+        from computer_mcp.tool_spec import micro_effects
+        try:
+            micro_effects(ops, depth)
+        except ValueError as exc:
+            self.stopped, self.stop_reason = True, str(exc)
+            return
+        self._run(ops, depth)
+
+    @_execution.boundary('run_script')
+    def _run(self, ops: list, depth: int) -> None:
         if depth > 8:
             self.stopped, self.stop_reason = True, "嵌套过深"
             return

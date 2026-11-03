@@ -22,7 +22,7 @@ def micro_effects(ops, depth=0):
             effects.update(("input", "text_entry"))
         elif kind in {"move", "turn", "scroll", "click"}:
             effects.add("input")
-        elif kind in {"if", "until"}:
+        elif kind in {"if", "loop", "until"}:
             for field in (("then", "else") if kind == "if" else ("do",)):
                 effects.update(micro_effects(step.get(field, []), depth + 1))
         elif kind not in {"sleep", "log"}:
