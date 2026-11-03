@@ -133,6 +133,27 @@ def combo(letter):
     time.sleep(0.1)
 
 
+_state = [None]
+
+
+def tool(name, arguments):
+    """Call a product tool through the real dispatch gate (permission included)."""
+    from computer_mcp.zones import dispatch as zone_dispatch
+    if _state[0] is None:
+        _state[0] = zone_dispatch.ComputerState()
+    return zone_dispatch.dispatch(name, arguments, computer_state=_state[0],
+                                  mouse_controller=mouse,
+                                  keyboard_controller=computer_mcp._default_keyboard_controller)
+
+
+def canvas_probe_rect(hwnd=None):
+    """The fixture's painted probe strip, in screen coordinates."""
+    hwnd = hwnd or fixture_hwnd()
+    left, top = win32gui.ClientToScreen(hwnd, (int(20 + 720 * 0.86), int(540 + 58 * 0.15)))
+    return dict(x=left, y=top, w=int(58 * 0.7), h=int(58 * 0.7))
+
+
+
 @case('B01')
 def b01_blocked():
     """Unauthorised click must not change the application."""
@@ -355,6 +376,95 @@ def b30_no_false_success():
             dict(application_state=dict(before=before, after=after),
                  result=dict(claimed_ok=claimed_ok, status=result.get('status'),
                              error=str(result.get('error'))[:200])))
+
+
+@case('B20')
+def b20_recreated_handle():
+    """A stale reference must not click the recreated window."""
+    wait_ready()
+    old = fixture_hwnd()
+    tree = ui_ext.ui_tree(hwnd=old)
+    candidate = next((n for n in tree.get('nodes', []) if n.get('name') == 'Counter' and n.get('ref')), None)
+    if not candidate:
+        raise RuntimeError('Counter snapshot ref unavailable')
+    args.state.with_suffix(args.state.suffix + '.command').write_text(
+        json.dumps(dict(message='S5-B20 recreate', action='recreate', sequence=time.time_ns())), encoding='utf-8')
+    time.sleep(1.2)
+    new = fixture_hwnd()
+    before = fixture_state()['counts']['Counter']
+    refused = False
+    try:
+        result = ui_ext.ui_click(name='', hwnd=new, ref=candidate['ref'], mouse=mouse)
+        refused = not result.get('success', result.get('ok', False))
+    except Exception:
+        refused = True
+    time.sleep(0.2)
+    after = fixture_state()['counts']['Counter']
+    return (new != old and refused and after == before,
+            dict(application_state=dict(before=before, after=after, old_hwnd=old, new_hwnd=new),
+                 result=dict(refused=refused)))
+
+
+@case('B21')
+def b21_content_changed():
+    """Content changed but the window sits still: the old reference must die."""
+    wait_ready()
+    hwnd = fixture_hwnd()
+    tree = ui_ext.ui_tree(hwnd=hwnd)
+    candidate = next((n for n in tree.get('nodes', []) if n.get('name') == 'Counter' and n.get('ref')), None)
+    if not candidate:
+        raise RuntimeError('Counter snapshot ref unavailable')
+    clear_input()
+    keyboard.type_text('S5-B21 content changed')
+    time.sleep(0.4)
+    before = fixture_state()['counts']['Counter']
+    refused = False
+    try:
+        result = ui_ext.ui_click(name='', hwnd=hwnd, ref=candidate['ref'], mouse=mouse)
+        refused = not result.get('success', result.get('ok', False))
+    except Exception:
+        refused = True
+    time.sleep(0.2)
+    after = fixture_state()['counts']['Counter']
+    return (refused and after == before,
+            dict(application_state=dict(before=before, after=after),
+                 result=dict(refused=refused)))
+
+
+@case('B26')
+def b26_ocr_text():
+    """OCR locates the painted label; the application state proves the click."""
+    wait_ready()
+    hwnd = fixture_hwnd()
+    before = fixture_state()['counts']['OcrTarget']
+    result = tool('click_text', {'query': 'CANITY TEST TARGET', 'hwnd': hwnd})
+    time.sleep(0.4)
+    after = fixture_state()['counts']['OcrTarget']
+    ok = bool(result.get('ok', result.get('success', False)))
+    return (ok and after == before + 1,
+            dict(application_state=dict(before=before, after=after),
+                 result=dict(ok=ok, response=str(result)[:300])))
+
+
+@case('B28')
+def b28_branch():
+    """Both sides of a visual branch must actually run."""
+    wait_ready()
+    rect = canvas_probe_rect()
+    box = [rect['x'], rect['y'], rect['w'], rect['h']]
+    click('Scroll')
+    before = fixture_state()['scroll']
+    live.tool_run_script({'ops': [
+        {'op': 'if', 'cond': {'kind': 'color', 'box': box, 'color': 'green', 'tol': 90},
+         'then': [{'op': 'scroll', 'dy': -3}], 'else': [{'op': 'scroll', 'dy': 3}]}]})
+    after_true = fixture_state()['scroll']
+    live.tool_run_script({'ops': [
+        {'op': 'if', 'cond': {'kind': 'color', 'box': box, 'color': 'red', 'tol': 20},
+         'then': [{'op': 'scroll', 'dy': -3}], 'else': [{'op': 'scroll', 'dy': 3}]}]})
+    after_false = fixture_state()['scroll']
+    return (after_true > before and after_false < after_true,
+            dict(application_state=dict(scroll_before=before, scroll_true=after_true,
+                                        scroll_false=after_false)))
 
 
 def main():
