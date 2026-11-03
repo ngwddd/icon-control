@@ -444,6 +444,26 @@ def window_metrics(hwnd: int) -> dict[str, Any]:
     }
 
 
+# Read capabilities from substituted on-disk steps, never from caller-supplied metadata.
+_MACRO_SCOPES = {
+    **dict.fromkeys("move click double_click right_click sleep".split(), ()),
+    **dict.fromkeys("type key hotkey paste clipboard_set clipboard_get assert_clipboard".split(), ('text_entry',)),
+    **dict.fromkeys("wait_change screen_state ui_click ui_invoke anchor_click page_check ensure_page click_text find_text verify_text wait_window assert_template assert_baseline wait_template sample_stable hover_probe assert_title".split(), ('screen_read',)),
+    **dict.fromkeys("type_verified ensure_chat".split(), ('screen_read','text_entry')),
+    **dict.fromkeys("learn_region learn_item capture_template set_baseline".split(), ('screen_read','file_write')),
+    'launch': ('process',), 'close_windows': ('window_close',), 'exit_app': ('window_close',),
+    'assert_file': ('file_read',),
+}
+
+def _check_macro_action(action):
+    from computer_mcp import permission, capabilities
+    if action not in _MACRO_SCOPES:
+        raise ValueError('Unknown macro action: ' + action)
+    for scope in _MACRO_SCOPES[action]:
+        if not capabilities.has_scope(scope):
+            raise permission.PermissionDenied('Macro action requires ' + scope)
+
+
 def run_macro(
     name: str,
     params: dict[str, Any] | None = None,
@@ -512,6 +532,9 @@ def run_macro(
             "hint": "open/restore the target window first, or fix the rel coordinates",
         }
 
+    for step in spec.get("steps") or []:
+        _check_macro_action(str(step.get("action", "")).lower())
+
     if dry_run:
         resolved = []
         for i, step in enumerate(spec.get("steps") or []):
@@ -550,6 +573,7 @@ def run_macro(
         i, step = queue.pop(0)
         step = dict(step)
         action = str(step.get("action", "")).lower()
+        _check_macro_action(action)
         t0 = time.perf_counter()
         entry: dict[str, Any] = {"i": i, "action": action}
         # 每一步都重读几何：用户在宏运行中挪窗口/改大小是常见情况
@@ -1072,15 +1096,15 @@ def run_macro(
                 elif action == "assert_file":
                     path = str(step.get("path", ""))
                     need = step.get("contains")
-                    exists = bool(path) and os.path.exists(path)
+                    from computer_mcp.workspace import readable_path, read_text
+                    path = str(readable_path(path))
+                    exists = os.path.isfile(path)
                     entry["exists"] = exists
                     entry["path"] = path
                     ok_f = exists
                     if exists and need:
                         try:
-                            with open(path, "r", encoding=str(step.get("encoding", "utf-8")),
-                                      errors="replace") as fh:
-                                content = fh.read()
+                            content = read_text(path, encoding=str(step.get("encoding", "utf-8")))
                             ok_f = str(need) in content
                             entry["contains"] = bool(ok_f)
                         except Exception as exc:

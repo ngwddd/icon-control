@@ -37,6 +37,22 @@ def owned_path(root: Path, name: str) -> Path:
         component(part)
     return candidate
 
+def readable_path(name, root=None):
+    from computer_mcp import capabilities, permission
+    if not capabilities.has_scope('file_read'):
+        raise permission.PermissionDenied('Dedicated file read approval required')
+    return owned_path(root or data_home() / 'workspace' / 'files', str(name))
+
+
+def read_text(name, root=None, encoding='utf-8'):
+    path = readable_path(name, root)
+    with path.open('rb') as source:
+        data = source.read(1048577)
+    if len(data) > 1048576:
+        raise ValueError('File exceeds the 1 MiB read limit')
+    return data.decode(encoding, errors='replace')
+
+
 def report_path(name: str) -> Path:
     return owned_path(data_home() / 'workspace' / 'reports', name)
 

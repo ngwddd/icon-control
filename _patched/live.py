@@ -75,7 +75,7 @@ def tool_capture(args: dict) -> dict:
         if args.get("monitor"):
             d.monitor = int(args["monitor"])
         res = d.start()
-        return {"success": True, **res}
+        return {**res, "success": res.get("ok") is True, "status": "running" if res.get("ok") is True else "failed"}
     if action == "stop":
         return {"success": True, **d.stop()}
     return {"success": True, **d.status()}
@@ -181,13 +181,9 @@ def tool_snapshot(args: dict) -> dict:
     if scale != 1.0:
         im = im.resize((max(1, int(im.width * scale)), max(1, int(im.height * scale))), Image.LANCZOS)
     path = os.path.join(_DRAW, f"snap_{int(time.time()*1000)}.png")
+    _execution.check('snapshot')
     im.save(path)
-    # 写完就按策略裁剪，别让 _draw 无限长大
-    try:
-        from computer_mcp import retention
-        pruned = retention.sweep()
-    except Exception:
-        pruned = {}
+    pruned = {}
     return {"success": True, "path": path, "size": list(im.size),
             "bytes": os.path.getsize(path), "region": region,
             "pruned": pruned.get("removed_count", 0)}
@@ -393,14 +389,11 @@ def tool_record(args: dict) -> dict:
                                            "window": fr.active_window[:40]})
             except Exception:
                 continue
+        _execution.checkpoint('record')
         with open(os.path.join(out, "manifest.json"), "w", encoding="utf-8") as fh:
             _execution.checkpoint('record')
             json.dump(manifest, fh, ensure_ascii=False, indent=1)
-        try:
-            from computer_mcp import retention
-            pruned = retention.sweep()
-        except Exception:
-            pruned = {}
+        pruned = {}
         return {"success": bool(manifest['frames']), "dir": out, "frames": len(manifest["frames"]),
                 "bytes": sum(os.path.getsize(os.path.join(out, f))
                              for f in os.listdir(out)),
@@ -649,6 +642,18 @@ def _win_rect(hwnd: int) -> tuple[int, int, int, int]:
 
 
 
+def _track_state(result, alive, total):
+    engine = result.get('status', 'running')
+    verified = bool(not alive and engine == 'done' and total and
+                    result.get('steps_done') == total and
+                    result.get('steps_verified') == total and not result.get('failed_steps'))
+    status = ('running' if alive else 'succeeded' if verified else
+              'executed_unverified' if engine == 'done' else
+              'cancelled' if engine in ('stopped', 'cancelled') else 'failed')
+    return dict(success=verified, verified=verified, status=status, engine_status=engine,
+                accepted=True, alive=alive)
+
+
 def tool_track(args: dict) -> dict:
     """列车控制：action = run | start | status | stop | selfcheck
 
@@ -670,9 +675,8 @@ def tool_track(args: dict) -> dict:
         if tid not in _TRAINS or _TRAINS[tid].get('owner')!=current():
             return {"success": False, "error": "没有正在跑的列车"}
         r = _TRAINS[tid]["runner"]
-        return {"success": True, "id": tid, "alive": _TRAINS[tid]["thread"].is_alive(),
-                **r.bundle(r.result.get("status", "running"), r.result.get("step", ""),
-                           r.result.get("reason", ""))}
+        bundle = r.bundle(r.result.get("status", "running"), r.result.get("step", ""), r.result.get("reason", ""))
+        return {**bundle, "id": tid, **_track_state(r.result, _TRAINS[tid]["thread"].is_alive(), _TRAINS[tid]["total"])}
 
     if action == "stop":
         tid = int(a.get("id") or 0)
@@ -682,15 +686,17 @@ def tool_track(args: dict) -> dict:
         r = _TRAINS[tid]["runner"]
         r.stop()
         _TRAINS[tid]["thread"].join(timeout=3)
-        return {"success": True, "id": tid, **r.result}
+        return {**r.result, "id": tid, **_track_state(r.result, _TRAINS[tid]["thread"].is_alive(), _TRAINS[tid]["total"])}
 
     # run / start
     spec = a.get("track")
     if not spec and a.get("recipe"):
         import pathlib as _p
-        rp = data_home() / 'recipes' / (str(a['recipe']) + '.json')
+        from computer_mcp.workspace import readable_path, read_text, component
+        recipes = data_home() / 'recipes'
+        rp = readable_path(component(a['recipe']) + '.json', recipes)
         if rp.is_file():
-            spec = json.loads(rp.read_text(encoding="utf-8")).get("track")
+            spec = json.loads(read_text(rp, recipes)).get("track")
     if not spec:
         return {"success": False, "error": "需要 track（步骤表）或 recipe"}
 
@@ -748,7 +754,7 @@ def tool_track(args: dict) -> dict:
     th = threading.Thread(target=lambda: context.run(_go), daemon=True)
     th.start()
     from computer_mcp.agent_session import current
-    _TRAINS[tid] = {"runner": runner, "thread": th, "track": track.name,'owner':current()}
+    _TRAINS[tid] = {"runner": runner, "thread": th, "track": track.name,"total":len(track.steps),'owner':current()}
     import sys
     print(f"[train] #{tid} 轨道 {track.name!r} 启动，窗口 {hwnd} {rect}", file=sys.stderr)
 
@@ -756,15 +762,7 @@ def tool_track(args: dict) -> dict:
         wait_s = float(a.get("wait_s", max_total))
         th.join(timeout=wait_s)
         alive = th.is_alive()
-        engine_status = 'running' if alive else runner.result.get('status','executed_unverified')
-        verified = (engine_status=='done' and bool(track.steps) and
-            runner.result.get('steps_done')==len(track.steps) and
-            runner.result.get('steps_verified')==len(track.steps) and
-            not runner.result.get('failed_steps'))
-        status = 'succeeded' if verified else ('executed_unverified' if engine_status == 'done' else engine_status)
-        return {"success": verified or alive,
-                "id": tid, "alive": alive, **runner.result, "status": status,
-                "engine_status": engine_status, "verified": verified}
+        return {**runner.result, "id": tid, **_track_state(runner.result, alive, len(track.steps))}
 
-    return {"success": True, "id": tid, "alive": True,
+    return {"accepted": True, "success": False, "verified": False, "id": tid, "alive": True,
             "status": "running", "track": track.name, "hwnd": hwnd, "rect": list(rect)}

@@ -122,6 +122,8 @@ def _check_file(spec: dict) -> dict:
     path = os.path.expanduser(str(spec.get("path") or ""))
     if not path:
         return {"ok": False, "detail": "缺少 path"}
+    from computer_mcp.workspace import readable_path, read_text
+    path = str(readable_path(path))
     exists = os.path.isfile(path)
     info: dict = {"path": path, "exists": exists}
     if exists:
@@ -133,8 +135,7 @@ def _check_file(spec: dict) -> dict:
     contains = spec.get("contains")
     if ok and contains:
         try:
-            with open(path, encoding="utf-8", errors="replace") as fh:
-                body = fh.read()
+            body = read_text(path)
             info["contains"] = str(contains) in body
             ok = bool(info["contains"])
         except Exception as exc:

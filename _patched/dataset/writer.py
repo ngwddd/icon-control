@@ -49,7 +49,8 @@ def today_dir() -> Path:
 
 def append_episode(ep: dict) -> Path:
     from .schema import sanitize_episode
-    ep = sanitize_episode(ep)
+    from computer_mcp.agent_session import current
+    ep = dict(sanitize_episode(ep), owner=current())
     p = today_dir() / "episodes.jsonl"
     line = json.dumps(ep, ensure_ascii=False) + "\n"
     with open(p, "a", encoding="utf-8") as fh:
@@ -70,7 +71,10 @@ def _iter_episodes():
                         continue
                     try:
                         from .schema import sanitize_episode
-                        yield sanitize_episode(json.loads(line))
+                        from computer_mcp.agent_session import current
+                        episode = json.loads(line)
+                        if episode.get('owner') == current():
+                            yield sanitize_episode(episode)
                     except Exception:                   # noqa: BLE001
                         continue
         except Exception:                               # noqa: BLE001

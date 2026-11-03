@@ -59,6 +59,11 @@ class ToolSpec:
             return self.effects
         if not isinstance(arguments,dict):
             raise ValueError('Tool arguments must be an object')
+        asset_delete = {'glyph': 'clear', 'layout_mem': 'delete', 'anchor_mem': 'forget'}
+        if self.name in asset_delete and arguments.get('action') == asset_delete[self.name]:
+            return ('file_delete',)
+        if self.name == 'glyph' and arguments.get('action') == 'learn':
+            return ('screen_read', 'file_write')
         if self.name == 'run_script' and ('ops' in arguments or 'steps' in arguments):
             return micro_effects(arguments.get('ops') or arguments.get('steps') or [])
         if self.parameter_effects:

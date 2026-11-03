@@ -30,7 +30,14 @@ def register(label=None):
     folder = security.data_home()/'state'/'sessions'
     folder.mkdir(parents=True, exist_ok=True)
     path = folder/(current()+'.json')
-    path.write_text(json.dumps(record), encoding='utf-8')
+    import tempfile
+    with tempfile.NamedTemporaryFile(dir=folder, delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        temporary.write_text(json.dumps(record), encoding='utf-8')
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
     return record
 
 def active():

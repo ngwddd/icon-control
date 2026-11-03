@@ -7,7 +7,7 @@ import psutil
 from computer_mcp import agent_session
 
 SCOPES = frozenset({'screen_read','input_observe','input','text_entry','window_close','file_write',
-                    'file_delete','config_write','process'})
+                    'file_delete','file_read','config_write','process'})
 
 def required(spec, args):
     effects = set(spec.effects_for(args))

@@ -27,7 +27,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='macro_run',
-        effects=('compose','input','clipboard_write','process','file_write',),
+        effects=('compose','input',),
         zone='Z4',
         description="Replay a saved macro in ONE call. Coordinates are re-based onto the target window's current position. Use dry_run=true to see resolved absolute coordinates without clicking.",
         read_only=False,

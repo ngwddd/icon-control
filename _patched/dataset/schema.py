@@ -9,7 +9,7 @@ import time
 from . import redact
 
 FIELDS = (
-    "id", "ts", "tool", "zone", "args", "args_hash", "target",
+    "owner", "id", "ts", "tool", "zone", "args", "args_hash", "target",
     "result", "verdict", "latency_ms", "labels", "redactions",
 )
 

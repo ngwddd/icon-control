@@ -85,7 +85,15 @@ def _expire(now):
     global _last_action, _revision, _authorization
     if _last_action and _last_action[1]:
         timestamp, _, owner = _last_action
-        if (now-timestamp >= CLIENT_ACTION_TTL_S or
+        owner_dead = False
+        if owner.startswith('native-'):
+            import psutil
+            try:
+                _, pid, created = owner.split('-', 2)
+                owner_dead = psutil.Process(int(pid)).create_time() != float(created)
+            except (ValueError, psutil.Error):
+                owner_dead = True
+        if (owner_dead or now-timestamp >= CLIENT_ACTION_TTL_S or
                 now-CLIENTS.get(owner,{}).get('ts',0) >= min(CLIENT_HB_TTL_S,STATE_LEASE_S) or
                 security.stopped({'session':_session,'revision':_revision,'authorized_at':timestamp})):
             _revision += 1
