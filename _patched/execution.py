@@ -85,6 +85,8 @@ def boundary(tool):
             bound = inspect.signature(function).bind(*args, **kwargs)
             policy_args = next((bound.arguments[n] for n in ('args','arguments','kwargs')
                                 if isinstance(bound.arguments.get(n),dict)), None)
+            if tool == 'run_script' and 'ops' in bound.arguments:
+                policy_args = {'ops': bound.arguments['ops']}
             with operation(tool, policy_args):
                 from computer_mcp import capabilities, tool_registry
                 spec = tool_registry.get(tool)

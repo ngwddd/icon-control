@@ -9,6 +9,27 @@ import copy
 from dataclasses import dataclass, field
 
 
+def micro_effects(ops, depth=0):
+    """Mirror the micro runner grammar, including both conditional branches."""
+    if depth > 8 or not isinstance(ops, list):
+        raise ValueError("Invalid micro instruction list")
+    effects = {"compose", "screen_read"}  # The runner obtains a frame on entry.
+    for step in ops:
+        if not isinstance(step, dict) or not isinstance(step.get("op"), str):
+            raise ValueError("Invalid micro instruction")
+        kind = step["op"].lower()
+        if kind in {"key", "press", "walk_or_turn"}:
+            effects.update(("input", "text_entry"))
+        elif kind in {"move", "turn", "scroll", "click"}:
+            effects.add("input")
+        elif kind in {"if", "until"}:
+            for field in (("then", "else") if kind == "if" else ("do",)):
+                effects.update(micro_effects(step.get(field, []), depth + 1))
+        elif kind not in {"sleep", "log"}:
+            raise ValueError("Unknown micro instruction: " + kind)
+    return tuple(sorted(effects))
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -38,6 +59,8 @@ class ToolSpec:
             return self.effects
         if not isinstance(arguments,dict):
             raise ValueError('Tool arguments must be an object')
+        if self.name == 'run_script' and ('ops' in arguments or 'steps' in arguments):
+            return micro_effects(arguments.get('ops') or arguments.get('steps') or [])
         if self.parameter_effects:
             chosen = tuple(dict.fromkeys(effect for key,effects in self.parameter_effects
                 if arguments.get(key) for effect in effects))
