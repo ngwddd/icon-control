@@ -1,16 +1,16 @@
 {
-  "version": "1.3.4",
-  "source_commit": "d96cf5468057e0d21f7cb34483beebfbfdd72c24",
+  "version": "1.3.6",
+  "source_commit": "0c18609139e256872beded251bfeb08674902623",
   "status": "blocked",
   "p0_review": "pending",
   "clean_windows_install": "pending",
   "known_false_success_paths": null,
   "unit_failures": 0,
   "unit_errors": 0,
-  "unit_skipped": 3,
+  "unit_skipped": 0,
   "unit_evidence": {
     "path": ".runtime\\test-results.json",
-    "sha256": "6869b02107850cf923b6d4d9e1e49a7f4a87a34c59db96e36fe132154fb978f1"
+    "sha256": "9d44b4e9e396a12c2ea2f26e8e792639b5ffbeae69c513e75937138e54ef8341"
   },
   "desktop_tasks": [
     {
@@ -78,33 +78,39 @@
     {
       "id": "B11",
       "status": "stale",
-      "elapsed_ms": 36.887,
+      "elapsed_ms": 2336.758,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
-        "version": "1.3.2",
+        "version": "1.3.6",
         "monitor_dpi": 144,
         "fixture_window_dpi": 144
       },
-      "application_state": {},
+      "application_state": {
+        "target": "S5-B11 hello 123",
+        "actual": "S5-B11 hello 123"
+      },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B11.json",
-        "sha256": "56dcc32229771af88e441e761a150028a799fd105e8c9aceb166f19f72391e4a"
+        "sha256": "2570c15a1e5c3bc6724333de4229883599237224f048683884af44f576499eed"
       }
     },
     {
       "id": "B12",
       "status": "stale",
-      "elapsed_ms": 12.992,
+      "elapsed_ms": 4189.982,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
-        "version": "1.3.2",
+        "version": "1.3.6",
         "monitor_dpi": 144,
         "fixture_window_dpi": 144
       },
-      "application_state": {},
+      "application_state": {
+        "target": "S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复",
+        "actual": "S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复S5-B12 中文与符号：你好，世界！123 [] {} @#$% ✓ 长文本重复"
+      },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B12.json",
-        "sha256": "7626f535eff17cc59a8f93223e87fd23f231b6cb44acdf724921f01652714383"
+        "sha256": "5b8b7532ee3794bc92f1ce254151351addc4719ff6ecf6fb0ff3d294c5f533a1"
       }
     },
     {
@@ -272,33 +278,60 @@
     {
       "id": "B20",
       "status": "stale",
-      "elapsed_ms": 14.664,
+      "elapsed_ms": 1956.149,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
-        "version": "1.3.2",
+        "version": "1.3.6",
         "monitor_dpi": 144,
         "fixture_window_dpi": 144
       },
-      "application_state": {},
+      "application_state": {
+        "before": 0,
+        "after": 0,
+        "old_hwnd": 1704646,
+        "new_hwnd": 1770182
+      },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B20.json",
-        "sha256": "61f32cf772e875287502f3db8f8ef37dd717d91fbb399d9fa3bdfc06bcf4bc41"
+        "sha256": "c9c94f611d6f7e1f943cfc715f017ace686057bc7188c6378d3167972f7290ac"
       }
     },
     {
       "id": "B21",
       "status": "stale",
-      "elapsed_ms": 11.01,
+      "elapsed_ms": 3050.364,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
-        "version": "1.3.2",
+        "version": "1.3.6",
         "monitor_dpi": 144,
         "fixture_window_dpi": 144
       },
-      "application_state": {},
+      "application_state": {
+        "before": 0,
+        "after": 0
+      },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B21.json",
-        "sha256": "a68b347121bc0cd9f75c5fcb309b84a670d41a88af5c00ecb11623b98fe41348"
+        "sha256": "7350dd80a2bbb811cbd4c48c13a1291508b0ebb787edff9e603cb4a987bbaccc"
+      }
+    },
+    {
+      "id": "B22",
+      "status": "stale",
+      "elapsed_ms": 2385.131,
+      "environment": {
+        "os": "Windows-11-10.0.26200-SP0",
+        "version": "1.3.6",
+        "monitor_dpi": 144,
+        "fixture_window_dpi": 144
+      },
+      "application_state": {
+        "before": 0,
+        "after": 0
+      },
+      "evidence": {
+        "path": "docs\\v1.3\\evidence\\s5\\B22.json",
+        "sha256": "0e89798e655fe9e66f19e79e8173ef52df367ab5a91f767b57caf4f53207ce62"
       }
     },
     {
@@ -323,34 +356,55 @@
     },
     {
       "id": "B26",
-      "status": "stale",
-      "elapsed_ms": 9.996,
+      "status": "passed",
+      "elapsed_ms": 1328.483,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
-        "version": "1.3.2",
+        "version": "1.3.6",
         "monitor_dpi": 144,
         "fixture_window_dpi": 144
       },
-      "application_state": {},
+      "application_state": {
+        "before": 1,
+        "after": 2
+      },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B26.json",
-        "sha256": "ea91e3a1eab5050e8756ccaea25744afc20a4792563607f2bc4651e5aae56741"
+        "sha256": "4dbcb6b2cdaf955c7ad896f820be3e9853a355f35e18504ae796d17cba9b0293"
       }
     },
     {
       "id": "B28",
-      "status": "stale",
-      "elapsed_ms": 10.561,
+      "status": "failed",
+      "elapsed_ms": 1835.714,
       "environment": {
         "os": "Windows-11-10.0.26200-SP0",
-        "version": "1.3.2",
+        "version": "1.3.6",
         "monitor_dpi": 144,
         "fixture_window_dpi": 144
       },
-      "application_state": {},
+      "application_state": {
+        "scroll_before": 0,
+        "scroll_true": 0,
+        "scroll_false": 9,
+        "boxes": {
+          "text": [
+            121,
+            673,
+            240,
+            30
+          ],
+          "blank": [
+            441,
+            673,
+            150,
+            30
+          ]
+        }
+      },
       "evidence": {
         "path": "docs\\v1.3\\evidence\\s5\\B28.json",
-        "sha256": "7190b79404c9bcfc2a1c42cd317870b2fdd732429f2bbac1236c86d32725c851"
+        "sha256": "609ef2d0a6816f572787153620632de7c2440e1f77912bc1de7f27b9356241ba"
       }
     },
     {

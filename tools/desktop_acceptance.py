@@ -472,6 +472,46 @@ def b28_branch():
                                         boxes=dict(text=text_box, blank=blank_box))))
 
 
+@case('B22')
+def b22_occluded():
+    """An occluded target must not be clicked through the cover."""
+    wait_ready()
+    hwnd = fixture_hwnd()
+    tree = ui_ext.ui_tree(hwnd=hwnd)
+    candidate = next((n for n in tree.get('nodes', []) if n.get('name') == 'Counter' and n.get('ref')), None)
+    if not candidate:
+        raise RuntimeError('Counter snapshot ref unavailable')
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    cover = subprocess.Popen(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                              '-WindowStyle', 'Hidden', '-File',
+                              str(ROOT / 'tests' / 'manual' / 'cover_window.ps1'),
+                              '-X', str(left), '-Y', str(top),
+                              '-W', str(right - left), '-H', str(bottom - top),
+                              '-Seconds', '60'])
+    try:
+        time.sleep(1.5)
+        covered = win32gui.FindWindow(None, 'Icon Control cover')
+        before = fixture_state()['counts']['Counter']
+        refused = False
+        try:
+            result = ui_ext.ui_click(name='', hwnd=hwnd, ref=candidate['ref'], mouse=mouse)
+            refused = not result.get('success', result.get('ok', False))
+        except Exception:
+            refused = True
+        time.sleep(0.3)
+        after = fixture_state()['counts']['Counter']
+        return (refused and after == before and bool(covered),
+                dict(application_state=dict(before=before, after=after),
+                     result=dict(refused=refused, cover_hwnd=covered,
+                                 covered=[left, top, right, bottom])))
+    finally:
+        cover.terminate()
+        try:
+            cover.wait(timeout=5)
+        except Exception:
+            pass
+
+
 def main():
     requested = [name.strip().upper() for name in args.cases.split(',')] if args.cases != 'all' else list(CASES)
     unknown = [name for name in requested if name not in CASES]
