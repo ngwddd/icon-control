@@ -70,6 +70,7 @@ class ConsentHost:
         self.authorization: dict = {}
         self.hotkey = ''
         self._stopping = False
+        self._showing = False
         self._wndproc = WNDPROC(self._on_message)
 
     # -- plumbing ---------------------------------------------------------
@@ -155,6 +156,15 @@ class ConsentHost:
             self.lease_until = 0.0
 
     def show(self):
+        if self._showing:
+            return
+        self._showing = True
+        try:
+            self._show_once()
+        finally:
+            self._showing = False
+
+    def _show_once(self):
         self._sync()
         if self.granted:
             left = max(0, int(self.lease_until - time.time()))
@@ -313,8 +323,12 @@ class ConsentHost:
 
     # -- lifecycle --------------------------------------------------------
     def run(self) -> int:
-        handle = self.kernel32.CreateMutexW(None, True, MUTEX_NAME)
-        if self.kernel32.GetLastError() == 183:          # ERROR_ALREADY_EXISTS
+        self.kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR]
+        self.kernel32.CreateMutexW.restype = wintypes.HANDLE
+        self.kernel32.CreateMutexW(None, True, MUTEX_NAME)
+        # ctypes.get_last_error(), not kernel32.GetLastError(): the latter is a
+        # fresh call whose value is already clobbered by the marshalling.
+        if ctypes.get_last_error() == 183:                # ERROR_ALREADY_EXISTS
             existing = self.user32.FindWindowW(CLASS_NAME, None)
             if existing:
                 self.user32.PostMessageW(existing, WM_SHOW, 0, 0)
