@@ -65,8 +65,24 @@ def consent_hosts() -> list[int]:
             continue
         joined = ' '.join(cmdline)
         if '-m computer_mcp.consent' in joined and 'permission_bridge' not in joined:
+            # The launcher is python.exe and exits; the host is pythonw.exe.
+            try:
+                if proc.name().lower() != 'pythonw.exe':
+                    continue
+            except psutil.Error:
+                continue
             pids.append(proc.info['pid'])
-    return pids
+    owner = host_window_owner()
+    if owner and owner in pids:
+        # The venv pythonw re-execs the real interpreter: drop the launcher
+        # ancestors so one host is not counted twice.
+        import psutil as _ps
+        try:
+            ancestors = {parent.pid for parent in _ps.Process(owner).parents()}
+            pids = [pid for pid in pids if pid not in ancestors]
+        except _ps.Error:
+            pass
+    return sorted(pids)
 
 
 def single_host() -> bool:
