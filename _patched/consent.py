@@ -45,6 +45,7 @@ def main():
     applications.pack(fill='both',expand=True)
     records = []
     launches = []
+    read_files = []
     desired = [False]
 
     def refresh(initial=False):
@@ -94,7 +95,7 @@ def main():
             if set(selected)&{'input','text_entry','window_close'} and not applications.curselection():
                 raise ValueError('请在应用列表选中允许操作的应用（蓝色高亮）')
             result = ipc('grant', agent_session=agent_ids[index], scopes=selected,
-                                        applications=[records[i] for i in applications.curselection()], launches=launches)
+                                        applications=[records[i] for i in applications.curselection()], launches=launches, read_files=read_files)
             if result.get('granted') is not True:raise RuntimeError('后端尚未确认授权')
             desired[0] = True
             confirmed_agent[0] = agent_ids[index]
@@ -149,6 +150,18 @@ def main():
         except Exception as exc: messagebox.showerror('无法批准',str(exc),parent=root)
     ttk.Button(frame,text='选择允许启动的程序及固定参数…',command=approve_launch).pack(
         before=applications,side='bottom',anchor='w',pady=(8,0))
+    def choose_read_file():
+        path = filedialog.askopenfilename(parent=root, title='批准读取单个外部文件（最多 1 MiB）')
+        if not path:
+            return
+        try:
+            read_files.append(capabilities.file_record(path))
+            options['file_read'].set(True)
+            status.set('已选择文件，点击“授权所选范围”确认本次读取范围。')
+        except Exception as exc:
+            messagebox.showerror('文件无法批准', str(exc), parent=root)
+
+    ttk.Button(buttons, text='批准单个文件读取', command=choose_read_file).pack(side='left')
     capsule = tk.Toplevel(root)
     capsule.title('Icon Control — Permissions · 快捷授权')
     capsule.attributes('-topmost', True)

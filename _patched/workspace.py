@@ -41,15 +41,28 @@ def readable_path(name, root=None):
     from computer_mcp import capabilities, permission
     if not capabilities.has_scope('file_read'):
         raise permission.PermissionDenied('Dedicated file read approval required')
-    return owned_path(root or data_home() / 'workspace' / 'files', str(name))
+    try:
+        return owned_path(root or data_home() / 'workspace' / 'files', str(name))
+    except ValueError:
+        if root is not None:
+            raise
+        state = permission.status()
+        if capabilities.file_record(name) not in state.get('authorization', {}).get('read_files', []):
+            raise permission.PermissionDenied('External file needs an exact native approval')
+        return Path(name).absolute()
 
 
 def read_text(name, root=None, encoding='utf-8'):
+    from computer_mcp import permission, execution
+    before = execution.authority_stamp(permission.status())
     path = readable_path(name, root)
     with path.open('rb') as source:
         data = source.read(1048577)
     if len(data) > 1048576:
         raise ValueError('File exceeds the 1 MiB read limit')
+    if execution.authority_stamp(permission.status()) != before:
+        raise permission.PermissionDenied('File read authority changed')
+    readable_path(name, root)
     return data.decode(encoding, errors='replace')
 
 

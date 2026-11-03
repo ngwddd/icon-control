@@ -31,6 +31,7 @@ import os
 import re
 import time
 from computer_mcp import execution as _execution
+from pathlib import Path
 from typing import Any
 
 MACRO_DIR = os.environ.get(
@@ -484,8 +485,13 @@ def run_macro(
     if not os.path.exists(p):
         return {"error": f"macro not found: {name}", "dir": MACRO_DIR}
 
-    with open(p, "r", encoding="utf-8-sig") as fh:
-        spec = json.load(fh)
+    from computer_mcp.workspace import owned_path
+    p = owned_path(Path(MACRO_DIR), p)
+    with p.open("rb") as source:
+        body = source.read(1048577)
+    if len(body) > 1048576:
+        raise ValueError('Macro exceeds the 1 MiB limit')
+    spec = json.loads(body.decode('utf-8-sig'))
 
     merged = dict(spec.get("defaults") or {})
     merged.update(params)

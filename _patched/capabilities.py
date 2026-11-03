@@ -84,3 +84,19 @@ def require_target(hwnd=None, point=None):
     from computer_mcp import permission
     why = check_target(permission.status(), hwnd=hwnd, point=point)
     if why: raise permission.PermissionDenied(why)
+
+
+def file_record(path):
+    """Identity for one explicitly chosen external read, capped at one MiB."""
+    from computer_mcp.workspace import owned_path
+    path = Path(path).absolute()
+    owned_path(path.parent, str(path))
+    if path.stat().st_size > 1048576:
+        raise ValueError('File exceeds the 1 MiB read limit')
+    with path.open('rb') as source:
+        data = source.read(1048577)
+        stat = os.fstat(source.fileno())
+    if len(data) > 1048576:
+        raise ValueError('File exceeds the 1 MiB read limit')
+    return dict(path=str(path), size=stat.st_size, mtime=stat.st_mtime_ns,
+                sha256=hashlib.sha256(data).hexdigest())

@@ -148,7 +148,14 @@ def dispatch(message, pid):
         for item in launches:
             if capabilities.launch_record(item['exe'],item.get('arguments','')) != item:
                 raise ValueError('Executable changed; approve it again')
-        auth = dict(agent_session=session, scopes=scopes, applications=applications, launches=launches)
+        read_files = message.get('read_files', [])
+        if not isinstance(read_files, list) or len(read_files) > 20:
+            raise ValueError('Invalid file approvals')
+        for record in read_files:
+            if capabilities.file_record(record['path']) != record:
+                raise ValueError('External file changed; approve again')
+        auth = dict(agent_session=session, scopes=scopes, applications=applications,
+                    launches=launches, read_files=read_files)
         if not capabilities.validate(auth): raise ValueError('Invalid scope selection')
         # Validate actual PID/create-time/executable, not caller supplied display names.
         for app in applications:
