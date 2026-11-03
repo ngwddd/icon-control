@@ -134,6 +134,9 @@ def dispatch(message, pid):
                     bridge._pending_app = app
             except Exception:
                 pass
+        scopes = message.get('prefer_scopes')
+        if isinstance(scopes, list) and scopes and set(scopes) <= capabilities.SCOPES:
+            bridge._pending_scopes = [scope for scope in scopes if scope in capabilities.SCOPES]
         return open_native()
     if command == 'authority':
         with bridge._lock:
@@ -158,7 +161,8 @@ def dispatch(message, pid):
     if command == 'status':
         return dict(state=bridge.current_state(), agents=list(agent_session.active()),
                     pending=getattr(bridge, '_pending_agent', None),
-                    pending_app=getattr(bridge, '_pending_app', None))
+                    pending_app=getattr(bridge, '_pending_app', None),
+                    pending_scopes=getattr(bridge, '_pending_scopes', None))
     if command == 'grant':
         session = message.get('agent_session')
         live = list(agent_session.active())

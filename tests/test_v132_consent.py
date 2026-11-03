@@ -139,6 +139,23 @@ class AutoConsentTests(unittest.TestCase):
         request.assert_called_once()
 
 
+class PendingScopeTests(unittest.TestCase):
+    """The window must pre-select a range that actually satisfies the call."""
+
+    def test_common_preset_covers_ordinary_input(self):
+        self.assertEqual(native_dialog.preset_for(['screen_read', 'input', 'text_entry']), 0)
+
+    def test_read_only_preset_for_screen_only(self):
+        self.assertEqual(native_dialog.preset_for(['screen_read']), 1)
+
+    def test_clipboard_or_file_needs_the_full_preset(self):
+        self.assertEqual(native_dialog.preset_for(['screen_read', 'file_write']), 2)
+        self.assertEqual(native_dialog.preset_for(['clipboard_read']), 2)
+
+    def test_empty_request_defaults_to_common(self):
+        self.assertEqual(native_dialog.preset_for(None), 0)
+
+
 class PresetTests(unittest.TestCase):
     def test_three_presets_are_declared_with_valid_scopes(self):
         self.assertEqual(len(native_dialog.PRESETS), 3)

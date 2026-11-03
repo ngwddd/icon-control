@@ -158,10 +158,12 @@ class ConsentHost:
 
         pending = None
         pending_app = None
+        pending_scopes = None
         try:
             status = self.ipc('status') or {}
             pending = status.get('pending')
             pending_app = status.get('pending_app')
+            pending_scopes = status.get('pending_scopes')
         except Exception:
             pass
         agent = self._pick_agent(pending)
@@ -185,7 +187,9 @@ class ConsentHost:
         answer = native_dialog.ask_grant(
             agent_label=f"{agent.get('label', 'Agent')} · {agent['id'][:10]}",
             target_text=f"{os.path.basename(app['exe'])} · PID {app['pid']}",
-            lease_minutes=LEASE_MINUTES, note=app.get('title', ''))
+            default_preset=native_dialog.preset_for(pending_scopes),
+            lease_minutes=LEASE_MINUTES, note=app.get('title', ''),
+            needs=pending_scopes)
         if answer is None or not answer['accepted']:
             return
         self._apply(agent['id'], answer['scopes'], app, answer['lease_minutes'])

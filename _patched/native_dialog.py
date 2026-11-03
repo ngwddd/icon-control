@@ -138,8 +138,21 @@ def _force_foreground(timeout: float = 2.5) -> None:
     threading.Thread(target=work, daemon=True).start()
 
 
+def preset_for(scopes) -> int:
+    """Tightest preset that still covers the requested scopes (2 = 全部)."""
+    wanted = set(scopes or ())
+    if not wanted:
+        return 0
+    best = None
+    for index, (_name, _detail, preset_scopes) in enumerate(PRESETS):
+        candidate = set(preset_scopes)
+        if wanted <= candidate and (best is None or len(candidate) < len(PRESETS[best][2])):
+            best = index
+    return len(PRESETS) - 1 if best is None else best
+
+
 def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
-              lease_minutes: int = 60, note: str = '') -> dict | None:
+              lease_minutes: int = 60, note: str = '', needs=None) -> dict | None:
     """Show the single approval window. Returns None when unavailable."""
     if not available():
         return None
@@ -157,9 +170,12 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
         *[TASKDIALOG_BUTTON(200 + index, f'{name}：{detail}')
           for index, (name, detail, _scopes) in enumerate(PRESETS)])
 
+    needed = ''
+    if needs:
+        needed = '\r\n本次调用需要：' + '、'.join(str(item) for item in needs)
     content = (
         f'Agent：{agent_label}\r\n'
-        f'目标：{target_text}\r\n\r\n'
+        f'目标：{target_text}{needed}\r\n\r\n'
         '批准范围（单选）：'
     )
     verification = f'{lease_minutes} 分钟内，本工作区的新进程自动沿用这次授权'

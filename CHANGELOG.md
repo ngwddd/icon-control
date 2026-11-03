@@ -1,3 +1,10 @@
+## [1.3.5] - 2026-11-04
+
+- 授权窗口会说出缺什么：被拦下的调用把缺失作用域带到窗口，标题下直接写“本次调用需要：file_write”，并自动预选能覆盖它的最小预设（只读 / 常用 / 全部）。
+- 新增 tools/acceptance_report.py：acceptance.json 的唯一生成入口，按 SHA 绑定与哈希校验组装证据，跨提交的旧证据会标 stale。
+- 新增 S5 用例 B22（遮挡）与 tests/manual/cover_window.ps1。
+- 回归：550 项运行 / 0 失败 / 0 错误 / 3 跳过（新增 4 项预设选择用例）。
+
 ## [1.3.4] - 2026-11-04
 
 - 被拒的调用会自动拉起授权窗口：permission.check_tool 在缺少授权或权限范围不足时请求 open，20 秒内只弹一次，可用 ICON_CONTROL_AUTO_CONSENT=0 关闭。
