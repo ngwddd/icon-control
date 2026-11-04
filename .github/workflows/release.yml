@@ -108,8 +108,12 @@ jobs:
           RELEASE_NOTES: ${{ steps.metadata.outputs.notes }}
         shell: pwsh
         run: |
-          gh release view "${{ github.ref_name }}" *> $null
+          $existingPrerelease = gh release view "${{ github.ref_name }}" --json isPrerelease --jq .isPrerelease
           if ($LASTEXITCODE -eq 0) {
+            if ($existingPrerelease -eq 'false') {
+              Write-Warning 'Automatic gate did not authorize publication; preserving the existing owner-published stable release and its assets.'
+              exit 0
+            }
             gh release upload "${{ github.ref_name }}" dist/* --clobber
             gh release edit "${{ github.ref_name }}" --notes-file "$env:RELEASE_NOTES" --prerelease --latest=false
           } else {
