@@ -279,8 +279,15 @@ class ConsentHost:
         self._apply(agent['id'], answer['scopes'], app, answer['lease_minutes'],
                     request_id=pending['request_id'] if pending else None)
 
-    @_state_action
     def _apply(self, agent_session_id, scopes, app, lease_minutes, request_id=None):
+        notice = self._apply_state(agent_session_id, scopes, app, lease_minutes, request_id)
+        # Modal notifications must never prevent the worker sending a negative
+        # heartbeat after an ambiguous grant or failed revocation.
+        if notice:
+            native_dialog.ask_notice(*notice)
+
+    @_state_action
+    def _apply_state(self, agent_session_id, scopes, app, lease_minutes, request_id=None):
         try:
             result = consent_ipc.confirmed_grant(self.ipc, agent_session=agent_session_id, scopes=list(scopes),
                               applications=[{k: app[k] for k in ('pid', 'created', 'exe')}],
@@ -289,11 +296,12 @@ class ConsentHost:
             self.granted = False
             self.state_unknown = True
             self._refresh_tray()
-            native_dialog.ask_notice('授权状态未知', str(exc)[:300])
-            return
+            return ('授权状态未知', str(exc)[:300])
         if result.get('granted') is not True:
-            native_dialog.ask_notice('后端未确认授权', str(result)[:300])
-            return
+            self.granted = False
+            self.state_unknown = True
+            self._refresh_tray()
+            return ('后端未确认授权', str(result)[:300])
         auth = result.get('authorization') or {}
         self.state_unknown = False
         self.granted = True
@@ -315,11 +323,17 @@ class ConsentHost:
         record = dict(apps[0])
         self._apply(agent, scopes, record, LEASE_MINUTES)
 
-    @_state_action
     def revoke(self):
+        notice = self._revoke_state()
+        if notice:
+            native_dialog.ask_notice(*notice)
+
+    @_state_action
+    def _revoke_state(self):
         # Stop positive renewal before the IPC request. A failed revoke is
         # repaired by negative heartbeats and remains visibly unknown meanwhile.
         self.granted = False
+        notice = None
         try:
             state = self.ipc('revoke')
             if state.get('granted') is not False:
@@ -329,8 +343,9 @@ class ConsentHost:
             self.lease_until = 0.0
         except Exception:
             self.state_unknown = True
-            native_dialog.ask_notice('撤销状态未知', '通信未确认撤销，已停止正向续期，将重试否定心跳。')
+            notice = ('撤销状态未知', '通信未确认撤销，已停止正向续期，将重试否定心跳。')
         self._refresh_tray()
+        return notice
 
     # -- message handling -------------------------------------------------
     def _on_message(self, hwnd, message, wparam, lparam):

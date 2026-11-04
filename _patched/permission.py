@@ -255,7 +255,7 @@ _last_consent_request = {}
 CONSENT_POPUP_INTERVAL_S = 20.0
 
 
-def _request_consent(arguments: dict | None = None, missing=None) -> None:
+def _request_consent(arguments: dict | None = None, missing=None) -> str | None:
     """A blocked call should bring up the approval window, not just an error."""
     global _last_consent_request
     if os.environ.get('ICON_CONTROL_AUTO_CONSENT') == '0':
@@ -281,7 +281,18 @@ def _request_consent(arguments: dict | None = None, missing=None) -> None:
            json.dumps(prefer_app, sort_keys=True))
     previous = _last_consent_request.get(key)
     if previous and now - previous[0] < CONSENT_POPUP_INTERVAL_S:
-        return previous[1]
+        try:
+            from computer_mcp import consent_ipc
+            current = consent_ipc.request('request_status', timeout_ms=300,
+                                         agent_session=agent_session.current(),
+                                         request_id=previous[1])
+            if (current.get('request_id') == previous[1] and
+                    current.get('status') in ('pending', 'displayed')):
+                return previous[1]
+        except Exception:
+            # Unknown, consumed, denied, expired or pruned IDs are not reusable.
+            pass
+        _last_consent_request.pop(key, None)
     try:
         from computer_mcp import agent_session, consent_ipc
         result = consent_ipc.request('open', timeout_ms=300,

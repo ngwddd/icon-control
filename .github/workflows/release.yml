@@ -4,6 +4,9 @@ on:
     tags: ['v*']
 permissions:
   contents: write
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
 jobs:
   release:
     runs-on: windows-latest
@@ -56,34 +59,52 @@ jobs:
             .runtime/tests.log
             .runtime/protocol/protocol-smoke.json
             dist/*
+      - name: Resolve release notes and release channel
+        id: metadata
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $notes = "docs/v1.3/RELEASE-$env:RELEASE_TAG.md"
+          if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) {
+            $notes = 'CHANGELOG.md'
+          }
+          if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) {
+            throw 'Neither version release notes nor CHANGELOG.md exists'
+          }
+          "notes=$notes" >> $env:GITHUB_OUTPUT
+          $candidate = $env:RELEASE_TAG -match '(?i)(alpha|beta|rc|preview|dev)'
+          "candidate=$($candidate.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
       - name: Publish stable release
-        if: steps.gate.outcome == 'success'
+        if: steps.gate.outcome == 'success' && steps.metadata.outputs.candidate != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ steps.metadata.outputs.notes }}
         shell: pwsh
         run: |
           gh release view "${{ github.ref_name }}" *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload "${{ github.ref_name }}" dist/* --clobber
-            gh release edit "${{ github.ref_name }}" --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md
+            gh release edit "${{ github.ref_name }}" --notes-file "$env:RELEASE_NOTES"
           } else {
             gh release create "${{ github.ref_name }}" dist/* `
               --title "Icon Control ${{ github.ref_name }}" `
-              --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md
+              --notes-file "$env:RELEASE_NOTES"
           }
       - name: Publish pre-release
-        if: steps.gate.outcome != 'success'
+        if: steps.gate.outcome != 'success' || steps.metadata.outputs.candidate == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ steps.metadata.outputs.notes }}
         shell: pwsh
         run: |
           gh release view "${{ github.ref_name }}" *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload "${{ github.ref_name }}" dist/* --clobber
-            gh release edit "${{ github.ref_name }}" --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md --prerelease
+            gh release edit "${{ github.ref_name }}" --notes-file "$env:RELEASE_NOTES" --prerelease --latest=false
           } else {
             gh release create "${{ github.ref_name }}" dist/* `
-              --prerelease `
+              --prerelease --latest=false `
               --title "Icon Control ${{ github.ref_name }} (pre-release)" `
-              --notes-file docs/v1.3/RELEASE-${{ github.ref_name }}.md
+              --notes-file "$env:RELEASE_NOTES"
           }

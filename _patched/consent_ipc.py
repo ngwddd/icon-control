@@ -165,6 +165,16 @@ def _dispatch(message, pid):
         elif any(key in message for key in ('prefer_app', 'prefer_scopes')):
             raise PermissionError('An application request requires a verified caller')
         return {**open_native(), 'request_id': request_id}
+    if command == 'request_status':
+        # Caller-scoped, read-only lookup; never expose another Agent's request
+        # or let a cache turn a terminal request back into a pending one.
+        session = message.get('agent_session')
+        if agent_session.lookup(session, pid) is None:
+            raise PermissionError('Requested Agent does not belong to this pipe peer')
+        record = _requests.get(message.get('request_id'))
+        if record['agent_session'] != session or record['peer']['pid'] != pid:
+            raise PermissionError('Consent request belongs to another caller')
+        return dict(request_id=record['request_id'], status=record['status'])
     if command == 'diagnose':
         return _diagnose(message, pid)
     if command == 'authority':
