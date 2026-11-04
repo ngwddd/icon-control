@@ -50,20 +50,47 @@ def require_clipboard_scopes(scopes):
     execution.authority_stamp(state)
 
 
-def check_clipboard_chord(key, modifiers):
-    """System clipboard remains a separate scope, including shortcut fallbacks."""
+def normalized_key_tokens(key):
+    """Normalize enum, character and VK-only forms at the input boundary.
+
+    Use both char and vk when both are supplied: a contradictory char must not
+    hide the virtual key that Windows will actually receive.
+    """
     from pynput.keyboard import Key
-    ctrl = bool(set(modifiers) & {Key.ctrl, Key.ctrl_l, Key.ctrl_r})
-    shift = bool(set(modifiers) & {Key.shift, Key.shift_l, Key.shift_r})
-    char = (getattr(key, 'char', None) or '').lower()
-    insert = key == Key.insert or getattr(key, 'vk', None) == Key.insert.value.vk
-    delete = key == Key.delete or getattr(key, 'vk', None) == Key.delete.value.vk
-    if ctrl and (char in ('c', 'x') or insert):
-        require_clipboard_scopes({'clipboard_write'})
-    elif (ctrl and char == 'v') or (shift and insert):
-        require_clipboard_scopes({'clipboard_read'})
-    elif shift and delete:
-        require_clipboard_scopes({'clipboard_write'})
+    value = key.value if isinstance(key, Key) else key
+    char = value if isinstance(value, str) else getattr(value, 'char', None)
+    tokens = {char.lower()} if isinstance(char, str) and char else set()
+    vk = getattr(value, 'vk', None)
+    virtual = {0x41: 'a', 0x43: 'c', 0x58: 'x', 0x56: 'v',
+               0x11: 'ctrl', 0xA2: 'ctrl', 0xA3: 'ctrl',
+               0x10: 'shift', 0xA0: 'shift', 0xA1: 'shift',
+               0x12: 'alt', 0xA4: 'alt', 0xA5: 'alt',
+               0x2D: 'insert', 0x2E: 'delete'}
+    if vk in virtual:
+        tokens.add(virtual[vk])
+    # Also handle enum names on backends whose modifier values lack a VK.
+    if isinstance(key, Key):
+        name = key.name
+        tokens.add(name.split('_', 1)[0] if name.startswith(('ctrl', 'shift', 'alt')) else name)
+    return tokens
+
+
+def check_clipboard_chord(key, modifiers):
+    """Clipboard scopes apply equally to named and numeric shortcut keys."""
+    modifier_tokens = set()
+    for modifier in modifiers:
+        modifier_tokens.update(normalized_key_tokens(modifier))
+    keys = normalized_key_tokens(key)
+    ctrl, shift = 'ctrl' in modifier_tokens, 'shift' in modifier_tokens
+    scopes = set()
+    if ctrl and keys & {'c', 'x', 'insert'}:
+        scopes.add('clipboard_write')
+    if (ctrl and 'v' in keys) or (shift and 'insert' in keys):
+        scopes.add('clipboard_read')
+    if shift and 'delete' in keys:
+        scopes.add('clipboard_write')
+    if scopes:
+        require_clipboard_scopes(scopes)
 
 
 def edit_shortcut(letter):

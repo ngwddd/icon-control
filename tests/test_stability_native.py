@@ -16,6 +16,20 @@ class NativeTests(AuthorityCase, unittest.TestCase):
     fixture_authorized = True
     fixture_monitoring = True
 
+    def setUp(self):
+        super().setUp()
+        # Fake HWNDs must have a complete, stable owner identity. Keep the real
+        # _MessageKeyboard validation and only replace OS process discovery.
+        self.owner = dict(pid=987654, created=1234.5, exe='C:/fixtures/editor.exe')
+        patches = [
+            patch.object(keyboard, '_window_controllers', {}),
+            patch('win32process.GetWindowThreadProcessId', return_value=(5678, self.owner['pid'])),
+            patch('computer_mcp.capabilities.process_record', return_value=self.owner),
+        ]
+        for item in patches:
+            item.start()
+            self.addCleanup(item.stop)
+
     def test_unicode_window_text_is_not_silently_skipped(self):
         posted = []
         with patch('win32gui.IsWindow', return_value=True), patch('win32gui.PostMessage', side_effect=lambda *a: posted.append(a)):
@@ -32,6 +46,29 @@ class NativeTests(AuthorityCase, unittest.TestCase):
             result = keyboard.type_text_to_window('abcd', 124)
         self.assertIn('error', result)
         self.assertEqual(len(posted), 1)
+
+    def test_replaced_process_blocks_next_window_character(self):
+        from computer_mcp import capabilities
+        posted = []
+        def post(*args):
+            posted.append(args)
+            # Same PID/HWND, different creation time: no ownership inheritance.
+            self.owner = dict(self.owner, created=self.owner['created'] + 1)
+        with patch('win32gui.IsWindow', return_value=True), patch('win32gui.PostMessage', side_effect=post), patch.object(capabilities, 'process_record', side_effect=lambda pid: dict(self.owner)):
+            result = keyboard.type_text_to_window('ab', 123)
+        self.assertIn('error', result)
+        self.assertEqual(len(posted), 1)
+        self.assertIn('target process changed', result['error'])
+
+    def test_changed_window_thread_blocks_message_release(self):
+        from pynput.keyboard import KeyCode
+        with patch('win32gui.IsWindow', return_value=True), patch('win32gui.PostMessage') as post:
+            raw = keyboard._MessageKeyboard(123)
+            with patch('win32process.GetWindowThreadProcessId', return_value=(9999, self.owner['pid'])):
+                from computer_mcp.permission import PermissionDenied
+                with self.assertRaises(PermissionDenied):
+                    raw.release(KeyCode.from_vk(86))
+        post.assert_not_called()
 
     def test_window_screenshot_never_focuses(self):
         with patch.object(ocr_ext, '_print_window', return_value=(Image.new('RGB',(12,8)),0,0)), patch('win32gui.ShowWindow') as show, patch('win32gui.SetForegroundWindow') as focus:

@@ -42,11 +42,12 @@ class InjectedKeyboard(RawKeyboard):
         return super()._resolve(key)
 
     def _handle(self, key, is_press):
-        from computer_mcp.native_keyboard import send_unicode, send_key, edit_shortcut
+        from computer_mcp.native_keyboard import send_unicode, send_key, edit_shortcut, normalized_key_tokens
         if isinstance(key, UnicodeKey):
             send_unicode(key.char, is_press)
             return
-        char = (key.char or '').lower()
+        tokens = normalized_key_tokens(key)
+        char = next((letter for letter in ('a', 'c', 'x', 'v') if letter in tokens), '')
         if is_press:
             from computer_mcp.native_keyboard import check_clipboard_chord
             modifiers = set()
