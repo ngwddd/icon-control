@@ -135,7 +135,7 @@ def install_boundaries():
     """Legacy public APIs share the registry policy, without adding MCP tools."""
     tables = {
         'actions.mouse': {n: ('mouse_move' if n == 'move_mouse' else n) for n in
-                          ('click','double_click','triple_click','button_down','button_up','drag','move_mouse')},
+                          ('scroll','click','double_click','triple_click','button_down','button_up','drag','move_mouse')},
         'actions.keyboard': {n: ('type' if n.startswith('type_text') else n.replace('_to_window','')) for n in
                              ('type_text','key_down','key_up','key_press','type_text_to_window',
                               'key_down_to_window','key_up_to_window','key_press_to_window')},

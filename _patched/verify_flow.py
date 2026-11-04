@@ -64,6 +64,8 @@ def _check_text(spec: dict) -> dict:
     res = ocr_ext.ocr_read(region=region, hwnd=None if region else hwnd, max_lines=120,
                            upscale=float(spec.get("upscale", 1.5)),
                            boost=bool(spec.get("boost", True)))
+    if res.get('error') or res.get('success') is False or not isinstance(res.get('lines'), list):
+        return {"ok": False, "detail": "OCR did not provide valid page evidence"}
     lines = [NORM(ln.get("text")) for ln in (res.get("lines") or [])]
     hit = any(query in h for h in lines)
     if not hit:                      # 允许 OCR 错字：最长公共子串占比够也算命中

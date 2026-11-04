@@ -45,7 +45,7 @@ SPECS: list[ToolSpec] = [
         name='run_script',
         effects=('compose','input','screen_read',),
         zone='Z4',
-        description='Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.',
+        description='Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/scroll/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.',
         read_only=False,
         schema={'type': 'object', 'properties': {'ops': {'type': 'array', 'items': {'type': 'object'}}, 'steps': {'type': 'array', 'items': {'type': 'object'}}, 'max_seconds': {'type': 'number'}}, 'additionalProperties': False},
     ),

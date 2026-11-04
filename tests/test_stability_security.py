@@ -212,7 +212,7 @@ class SecurityTests(unittest.TestCase):
                 dispatch('win_list',{},computer_state=Mock(),mouse_controller=Mock(),keyboard_controller=Mock())
 
     def test_all_registered_tools_have_effects(self):
-        self.assertEqual(len(R.TOOLS),89)
+        self.assertEqual(len(R.TOOLS),90)
         for spec in R.iter_specs(): self.assertTrue(spec.effects,spec.name)
 
     def test_out_of_order_grant_does_not_override_revoke(self):

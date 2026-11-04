@@ -457,7 +457,68 @@ _MACRO_SCOPES = {
     'anchor_click': ('screen_read','file_write'), 'launch': ('process',), 'close_windows': ('window_close',), 'exit_app': ('window_close',),
     'assert_file': ('file_read',),
     'paste': ('text_entry', 'clipboard_read'),
+    'guarded_click': ('screen_read',),
 }
+
+def _guarded_click(step, win, mouse):
+    """One visual transition: reject missing evidence, never retry the click."""
+    from computer_mcp import verify_flow
+    from computer_mcp.actions import mouse as mouse_actions
+    if not win:
+        return dict(ok=False, error='guarded_click requires an identified target window')
+
+    def checks(field):
+        value = step.get(field)
+        if not isinstance(value, list) or not value:
+            raise ValueError('guarded_click requires nonempty before and after checks')
+        result = []
+        for raw in value:
+            if not isinstance(raw, dict) or raw.get('kind') not in ('text', 'template', 'baseline', 'stable'):
+                raise ValueError('guarded_click accepts only explicit visual assertion kinds')
+            check = dict(raw)
+            if check['kind'] == 'text':
+                if not check.get('query'):
+                    raise ValueError('Text page checks require a nonempty query')
+                check.setdefault('min_lcs_share', 1.0)
+            region = _resolve_region(check, win)
+            if region:
+                check['region'] = region
+            check['hwnd'] = win['hwnd']
+            result.append(check)
+        return result
+
+    # Validate both halves before doing anything, not after the click.
+    before, after = checks('before'), checks('after')
+    import win32process
+    from computer_mcp import capabilities, permission
+    _, pid = win32process.GetWindowThreadProcessId(win['hwnd'])
+    expected = capabilities.process_record(pid)
+    initial = verify_flow.run([{'assert': before}])
+    if not initial.get('ok'):
+        return dict(ok=False, phase='before', evidence=initial, clicked=False)
+    point = _resolve_point(step, win)
+    if point is None:
+        raise ValueError('guarded_click requires an explicit point')
+    # Window geometry alone does not establish a trustworthy click target.
+    _, pid = win32process.GetWindowThreadProcessId(win['hwnd'])
+    if capabilities.process_record(pid) != expected:
+        raise permission.PermissionDenied('Guarded click target changed after page observation')
+    import win32gui
+    _, point_pid = win32process.GetWindowThreadProcessId(win32gui.WindowFromPoint(point))
+    if capabilities.process_record(point_pid) != expected:
+        raise permission.PermissionDenied('Guarded click point is outside its target application')
+    mouse_actions.click(controller=mouse, x=point[0], y=point[1], button=step.get('button', 'left'))
+    _execution.sleep(min(3000, max(0, int(step.get('settle_ms', 300)))) / 1000)
+    _, pid = win32process.GetWindowThreadProcessId(win['hwnd'])
+    if capabilities.process_record(pid) != expected:
+        return dict(ok=False, phase='after', clicked=True, error='Target identity changed before postcondition')
+    final = verify_flow.run([{'assert': after}])
+    _, pid = win32process.GetWindowThreadProcessId(win['hwnd'])
+    if capabilities.process_record(pid) != expected:
+        return dict(ok=False, phase='after', clicked=True, error='Target identity changed during postcondition')
+    return dict(ok=bool(final.get('ok')), phase='after', clicked=True, evidence=final,
+                verified=bool(final.get('ok')), verification_method='visual_assertions')
+
 
 def _check_macro_action(action):
     from computer_mcp import permission, capabilities
@@ -659,6 +720,9 @@ def run_macro(
                 sub = ui_ext.run_batch(
                     [step], mouse, keyboard, stop_on_error=True, default_sleep_ms=0, max_steps=1
                 )
+            elif action == "guarded_click":
+                sub = _guarded_click(step, win, mouse)
+                entry['page_transition'] = sub
             elif action == "type":
                 keyboard.type(str(step.get("text", "")))
                 sub = {"ok": True}
@@ -1238,7 +1302,7 @@ def run_macro(
         log.append(entry)
         if not entry["ok"]:
             tries = int(step.get("_tries", 0)) + 1
-            max_tries = max(1, int(step.get("retry", 1)))
+            max_tries = 1 if action == 'guarded_click' else max(1, int(step.get("retry", 1)))
             if tries < max_tries:
                 step["_tries"] = tries
                 entry["retrying"] = f"{tries}/{max_tries}"

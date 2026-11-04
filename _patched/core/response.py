@@ -45,6 +45,9 @@ def format_response(
     if screenshot_metadata:
         result["screenshot"] = screenshot_metadata
     
+    from computer_mcp.runtime_contract import describe
+    result.setdefault('runtime_contract', describe(include_schema=False))
+
     # Merge result with remaining state
     result.update(result_state)
     

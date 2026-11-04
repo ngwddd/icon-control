@@ -1,0 +1,118 @@
+{
+  "name": "wechat_moments_guarded",
+  "description": "微信发现→朋友圈。历史相对坐标仅作候选；调用前必须从当前界面选择 main_query 与 moments_content_query，缺参或任一视觉判据失败即停止，不重复点击。",
+  "window": {
+    "process": "weixin"
+  },
+  "steps": [
+    {
+      "action": "guarded_click",
+      "rel_frac": [
+        0.0351,
+        0.359
+      ],
+      "settle_ms": 400,
+      "before": [
+        {
+          "kind": "text",
+          "query": "${main_query}",
+          "region_frac": [
+            0.05,
+            0,
+            0.94,
+            0.98
+          ],
+          "boost": false,
+          "upscale": 2
+        }
+      ],
+      "after": [
+        {
+          "kind": "text",
+          "query": "朋友圈",
+          "region_frac": [
+            0.04,
+            0.06,
+            0.4,
+            0.5
+          ],
+          "boost": false,
+          "upscale": 2
+        },
+        {
+          "kind": "text",
+          "query": "视频号",
+          "region_frac": [
+            0.04,
+            0.06,
+            0.4,
+            0.5
+          ],
+          "boost": false,
+          "upscale": 2
+        }
+      ]
+    },
+    {
+      "action": "guarded_click",
+      "rel_frac": [
+        0.118,
+        0.1485
+      ],
+      "settle_ms": 600,
+      "before": [
+        {
+          "kind": "text",
+          "query": "朋友圈",
+          "region_frac": [
+            0.04,
+            0.06,
+            0.4,
+            0.5
+          ],
+          "boost": false,
+          "upscale": 2
+        },
+        {
+          "kind": "text",
+          "query": "视频号",
+          "region_frac": [
+            0.04,
+            0.06,
+            0.4,
+            0.5
+          ],
+          "boost": false,
+          "upscale": 2
+        }
+      ],
+      "after": [
+        {
+          "kind": "text",
+          "query": "${moments_content_query}",
+          "region_frac": [
+            0.3,
+            0.08,
+            0.68,
+            0.86
+          ],
+          "boost": false,
+          "upscale": 2
+        },
+        {
+          "kind": "text",
+          "query": "视频号",
+          "absent": true,
+          "region_frac": [
+            0.04,
+            0.06,
+            0.25,
+            0.4
+          ],
+          "boost": false,
+          "upscale": 2
+        }
+      ]
+    }
+  ]
+}

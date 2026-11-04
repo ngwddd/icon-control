@@ -211,10 +211,19 @@ class MouseController(_Held):
             self.press(button, expected_target=expected_target, expected_point=expected_point)
             self.release(button)
 
-    def scroll(self, dx, dy):
+    def scroll(self, dx, dy, *, expected_target=None, expected_point=None):
         check('mouse_move')
         from computer_mcp.capabilities import require_target
         require_target(point=self.raw.position)
+        if expected_target is not None:
+            import win32gui, win32process
+            from computer_mcp import capabilities, permission
+            point = tuple(self.raw.position)
+            hwnd = win32gui.WindowFromPoint(point)
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            if point != expected_point or capabilities.process_record(pid) != expected_target:
+                raise permission.PermissionDenied('Scroll target changed before injection')
+            require_target(point=point)
         self.raw.scroll(dx, dy)
 
 class KeyboardController(_Held):

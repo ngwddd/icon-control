@@ -89,6 +89,9 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             button=arguments.get("button", "left"),
             controller=mouse_controller
         )
+    elif name == "scroll":
+        result = mouse_actions.scroll(dy=arguments['dy'], dx=arguments.get('dx', 0),
+                                      x=arguments.get('x'), y=arguments.get('y'), controller=mouse_controller)
     elif name == "mouse_move":
         result = mouse_actions.move_mouse(
             x=arguments["x"],
@@ -607,6 +610,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
     if name == "control_status":
         from computer_mcp import control as _ctl
         result = _ctl.status()
+        from computer_mcp.runtime_contract import describe
+        result['runtime_contract'] = describe()
         from computer_mcp.permission import caller_diagnostic
         result["authorization_diagnostic"] = caller_diagnostic(arguments.get("requested_scopes"), arguments.get("hwnd"))
 

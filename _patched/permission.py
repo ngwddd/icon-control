@@ -29,7 +29,7 @@ NEG_TTL_S = float(os.environ.get("DSH_MOUSE_NEG_TTL", "3"))
 # 会改变用户输入/焦点状态的工具 —— 这些必须先过闸门
 INPUT_TOOLS = frozenset({
     "click", "double_click", "triple_click", "button_down", "button_up", "drag",
-    "mouse_move", "type", "key_press", "key_down", "key_up",
+    "mouse_move", "scroll", "type", "key_press", "key_down", "key_up",
     "batch", "ui_click", "ui_invoke", "ui_set_text",
     "macro_run", "click_text", "click_template", "hover_probe",
 })

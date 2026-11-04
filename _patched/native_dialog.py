@@ -14,6 +14,7 @@ from pathlib import Path
 
 TDF_ALLOW_DIALOG_CANCELLATION = 0x0008
 TDF_SIZE_TO_CONTENT = 0x01000000
+TDF_NO_DEFAULT_RADIO_BUTTON = 0x4000
 TDF_VERIFICATION_FLAG_CHECKED = 0x0100
 TD_INFORMATION_ICON = 65533
 
@@ -294,22 +295,22 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
     return dict(button=button.value, action=action)
 
 
-def _choose_record(agents, headline, descriptions):
+def _choose_record(agents, headline, descriptions, *, auto_single=True, selection_label='选择此会话'):
     """Explicit radio selection for a manually opened window without a request."""
     if not agents or not available():
         return None
-    if len(agents) == 1:
+    if len(agents) == 1 and auto_single:
         return agents[0]
     library = _common_controls()
     buttons = (TASKDIALOG_BUTTON * 2)(
-        TASKDIALOG_BUTTON(BUTTON_GRANT, '选择此会话'),
+        TASKDIALOG_BUTTON(BUTTON_GRANT, selection_label),
         TASKDIALOG_BUTTON(BUTTON_CANCEL, '取消'))
     radios = (TASKDIALOG_BUTTON * len(agents))(*[
         TASKDIALOG_BUTTON(300+i, descriptions[i])
         for i, a in enumerate(agents)])
     config = TASKDIALOGCONFIG()
     config.cbSize = ctypes.sizeof(config)
-    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_SIZE_TO_CONTENT
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_SIZE_TO_CONTENT | TDF_NO_DEFAULT_RADIO_BUTTON
     config.pszWindowTitle = 'Icon Control'
     config.pszMainInstruction = headline
     config.pszContent = '请选择实际目标，随后将显示完整授权范围。'
@@ -336,8 +337,9 @@ def choose_agent(agents):
 
 
 def choose_application(applications):
-    return _choose_record(applications, '请选择允许操作的应用',
-                          [f"{a.get('title', '')} · PID {a['pid']} · {os.path.basename(a['exe'])}" for a in applications])
+    return _choose_record(applications, '尚未确定要操作的应用，请明确选择',
+                          [f"{a.get('title', '')} · PID {a['pid']} · {os.path.basename(a['exe'])}" for a in applications],
+                          auto_single=False, selection_label='选择此应用')
 
 
 def _probe() -> int:
