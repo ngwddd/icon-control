@@ -54,7 +54,7 @@ $interpreter = Join-Path $staging 'Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $Constraints)) { throw 'Validated dependency constraints missing' }
 & $interpreter -m pip install -c $Constraints $Wheel
 if ($LASTEXITCODE -ne 0) { throw 'Installation failed; current version preserved' }
-& $interpreter -c "import computer_mcp,tkinter,sys; from pathlib import Path; from computer_mcp import tool_registry; assert len(tool_registry.TOOLS)==89; tkinter.Tcl().eval('info patchlevel'); assert Path(sys.executable).with_name('pythonw.exe').is_file()"
+& $interpreter -c "import computer_mcp,tkinter,sys; from pathlib import Path; from computer_mcp.tool_manifest import validate_registry; validate_registry(); tkinter.Tcl().eval('info patchlevel'); assert Path(sys.executable).with_name('pythonw.exe').is_file()"
 if ($LASTEXITCODE -ne 0) { throw 'Import validation failed; current version preserved' }
 $backupTarget = Assert-Managed (Join-Path $root ('backup-' + $stamp))
 Revoke-CurrentAuthority

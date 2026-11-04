@@ -1,8 +1,9 @@
 {
   "name": "wechat_moments_guarded",
-  "description": "微信发现→朋友圈。历史相对坐标仅作候选；调用前必须从当前界面选择 main_query 与 moments_content_query，缺参或任一视觉判据失败即停止，不重复点击。",
+  "description": "微信发现→朋友圈。必须指定目标顶层 target_hwnd 及当前页面 main_query、moments_content_query；历史坐标只作候选。缺参、空值、遮挡、页面判据失败均停止，单次点击不自动重试。",
   "window": {
-    "process": "weixin"
+    "process": "weixin",
+    "hwnd": "${target_hwnd}"
   },
   "steps": [
     {
@@ -114,5 +115,15 @@
         }
       ]
     }
+  ],
+  "defaults": {
+    "main_query": "",
+    "moments_content_query": "",
+    "target_hwnd": ""
+  },
+  "required_params": [
+    "main_query",
+    "moments_content_query",
+    "target_hwnd"
   ]
 }

@@ -202,10 +202,10 @@ class TestMacros(unittest.TestCase):
     def test_macros_declare_their_placeholders(self):
         for name, spec in self._macros().items():
             used = set(re.findall(r"\$\{(\w+)\}", json.dumps(spec, ensure_ascii=False)))
-            declared = set((spec.get("defaults") or {}).keys())
+            declared = set((spec.get("defaults") or {}).keys()) | set(spec.get('required_params') or [])
             undeclared = used - declared - {"text"}
             self.assertEqual(undeclared, set(),
-                             f"{name} 用了未声明默认值的占位符 {undeclared}")
+                             f"{name} 用了未声明的占位符 {undeclared}")
 
     def test_send_macro_uses_enter_not_send_button(self):
         """实测：点「发送」按钮无效，必须用回车。"""

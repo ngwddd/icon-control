@@ -98,32 +98,38 @@ def _find_window(hint: dict[str, Any] | None) -> dict[str, Any] | None:
 
     title_sub = str(hint.get("title_contains") or "").casefold()
     proc_sub = str(hint.get("process") or "").casefold()
-    matches: list[tuple[int, str]] = []
+    explicit = hint.get('hwnd')
+    if explicit is not None:
+        if isinstance(explicit, bool) or not str(explicit).isdigit() or int(explicit) <= 0:
+            raise ValueError('Explicit target hwnd must be a positive window handle')
+        explicit = int(explicit)
+    matches = []
 
     def cb(hwnd, _):
-        if not win32gui.IsWindowVisible(hwnd):
+        if explicit is not None and hwnd != explicit:
+            return
+        if not win32gui.IsWindowVisible(hwnd) or win32gui.GetAncestor(hwnd, 2) != hwnd:
             return
         title = win32gui.GetWindowText(hwnd)
-        if not title.strip():
+        if not title.strip() or (title_sub and title_sub not in title.casefold()):
             return
-        if title_sub and title_sub in title.casefold():
-            matches.append((hwnd, title))
-        elif proc_sub:
+        if proc_sub:
             try:
-                import win32process
-
+                import win32process, psutil
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                import psutil
-
-                pname = psutil.Process(pid).name().casefold()
-                if proc_sub in pname:
-                    matches.append((hwnd, title))
+                if proc_sub not in psutil.Process(pid).name().casefold():
+                    return
             except Exception:
                 return
+        if not explicit and not title_sub and not proc_sub:
+            return
+        matches.append((hwnd, title))
 
     win32gui.EnumWindows(cb, None)
     if not matches:
         return None
+    if len(matches) != 1:
+        raise ValueError('Multiple matching windows; select an explicit top-level hwnd')
     hwnd, title = matches[0]
     wr = win32gui.GetWindowRect(hwnd)
     return {
@@ -472,19 +478,41 @@ def _guarded_click(step, win, mouse):
         if not isinstance(value, list) or not value:
             raise ValueError('guarded_click requires nonempty before and after checks')
         result = []
+        identity_evidence = False
         for raw in value:
             if not isinstance(raw, dict) or raw.get('kind') not in ('text', 'template', 'baseline', 'stable'):
                 raise ValueError('guarded_click accepts only explicit visual assertion kinds')
             check = dict(raw)
             if check['kind'] == 'text':
-                if not check.get('query'):
+                import math
+                query = check.get('query')
+                if not isinstance(query, str) or not query.strip():
                     raise ValueError('Text page checks require a nonempty query')
-                check.setdefault('min_lcs_share', 1.0)
+                threshold = check.get('min_lcs_share', 1.0)
+                if (isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or
+                        not math.isfinite(threshold) or threshold != 1.0):
+                    raise ValueError('Guarded text checks require min_lcs_share=1.0')
+                check['min_lcs_share'] = 1.0
+                check['require_evidence'] = True
+            if type(check.get('absent', False)) is not bool:
+                raise ValueError('Page assertion absent flag must be boolean')
+            if check['kind'] == 'template':
+                import math
+                confidence = check.get('confidence', 0.8)
+                if (isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or
+                        not math.isfinite(confidence) or not 0.8 <= confidence <= 1):
+                    raise ValueError('Guarded template confidence must be in [0.8, 1]')
+                if not (check.get('name') or check.get('template')):
+                    raise ValueError('Template page checks require an asset name')
+            if check['kind'] in ('text', 'template') and not check.get('absent', False):
+                identity_evidence = True
             region = _resolve_region(check, win)
             if region:
                 check['region'] = region
             check['hwnd'] = win['hwnd']
             result.append(check)
+        if not identity_evidence:
+            raise ValueError('Each page condition requires positive text or template identity evidence')
         return result
 
     # Validate both halves before doing anything, not after the click.
@@ -493,6 +521,10 @@ def _guarded_click(step, win, mouse):
     from computer_mcp import capabilities, permission
     _, pid = win32process.GetWindowThreadProcessId(win['hwnd'])
     expected = capabilities.process_record(pid)
+    import win32gui
+    root = win32gui.GetAncestor(win['hwnd'], 2)
+    if root != win['hwnd']:
+        raise permission.PermissionDenied('Guarded click requires an explicit top-level window')
     initial = verify_flow.run([{'assert': before}])
     if not initial.get('ok'):
         return dict(ok=False, phase='before', evidence=initial, clicked=False)
@@ -505,9 +537,10 @@ def _guarded_click(step, win, mouse):
         raise permission.PermissionDenied('Guarded click target changed after page observation')
     import win32gui
     _, point_pid = win32process.GetWindowThreadProcessId(win32gui.WindowFromPoint(point))
-    if capabilities.process_record(point_pid) != expected:
-        raise permission.PermissionDenied('Guarded click point is outside its target application')
-    mouse_actions.click(controller=mouse, x=point[0], y=point[1], button=step.get('button', 'left'))
+    if (capabilities.process_record(point_pid) != expected or
+            win32gui.GetAncestor(win32gui.WindowFromPoint(point), 2) != root):
+        raise permission.PermissionDenied('Guarded click point belongs to a different top-level window')
+    mouse_actions.click(controller=mouse, x=point[0], y=point[1], button=step.get('button', 'left'), expected_hwnd=root)
     _execution.sleep(min(3000, max(0, int(step.get('settle_ms', 300)))) / 1000)
     _, pid = win32process.GetWindowThreadProcessId(win['hwnd'])
     if capabilities.process_record(pid) != expected:
@@ -614,12 +647,22 @@ def run_macro(
 
     merged = dict(spec.get("defaults") or {})
     merged.update(params)
+    required = spec.get('required_params', [])
+    if not isinstance(required, list) or any(not isinstance(k, str) for k in required):
+        return {'error': 'Invalid required_params declaration'}
+    missing = [key for key in required if merged.get(key) is None or
+               isinstance(merged.get(key), bool) or not str(merged.get(key)).strip()]
+    if missing:
+        return {'error': 'Missing nonempty required macro parameters', 'missing_params': missing}
     try:
         spec = _subst(spec, merged)
     except KeyError as exc:
         return {"error": str(exc)}
 
-    win = _find_window(spec.get("window"))
+    try:
+        win = _find_window(spec.get("window"))
+    except ValueError as exc:
+        return {'error': str(exc)}
     if spec.get("window") and win is None:
         # 宏自己会 launch / wait_window 时，允许先没有窗口
         allows_late = bool(spec.get("allow_missing_window")) or any(

@@ -45,7 +45,7 @@ class ScrollBoundaryTests(AuthorityCase, unittest.TestCase):
         raw = Mock(position=(10, 20))
         controller = input_guard.MouseController(raw)
         target = dict(pid=11, created=1, exe='fixture.exe')
-        with patch('win32gui.WindowFromPoint', return_value=123), patch('win32process.GetWindowThreadProcessId', return_value=(1, 11)), patch('computer_mcp.capabilities.process_record', side_effect=[target, dict(target, created=2)]):
+        with patch('win32gui.GetAncestor', return_value=123), patch('win32gui.WindowFromPoint', return_value=123), patch('win32process.GetWindowThreadProcessId', return_value=(1, 11)), patch('computer_mcp.capabilities.process_record', side_effect=[target, dict(target, created=2)]):
             with self.assertRaises(permission.PermissionDenied):
                 mouse.scroll(dy=-3, controller=controller)
         raw.scroll.assert_not_called()
@@ -60,20 +60,23 @@ class ScrollBoundaryTests(AuthorityCase, unittest.TestCase):
 
 class PageTransitionTests(unittest.TestCase):
     def step(self):
-        return dict(action='guarded_click', x=10, y=20,
+        return dict(action='guarded_click', rel=[10, 20],
                     before=[dict(kind='text', query='main')],
                     after=[dict(kind='text', query='moments')])
 
+    def window(self):
+        return dict(hwnd=123, x=0, y=0, w=100, h=100, rect_x=0, rect_y=0, rect_w=100, rect_h=100)
+
     def test_missing_page_precondition_never_clicks(self):
-        with patch('win32process.GetWindowThreadProcessId', return_value=(1, 11)), patch('computer_mcp.capabilities.process_record', return_value={'pid':11}), patch.object(verify_flow, 'run', return_value={'ok':False}), patch.object(mouse, 'click') as click:
-            result = macro_ext._guarded_click(self.step(), {'hwnd':123}, Mock())
+        with patch('win32gui.GetAncestor', return_value=123), patch('win32process.GetWindowThreadProcessId', return_value=(1, 11)), patch('computer_mcp.capabilities.process_record', return_value={'pid':11}), patch.object(verify_flow, 'run', return_value={'ok':False}), patch.object(mouse, 'click') as click:
+            result = macro_ext._guarded_click(self.step(), self.window(), Mock())
         self.assertFalse(result['ok'])
         self.assertFalse(result['clicked'])
         click.assert_not_called()
 
     def test_failed_postcondition_reports_failure_after_one_click(self):
-        with patch('win32gui.WindowFromPoint', return_value=123), patch('win32process.GetWindowThreadProcessId', return_value=(1, 11)), patch('computer_mcp.capabilities.process_record', return_value={'pid':11}), patch.object(verify_flow, 'run', side_effect=[{'ok':True}, {'ok':False}]), patch.object(macro_ext, '_execution') as execution, patch.object(mouse, 'click') as click:
-            result = macro_ext._guarded_click(self.step(), {'hwnd':123}, Mock())
+        with patch('win32gui.GetAncestor', return_value=123), patch('win32gui.WindowFromPoint', return_value=123), patch('win32process.GetWindowThreadProcessId', return_value=(1, 11)), patch('computer_mcp.capabilities.process_record', return_value={'pid':11}), patch.object(verify_flow, 'run', side_effect=[{'ok':True}, {'ok':False}]), patch.object(macro_ext, '_execution') as execution, patch.object(mouse, 'click') as click:
+            result = macro_ext._guarded_click(self.step(), self.window(), Mock())
         self.assertFalse(result['ok'])
         self.assertTrue(result['clicked'])
         click.assert_called_once()

@@ -37,3 +37,6 @@ packages = ["computer_mcp", "computer_mcp.actions", "computer_mcp.core",
 "share/icon-control/macros" = ["macros/*.json"]
 "share/icon-control/recipes" = ["recipes/*.json"]
 "share/icon-control/templates" = ["templates/*.png"]
+
+[tool.setuptools.package-data]
+computer_mcp = ["tool_manifest.json", "_build_info.json"]

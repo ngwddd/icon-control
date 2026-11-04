@@ -8,7 +8,7 @@ from computer_mcp.input_guard import Button, MouseController as Controller
 from computer_mcp.core.utils import button_from_string
 
 
-def click(button: str = "left", controller: Controller | None = None, *, x: float | None = None, y: float | None = None) -> dict[str, Any]:
+def click(button: str = "left", controller: Controller | None = None, *, x: float | None = None, y: float | None = None, expected_hwnd: int | None = None) -> dict[str, Any]:
     """Perform a mouse click.
     
     Args:
@@ -24,6 +24,8 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
     import math
     if (x is None) != (y is None):
         raise ValueError('click requires both x and y, or neither')
+    if expected_hwnd is not None and x is None:
+        raise ValueError('A window-bound click requires explicit x/y coordinates')
     target = None
     if x is not None:
         if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (x, y)):
@@ -34,6 +36,8 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
         hwnd = win32gui.WindowFromPoint(point)
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         target = capabilities.process_record(pid)
+        if expected_hwnd is not None and win32gui.GetAncestor(hwnd, 2) != expected_hwnd:
+            raise ValueError('Point is outside the expected top-level window')
         capabilities.require_target(point=point)
         controller.position = point
         current_hwnd = win32gui.WindowFromPoint(point)
@@ -45,7 +49,7 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
     if target is None:
         controller.click(btn)
     else:
-        controller.click(btn, expected_target=target, expected_point=point)
+        controller.click(btn, expected_target=target, expected_point=point, expected_hwnd=expected_hwnd)
     return {"success": True, "action": "click", "button": button,
             "status": "executed_unverified", "verified": False,
             "verification_method": "not_performed",
@@ -199,7 +203,7 @@ def scroll(dy: int, dx: int = 0, controller: Controller | None = None, *, x=None
     target = capabilities.process_record(pid)
     capabilities.require_target(point=point)
     if x is not None:
-        controller.position = point
+        controller.position_for_scroll(point)
     controller.scroll(dx, dy, expected_target=target, expected_point=point)
     return dict(success=True, action='scroll', x=point[0], y=point[1], dx=dx, dy=dy,
                 status='executed_unverified', verified=False, verification_method='not_performed',

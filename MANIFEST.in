@@ -8,3 +8,4 @@ recursive-include tools *.py *.ps1
 recursive-include tests *.py *.ps1 *.cjs
 recursive-include skill *.md
 recursive-include programs *.json *.jsonl
+include _patched/tool_manifest.json

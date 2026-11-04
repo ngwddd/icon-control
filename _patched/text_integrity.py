@@ -18,4 +18,4 @@ def fingerprint(text):
 
 def guidance():
     return dict(verification_method='not_performed',
-                next_action='Read the target input field with approved UIA/OCR or ask the user to compare the draft character by character, including punctuation; do not send until confirmed. OCR alone does not prove exact text equality.')
+                next_action='Read the target input field with approved UIA/OCR or ask the user to compare the draft character by character, including punctuation; Confirm the draft before sending. OCR alone does not prove exact text equality.')

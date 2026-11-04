@@ -187,7 +187,7 @@ class MouseController(_Held):
         require_target(point=(x+dx,y+dy))
         self.raw.move(dx, dy)
 
-    def press(self, button, *, expected_target=None, expected_point=None):
+    def press(self, button, *, expected_target=None, expected_point=None, expected_hwnd=None):
         with self._mutex:
             check('button_down')
             from computer_mcp.capabilities import require_target
@@ -201,18 +201,26 @@ class MouseController(_Held):
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 if position != expected_point or capabilities.process_record(pid) != expected_target:
                     raise permission.PermissionDenied('Point-click target changed before button-down')
+                if expected_hwnd is not None and win32gui.GetAncestor(hwnd, 2) != expected_hwnd:
+                    raise permission.PermissionDenied('Point-click top-level window changed before button-down')
                 capabilities.require_target(point=position)
             self.held.add(button)
             self.raw.press(button)
 
-    def click(self, button, count=1, *, expected_target=None, expected_point=None):
+    def click(self, button, count=1, *, expected_target=None, expected_point=None, expected_hwnd=None):
         for _ in range(count):
             check('click')
-            self.press(button, expected_target=expected_target, expected_point=expected_point)
+            self.press(button, expected_target=expected_target, expected_point=expected_point, expected_hwnd=expected_hwnd)
             self.release(button)
 
+    def position_for_scroll(self, point):
+        check('scroll')
+        from computer_mcp.capabilities import require_target
+        require_target(point=point)
+        self.raw.position = point
+
     def scroll(self, dx, dy, *, expected_target=None, expected_point=None):
-        check('mouse_move')
+        check('scroll')
         from computer_mcp.capabilities import require_target
         require_target(point=self.raw.position)
         if expected_target is not None:

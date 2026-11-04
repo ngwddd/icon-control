@@ -67,7 +67,7 @@
 
 ### 页面状态确认
 
-先读 recipes/wechat.json；使用 `wechat_moments_guarded` 前，从当前截图选择主页面唯一文字 `main_query` 及朋友圈内容区唯一文字 `moments_content_query`。配方坐标来自历史窗口，只作候选，不适用于所有版本和 DPI。
+先读 recipes/wechat.json；使用 `wechat_moments_guarded` 前，用 list_windows 明确选择顶层 `target_hwnd`，再从当前截图选择主页面唯一文字 `main_query` 及朋友圈内容区唯一文字 `moments_content_query`。配方坐标来自历史窗口，只作候选，不适用于所有版本和 DPI。
 
 两个步骤均使用 `guarded_click`：主页面判据 → 单击发现 → 同时确认朋友圈/视频号菜单 → 单击朋友圈 → 确认内容区指定文字并确认菜单消失。判据不足即停止，不能把再次点击同一 tab 当作重试方法。工具只验证配置的视觉条件，不证明坐标普遍有效。
 

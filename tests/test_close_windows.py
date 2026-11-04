@@ -73,10 +73,10 @@ class TestTaskFinishDoc(unittest.TestCase):
         with open(skill, encoding="utf-8") as fh:
             skill_text = fh.read()
         self.assertIn("收尾", skill_text)
-        self.assertTrue(
-            "close_windows" in skill_text or "关窗" in skill_text,
-            "skill 里要写明「任务收尾必须关窗」",
-        )
+        self.assertIn("Agent 新建的临时窗口", skill_text)
+        self.assertIn("用户原有或明确要求保留的应用保持打开", skill_text)
+        self.assertIn("不等于获得关闭授权", skill_text)
+        self.assertNotIn("我打开或使用的", skill_text)
         self.assertIn("desktop-operator", skill_text)
 
         agents = os.path.join(os.path.expanduser("~"), ".dsh", "AGENTS.md")

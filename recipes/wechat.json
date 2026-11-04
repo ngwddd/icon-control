@@ -51,7 +51,7 @@
     ],
     "open_moments": [
       "read references/wechat.md and this recipe",
-      "observe and choose page-specific main_query and moments_content_query",
+      "list_windows and explicitly choose target_hwnd; observe unique main_query and moments_content_query in that window",
       "macro_run wechat_moments_guarded with both required parameters",
       "confirm visual evidence; failure stops navigation"
     ]
@@ -203,6 +203,7 @@
     "coordinates": "Historical candidates only; re-observe after resize, DPI or WeChat version changes.",
     "moments_macro": "wechat_moments_guarded",
     "required_parameters": [
+      "target_hwnd",
       "main_query",
       "moments_content_query"
     ],
@@ -212,6 +213,7 @@
       "confirmed_moments_content"
     ],
     "failure": "Stop on any missing page evidence; do not click the same tab again automatically.",
-    "cleanup": "Keep existing WeChat windows open; close only agent-created temporary windows when permitted."
+    "cleanup": "Keep existing WeChat windows open; close only agent-created temporary windows when permitted.",
+    "window_binding": "Explicit top-level target_hwnd plus process identity; same-PID covering windows are rejected."
   }
 }
