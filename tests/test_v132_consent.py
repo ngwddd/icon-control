@@ -119,14 +119,24 @@ class AutoConsentTests(unittest.TestCase):
 
     def test_blocked_tool_requests_the_window_once(self):
         from computer_mcp import permission
+        def reply(command, **fields):
+            if command == "open":
+                return {"opened": True, "request_id": "request-fixture"}
+            if command == "request_status":
+                return {"request_id": fields["request_id"], "status": "pending"}
+            raise AssertionError(f"Unexpected IPC command: {command}")
+
         with patch.object(permission, "status", return_value=dict(granted=False, reason="no")), \
-                patch("computer_mcp.consent_ipc.request", return_value={"opened": True, "request_id": "request-fixture"}) as request, \
+                patch("computer_mcp.consent_ipc.request", side_effect=reply) as request, \
                 patch.object(permission, "_last_consent_request", {}), patch.object(permission, "caller_diagnostic", return_value={}):
             first = permission.check_tool("screenshot", {})
             second = permission.check_tool("screenshot", {})
         self.assertTrue(first and first.get("blocked"))
         self.assertTrue(second and second.get("blocked"))
-        self.assertEqual(request.call_count, 1)
+        self.assertEqual([c.args[0] for c in request.call_args_list],
+                         ["open", "request_status"])
+        self.assertEqual(request.call_args_list[1].kwargs["request_id"], "request-fixture")
+        self.assertEqual(request.call_args_list[1].kwargs["agent_session"], agent_session.current())
 
     def test_missing_scope_also_opens_the_window(self):
         from computer_mcp import permission
