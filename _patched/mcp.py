@@ -39,7 +39,13 @@ keyboard_controller = KeyboardController()
 
 # Initialize MCP server
 from computer_mcp import __version__
-server = Server("computer-mcp", version=__version__)
+server = Server("computer-mcp", version=__version__, instructions=(
+    "Use control_status.runtime_contract to inspect this running server's version, schema fingerprint and click inputSchema. "
+    "Refresh tools/list after reconnecting when the host exposes an older schema. "
+    "Before WeChat actions read desktop-operator references/wechat.md and recipes/wechat.json. "
+    "Navigation requires page-specific before/after evidence, not only HWND/PID. "
+    "executed_unverified only confirms injected events; compare the draft including quotes before sending. "
+    "Keep user-opened apps and apps the user requested to keep open."))
 
 
 

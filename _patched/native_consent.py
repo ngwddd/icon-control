@@ -143,6 +143,11 @@ class ConsentHost:
                     continue
                 if not win32gui.IsWindowVisible(hwnd):
                     continue
+                # Hide non-interactive/tool overlays, never infer intent from
+                # the foreground window or a familiar executable name.
+                style = win32gui.GetWindowLong(hwnd, -20)  # GWL_EXSTYLE
+                if style & (0x00000080 | 0x08000000):  # TOOLWINDOW / NOACTIVATE
+                    continue
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 if not pid or pid == os.getpid() or pid in seen:
                     continue
@@ -236,7 +241,7 @@ class ConsentHost:
         else:
             app = self._foreground_app()
             if app is None:
-                native_dialog.ask_notice('请选择目标应用', '请先切换到目标应用，再处理本次请求。')
+                native_dialog.ask_notice('请选择目标应用', '没有选定应用，本次未授权。请明确选择实际操作目标。')
                 return
             if pending:
                 try:

@@ -48,6 +48,12 @@
       "assert_text(<首行片段>)",
       "key enter",
       "verify_text(<末行片段>)"
+    ],
+    "open_moments": [
+      "read references/wechat.md and this recipe",
+      "list_windows and explicitly choose target_hwnd; observe unique main_query and moments_content_query in that window",
+      "macro_run wechat_moments_guarded with both required parameters",
+      "confirm visual evidence; failure stops navigation"
     ]
   },
   "pitfalls": [
@@ -68,7 +74,9 @@
       "点输入框前确认会话标题 = 目标（ensure_chat 已内置）",
       "长文本一律走剪贴板粘贴，不要逐字敲",
       "发送用回车，不要点发送按钮（实测点不中）",
-      "发完必须 OCR 断言气泡里出现原文"
+      "发完必须 OCR 断言气泡里出现原文",
+      "粘贴后先核对未发送草稿，直引号及原文逐字一致后才发送；OCR 相似匹配不能证明文本完全一致",
+      "用户原本打开或明确要求保留的微信窗口不得在收尾时关闭"
     ]
   },
   "window_sizes_seen": {
@@ -190,5 +198,22 @@
       ]
     },
     "do_not": "boost=True 会把「件」读成「亻牛」——CJK 上不要用 boost"
+  },
+  "navigation_policy": {
+    "coordinates": "Historical candidates only; re-observe after resize, DPI or WeChat version changes.",
+    "moments_macro": "wechat_moments_guarded",
+    "required_parameters": [
+      "target_hwnd",
+      "main_query",
+      "moments_content_query"
+    ],
+    "states": [
+      "confirmed_main",
+      "confirmed_discover_menu",
+      "confirmed_moments_content"
+    ],
+    "failure": "Stop on any missing page evidence; do not click the same tab again automatically.",
+    "cleanup": "Keep existing WeChat windows open; close only agent-created temporary windows when permitted.",
+    "window_binding": "Explicit top-level target_hwnd plus process identity; same-PID covering windows are rejected."
   }
 }

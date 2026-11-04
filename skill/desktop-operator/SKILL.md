@@ -78,12 +78,20 @@ description: >
 
 **永远不要**：逐字敲长文本、点 OCR 读到的"发送"、同一个开关点两次。
 
-## 5. 工具分层（79 个里只有这几个是入口）
+## 运行契约与文本核对
+
+连接后读取 `control_status.runtime_contract`，核对 server_version、tools_sha256 及 click_input_schema。当前 click 支持成对 x/y；宿主没有展示时重启 MCP 连接并重新获取 tools/list，不要以旧缓存推断新版本能力。
+
+`executed_unverified` 只代表输入已提交。原文精确保留任务必须核对目标草稿及引号，不能凭注入字符数、OCR 模糊相似度或哈希相同以外的推断自动发送。`text_integrity` 是工具收到参数的摘要，不能证明宿主最初构造参数正确。
+
+微信导航先读 references/wechat.md 与 recipes/wechat.json；`guarded_click` 使用页面前置/后置条件且不自动重试。单凭窗口标题、PID 相同不代表进入了朋友圈。
+
+## 5. 工具分层（90 个里只有这几个是入口）
 
 | 用途 | 工具 |
 |---|---|
 | 看 | `screenshot` / `screen_state`（只要"变没变"时） |
-| 动 | `batch` / 坐标点击 / `type` |
+| 动 | `batch` / 坐标点击 / `scroll` / `type` |
 | 整段 | `macro_run`（含断言与重试） |
 | 多步 + 连续性 | `track`（三轮回转 + 看门狗，见 train.md） |
 | 认字 | `ocr_read` / `find_text`（只确认，不定位） |
@@ -91,18 +99,18 @@ description: >
 
 其余（`screen_model` 实验性、`perceive`/`navigator` 内部件、30 个低层动作）**不要当第一步**。
 
-## 6. 收尾（每次任务结束：**关窗** + 清理 + 还原）
+## 6. 收尾（保留用户窗口，只处理本任务的临时资源）
 
 ```
-① 关窗：close_windows 关掉**我打开或使用的**窗口（只发 WM_CLOSE，不杀进程）
+① 只在用户允许时关闭本任务由 Agent 新建的临时窗口；用户原有或明确要求保留的应用保持打开
    要退出整个应用才用 appkit.exit_app / exit_app
    ⚠️ 不要 SW_HIDE 微信主窗口；清桌面用 SW_MINIMIZE
 ② 把任务开始前的窗口还原到前台
-③ clean.py --apply --keep 1  清临时文件
+③ 仅在具有 file_delete 授权且任务需要时清理助手自己的临时文件
 ④ 报告：关了哪些窗口、清了多大、**量到的坐标写进配方了吗**
 ```
 
-**边界**：只关自己开的；有未保存改动（标题带 `*`、弹保存提示）先问用户。
+**边界**：使用过一个应用不等于获得关闭授权。用户明确要求保留的微信等窗口始终保留；有未保存改动或保存提示时先征询用户。
 
 ## 7. 分册索引
 

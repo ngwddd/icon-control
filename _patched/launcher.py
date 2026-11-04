@@ -86,7 +86,8 @@ def main():
         print(json.dumps(add_http_client(args.client_name)));return 0
     if args.command=='check':
         from computer_mcp import tool_registry,permission
-        print(json.dumps(dict(version=__version__,tools=tool_registry.summary(),permission=permission.status())));return 0
+        from computer_mcp.runtime_contract import describe
+        print(json.dumps(dict(version=__version__,tools=tool_registry.summary(),runtime_contract=describe(),permission=permission.status())));return 0
     if args.command=='bridge':
         from computer_mcp.permission_bridge import main as bridge_main
         sys.argv=[sys.argv[0],'--port',str(args.bridge_port or (security.bridge_port() if args.port==8000 else args.port))]

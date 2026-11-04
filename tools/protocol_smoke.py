@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import hashlib
 import os
 from pathlib import Path
 import socket
@@ -20,9 +21,16 @@ async def verify(read,write):
         if initialized.serverInfo.version != (Path(__file__).resolve().parents[1]/'VERSION').read_text().strip():
             raise RuntimeError('Installed server version mismatch')
         tools=await session.list_tools()
-        if len(tools.tools)!=89:raise RuntimeError('Tool manifest mismatch')
+        from computer_mcp import tool_registry
+        from computer_mcp.tool_manifest import validate_registry
+        validate_registry()
+        expected = {tool.name: (tool.description, tool.inputSchema) for tool in tool_registry.all_tools()}
+        actual = {tool.name: (tool.description, tool.inputSchema) for tool in tools.tools}
+        if len(actual) != len(tools.tools) or actual != expected:
+            raise RuntimeError('Tool names, descriptions or input schemas differ from installed contract')
+        digest = hashlib.sha256(json.dumps(actual, ensure_ascii=False, sort_keys=True).encode('utf-8')).hexdigest()
         return dict(protocol=initialized.protocolVersion,tools=len(tools.tools),
-                    server_version=initialized.serverInfo.version)
+                    tools_sha256=digest, server_version=initialized.serverInfo.version)
 
 async def main(args):
     env=dict(os.environ,ICON_CONTROL_HOME=str(args.home),DSH_MOUSE_BRIDGE='off',PYTHONIOENCODING='utf-8')

@@ -22,7 +22,9 @@ def type_text(text: str, controller: Controller | None = None) -> dict[str, Any]
         controller = Controller()
     
     injected = controller.type(text)
+    from computer_mcp.text_integrity import fingerprint, guidance
     return {"success": True, "action": "type", "text": text,
+            "text_integrity": fingerprint(text), **guidance(),
             "injected_characters": injected, "requested_characters": len(text),
             "status": "executed_unverified", "verified": False}
 
@@ -162,6 +164,9 @@ if IS_WINDOWS:
             import win32gui, win32con
             from pynput.keyboard import Key
             from computer_mcp.execution import check
+            text.encode('utf-16-le')  # Reject invalid surrogates before sending.
+            from computer_mcp.text_integrity import fingerprint, guidance
+            injected = 0
             controller = _window_controller(hwnd)
             for char in text:
                 check('type')
@@ -179,7 +184,11 @@ if IS_WINDOWS:
                         controller.raw.validate_target()
                         win32gui.PostMessage(hwnd, win32con.WM_CHAR,
                                              int.from_bytes(units[offset:offset+2], 'little'), 0)
-            return {"success": True, "action": "type", "text": text, "hwnd": hwnd}
+                injected += 1
+            return {"success": True, "action": "type", "text": text, "hwnd": hwnd,
+                    "injected_characters": injected, "requested_characters": len(text),
+                    "text_integrity": fingerprint(text), "status": "executed_unverified",
+                    "verified": False, **guidance()}
         except Exception as exc:
             return {"error": f"Failed to type to window: {exc}"}
 

@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import os
+import math
 import re
 import time
 
@@ -54,6 +55,10 @@ def _lcs_len(a: str, b: str) -> int:
 def _check_text(spec: dict) -> dict:
     from computer_mcp import ocr_ext
 
+    threshold = spec.get('min_lcs_share', 0.6)
+    if (isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or
+            not math.isfinite(threshold) or not 0 < threshold <= 1):
+        return {"ok": False, "detail": "min_lcs_share must be a finite number in (0, 1]"}
     query = NORM(spec.get("query"))
     region = spec.get("region")
     hwnd = spec.get("hwnd")
@@ -64,11 +69,15 @@ def _check_text(spec: dict) -> dict:
     res = ocr_ext.ocr_read(region=region, hwnd=None if region else hwnd, max_lines=120,
                            upscale=float(spec.get("upscale", 1.5)),
                            boost=bool(spec.get("boost", True)))
+    if res.get('error') or res.get('success') is False or not isinstance(res.get('lines'), list):
+        return {"ok": False, "detail": "OCR did not provide valid page evidence"}
     lines = [NORM(ln.get("text")) for ln in (res.get("lines") or [])]
+    if spec.get('require_evidence') and not any(lines):
+        return {"ok": False, "detail": "No observed text supports this page assertion"}
     hit = any(query in h for h in lines)
     if not hit:                      # 允许 OCR 错字：最长公共子串占比够也算命中
         share = max((_lcs_len(query, h) / max(1, len(query)) for h in lines), default=0.0)
-        hit = share >= float(spec.get("min_lcs_share", 0.6))
+        hit = bool(lines) and share > 0 and share >= threshold
     ok = (not hit) if absent else hit
     return {"ok": ok, "detail": {"query": query, "absent": absent, "hit": hit,
                                  "sample": lines[:6]}}

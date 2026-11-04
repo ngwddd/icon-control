@@ -10,6 +10,11 @@ from computer_mcp.tool_spec import ToolSpec
 
 SPECS: list[ToolSpec] = [
     ToolSpec(
+        name='scroll', effects=('input',), zone='Z3', read_only=False,
+        description='Scroll at the current pointer or optional screen x/y. dy>0 up, dy<0 down; dx>0 right. Integer wheel steps limited to [-100,100] per axis. Rechecks target process before injection; content movement remains unverified.',
+        schema={'type': 'object', 'properties': {'dy': {'type': 'integer', 'minimum': -100, 'maximum': 100}, 'dx': {'type': 'integer', 'minimum': -100, 'maximum': 100, 'default': 0}, 'x': {'type': 'number'}, 'y': {'type': 'number'}}, 'required': ['dy'], 'additionalProperties': False},
+    ),
+    ToolSpec(
         name='button_down',
         effects=('input',),
         zone='Z3',

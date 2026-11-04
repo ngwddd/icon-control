@@ -2,8 +2,8 @@
  "generated_at": "2026-11-02T04:12:49+0800",
  "source": "C:\\Users\\ggg\\.dsh\\tools\\desktop-mcp\\venv\\Lib\\site-packages\\computer_mcp\\mcp.py",
  "mcp_py_lines": 1830,
- "tool_count": 79,
- "dispatch_count": 79,
+ "tool_count": 80,
+ "dispatch_count": 80,
  "tools": [
   {
    "name": "click",
@@ -906,7 +906,7 @@
   },
   {
    "name": "run_script",
-   "description": "Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.",
+   "description": "Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/scroll/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.",
    "block_sha1": "434ba495ee658fb5df086d4352cbce475a7d2475",
    "schema": {
     "type": "object",
@@ -2141,6 +2141,36 @@
     "required": [
      "query"
     ]
+   }
+  },
+  {
+   "name": "scroll",
+   "description": "Scroll at the current pointer or optional screen x/y. dy>0 up, dy<0 down; dx>0 right. Integer wheel steps limited to [-100,100] per axis. Rechecks target process before injection; content movement remains unverified.",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "dy": {
+      "type": "integer",
+      "minimum": -100,
+      "maximum": 100
+     },
+     "dx": {
+      "type": "integer",
+      "minimum": -100,
+      "maximum": 100,
+      "default": 0
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "dy"
+    ],
+    "additionalProperties": false
    }
   }
  ],
