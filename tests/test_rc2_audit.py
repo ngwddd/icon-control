@@ -38,13 +38,13 @@ class RevocationTests(AuthorityCase, unittest.TestCase):
             self.assertFalse(permission.status()['granted'])
 
 
-class WorkspaceTests(unittest.TestCase):
+class WorkspaceTests(AuthorityCase, unittest.TestCase):
+    fixture_authorized = True
+    fixture_monitoring = True
+
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
-        self.env = patch.dict(os.environ, ICON_CONTROL_HOME=str(self.root / 'home'))
-        self.env.start(); self.addCleanup(self.env.stop)
+        super().setUp()
+        self.root = Path(self.authority.temp.name)
 
     def test_report_cannot_write_user_file(self):
         victim = self.root / 'user.txt'

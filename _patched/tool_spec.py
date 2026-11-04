@@ -30,6 +30,33 @@ def micro_effects(ops, depth=0):
     return tuple(sorted(effects))
 
 
+def verification_effects(arguments):
+    """Declare the complete plan before any staged read or report write."""
+    stages = arguments.get('stages', [])
+    if not isinstance(stages, list):
+        raise ValueError('Verification stages must be an array')
+    effects = {'file_write'} if arguments.get('report_path') else set()
+    for stage in stages:
+        if not isinstance(stage, dict):
+            raise ValueError('Invalid verification stage')
+        checks = stage.get('assert') or stage.get('checks') or []
+        if not isinstance(checks, list):
+            raise ValueError('Verification checks must be an array')
+        for check in checks:
+            if not isinstance(check, dict):
+                raise ValueError('Invalid verification check')
+            kind = str(check.get('kind') or check.get('type') or '').lower()
+            if kind in ('text', 'template', 'baseline', 'stable'):
+                effects.add('screen_read')
+            elif kind == 'file':
+                effects.add('file_read')
+            else:
+                # Unknown assertions have no handler and are reported as failed
+                # by verify_flow; they cannot perform an unclassified action.
+                continue
+    return tuple(sorted(effects)) or ('observe',)
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -47,7 +74,7 @@ class ToolSpec:
     def __post_init__(self):
         supported={'observe','input','compose','window','process','control','capture',
                    'clipboard_write','file_write','file_delete','config_write',
-                   'screen_read','text_entry','window_close'}
+                   'screen_read','text_entry','window_close','file_read'}
         if not isinstance(self.effects,tuple) or not self.effects or not set(self.effects)<=supported:
             raise ValueError(f'{self.name}: explicit nonempty supported effects are required')
         for key,effects in self.parameter_effects:
@@ -59,6 +86,8 @@ class ToolSpec:
             return self.effects
         if not isinstance(arguments,dict):
             raise ValueError('Tool arguments must be an object')
+        if self.name == 'verify_flow':
+            return verification_effects(arguments)
         asset_delete = {'glyph': 'clear', 'layout_mem': 'delete', 'anchor_mem': 'forget'}
         if self.name in asset_delete and arguments.get('action') == asset_delete[self.name]:
             return ('file_delete',)

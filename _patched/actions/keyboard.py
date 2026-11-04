@@ -91,7 +91,27 @@ if IS_WINDOWS:
     class _MessageKeyboard:
         """WM_CHAR for text; tracked WM_KEYDOWN/UP for held keys."""
         def __init__(self, hwnd):
+            import win32process
+            from computer_mcp.capabilities import process_record
             self.hwnd = hwnd
+            self.thread, pid = win32process.GetWindowThreadProcessId(hwnd)
+            self.target = process_record(pid)
+
+        def target_exists(self):
+            import win32gui, win32process
+            from computer_mcp.capabilities import process_record
+            try:
+                if not win32gui.IsWindow(self.hwnd):
+                    return False
+                thread, pid = win32process.GetWindowThreadProcessId(self.hwnd)
+                return thread == self.thread and process_record(pid) == self.target
+            except Exception:
+                return False
+
+        def validate_target(self):
+            from computer_mcp.permission import PermissionDenied
+            if not self.target_exists():
+                raise PermissionDenied('Keyboard target process changed or window was destroyed')
 
         def _vk(self, key):
             import win32api
@@ -107,17 +127,25 @@ if IS_WINDOWS:
 
         def press(self, key):
             import win32gui, win32con
-            win32gui.PostMessage(self.hwnd, win32con.WM_KEYDOWN, self._vk(key), 0)
+            vk = self._vk(key)
+            self.validate_target()
+            win32gui.PostMessage(self.hwnd, win32con.WM_KEYDOWN, vk, 0)
 
         def release(self, key):
             import win32gui, win32con
-            win32gui.PostMessage(self.hwnd, win32con.WM_KEYUP, self._vk(key), 0)
+            vk = self._vk(key)
+            self.validate_target()
+            win32gui.PostMessage(self.hwnd, win32con.WM_KEYUP, vk, 0)
 
     def _window_controller(hwnd):
         import win32gui
         if not win32gui.IsWindow(hwnd):
             raise ValueError('Invalid window handle')
         with _window_lock:
+            previous = _window_controllers.get(hwnd)
+            if previous is not None and not previous.raw.target_exists():
+                previous.cleanup()
+                del _window_controllers[hwnd]
             if hwnd not in _window_controllers:
                 # Inactive cached controllers may be discarded. Held ones stay
                 # alive in input_guard until emergency cleanup releases them.
@@ -148,6 +176,7 @@ if IS_WINDOWS:
                     for offset in range(0, len(units), 2):
                         check('type')
                         require_target(hwnd=hwnd)
+                        controller.raw.validate_target()
                         win32gui.PostMessage(hwnd, win32con.WM_CHAR,
                                              int.from_bytes(units[offset:offset+2], 'little'), 0)
             return {"success": True, "action": "type", "text": text, "hwnd": hwnd}

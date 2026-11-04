@@ -155,6 +155,10 @@ KINDS = {
 
 def run(stages: list, stop_on_fail: bool = True, report_path: str | None = None) -> dict:
     """按顺序跑分级验证。返回结构化报告（含每级证据）。"""
+    # The direct Python API has the same preflight as MCP dispatch. Keep the
+    # inner OCR/file/path checks: a grant may be revoked during a long plan.
+    from computer_mcp import execution
+    execution.check('verify_flow', {'stages': stages, 'report_path': report_path})
     t_all = time.time()
     report: dict = {"ok": bool(stages), "stages": [], "failed_stage": None,
                     "failed_stages": [], "elapsed_ms": 0}
@@ -208,6 +212,7 @@ def run(stages: list, stop_on_fail: bool = True, report_path: str | None = None)
         try:
             import json
             from computer_mcp.workspace import report_path as safe_report_path, create_text
+            execution.check('verify_flow', {'stages': stages, 'report_path': report_path})
             p = safe_report_path(report_path)
             create_text(p, json.dumps(report, ensure_ascii=False, indent=2))
             report["report_path"] = str(p)

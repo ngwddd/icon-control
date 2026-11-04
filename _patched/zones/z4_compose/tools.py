@@ -67,7 +67,7 @@ SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name='verify_flow',
-        effects=('file_write',),
+        effects=('screen_read', 'file_read', 'file_write'),
         zone='Z4',
         description='Run staged verification and return per-stage evidence. Each stage may wait, then run assertions: kind=text|template|baseline|stable|file. Stages stop at the first failure (stop_on_fail) and the report can be written to a JSON file. Verification only - it performs no input actions.',
         read_only=False,

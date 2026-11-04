@@ -47,6 +47,13 @@ class InjectedKeyboard(RawKeyboard):
             send_unicode(key.char, is_press)
             return
         char = (key.char or '').lower()
+        if is_press:
+            from computer_mcp.native_keyboard import check_clipboard_chord
+            modifiers = set()
+            for name in ('ctrl', 'shift', 'alt'):
+                if getattr(self, name + '_pressed', False):
+                    modifiers.add(getattr(Key, name))
+            check_clipboard_chord(key, modifiers)
         if not is_press and key in self._edit_keys:
             self._edit_keys.discard(key)
             return
@@ -123,11 +130,15 @@ class _Held:
             _controllers.add(self)
 
     def release(self, value):
-        # Releasing something this process pressed is emergency cleanup,
-        # never a way to inject an otherwise unauthorised key-up event.
+        # Normal release is an input operation. Only cleanup() may bypass
+        # authority, and then only for events recorded as held by this process.
         with self._mutex:
-            if value not in self.held:
-                check(self.up_tool)
+            check(self.up_tool)
+            from computer_mcp.capabilities import require_target
+            if self.up_tool == 'button_up':
+                require_target(point=self.raw.position)
+            else:
+                require_target(hwnd=getattr(self.raw, 'hwnd', None))
             self.raw.release(value)
             self.held.discard(value)
             if not self.held:
@@ -136,6 +147,11 @@ class _Held:
 
     def cleanup(self):
         with self._mutex:
+            # A destroyed/reused message target no longer owns our held keys.
+            # Do not send cleanup events into the replacement process.
+            target_exists = getattr(self.raw, 'target_exists', None)
+            if target_exists is not None and not target_exists():
+                self.held.clear()
             for value in tuple(self.held):
                 try:
                     self.raw.release(value)
@@ -208,6 +224,12 @@ class KeyboardController(_Held):
     def press(self, key):
         with self._mutex:
             check('key_down')
+            from computer_mcp.native_keyboard import check_clipboard_chord
+            modifiers = set(self.held)
+            for name in ('ctrl', 'shift', 'alt'):
+                if getattr(self.raw, name + '_pressed', False):
+                    modifiers.add(getattr(Key, name))
+            check_clipboard_chord(key, modifiers)
             from computer_mcp.capabilities import require_target
             require_target(hwnd=getattr(self.raw,'hwnd',None))
             _retain(self, 'key_down', hwnd=getattr(self.raw,'hwnd',None))

@@ -1,3 +1,12 @@
+## Unreleased — 2026-11-05
+
+- 正常 key_up/button_up 重新检查授权与目标；仅 cleanup 对实际持有输入绕过授权。指定窗口控制器绑定 PID、进程创建时间、路径和窗口线程，失效句柄不再接收清理消息。
+- 复制/剪切快捷键要求 clipboard_write，粘贴要求 clipboard_read；覆盖标准 Edit 消息、SendInput 回退和窗口键盘控制器，兼容 Ctrl+Insert / Shift+Insert / Shift+Delete。
+- Release 工作流遇到非零测试退出码立即终止，并核对新生成报告的字段、源码 SHA、完整测试范围和干净源码状态。
+- WM_CLOSE 请求已提交与窗口已关闭分开返回，未确认关闭时报告 executed_unverified。
+- verify_flow 按完整验证计划声明 screen_read/file_read/report file_write，直接 Python 调用也在执行前检查。
+- 按用户要求仅修改代码，未执行测试、CI 核查或桌面验证，未制作新版本标签。
+
 ## [1.3.7rc3] - 2026-11-04
 
 - 后续整改：旧自动授权测试按 IPC 命令分别模拟 open/request_status，并断言窗口仅打开一次且查询绑定实际会话。

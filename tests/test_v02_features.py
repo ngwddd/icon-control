@@ -127,6 +127,7 @@ class TestPermissionGate(AuthorityCase,unittest.TestCase):
 
 class TestVerifyFlow(AuthorityCase, unittest.TestCase):
     fixture_authorized = True
+    fixture_monitoring = True
     @NEED
     def test_pass_then_fail_stops(self) -> None:
         d = tempfile.mkdtemp()

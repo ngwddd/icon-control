@@ -422,7 +422,12 @@ if IS_WINDOWS:
         try:
             _execution.checkpoint('move_window', hwnd=hwnd)
             win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
-            return {"success": True, "action": "close_window", "hwnd": hwnd}
+            # WM_CLOSE is asynchronous: a save prompt or an unresponsive app
+            # may leave the window open. Do not equate acceptance with closure.
+            closed = not win32gui.IsWindow(hwnd)
+            return {"success": closed, "accepted": True,
+                    "status": "succeeded" if closed else "executed_unverified",
+                    "verified": closed, "action": "close_window", "hwnd": hwnd}
         except Exception as e:
             return {"error": f"Failed to close window: {str(e)}"}
 

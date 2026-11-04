@@ -40,6 +40,32 @@ class GUITHREADINFO(ctypes.Structure):
               *[(name,wintypes.HWND) for name in ('hwndActive','hwndFocus','hwndCapture','hwndMenuOwner','hwndMoveSize','hwndCaret')],
               ('rcCaret',wintypes.RECT)]
 
+def require_clipboard_scopes(scopes):
+    from computer_mcp import capabilities, permission, execution
+    state = permission.status()
+    missing = set(scopes) - set((state.get('authorization') or {}).get('scopes') or [])
+    if not state.get('granted') or missing:
+        permission._request_consent(missing=set(scopes) | {'input'})
+        raise permission.PermissionDenied('Clipboard shortcut requires: ' + ', '.join(sorted(scopes)))
+    execution.authority_stamp(state)
+
+
+def check_clipboard_chord(key, modifiers):
+    """System clipboard remains a separate scope, including shortcut fallbacks."""
+    from pynput.keyboard import Key
+    ctrl = bool(set(modifiers) & {Key.ctrl, Key.ctrl_l, Key.ctrl_r})
+    shift = bool(set(modifiers) & {Key.shift, Key.shift_l, Key.shift_r})
+    char = (getattr(key, 'char', None) or '').lower()
+    insert = key == Key.insert or getattr(key, 'vk', None) == Key.insert.value.vk
+    delete = key == Key.delete or getattr(key, 'vk', None) == Key.delete.value.vk
+    if ctrl and (char in ('c', 'x') or insert):
+        require_clipboard_scopes({'clipboard_write'})
+    elif (ctrl and char == 'v') or (shift and insert):
+        require_clipboard_scopes({'clipboard_read'})
+    elif shift and delete:
+        require_clipboard_scopes({'clipboard_write'})
+
+
 def edit_shortcut(letter):
     """Use explicit edit commands only on the actual focused standard edit."""
     import win32gui,win32process
@@ -63,6 +89,10 @@ def edit_shortcut(letter):
     if win32gui.GetAncestor(hwnd,2)!=foreground:
         raise permission.PermissionDenied('Focused edit belongs to another window')
     execution.check('key_press')
+    if letter in ('c', 'x'):
+        require_clipboard_scopes({'clipboard_write'})
+    elif letter == 'v':
+        require_clipboard_scopes({'clipboard_read'})
     capabilities.require_target(hwnd=hwnd)
     if win32gui.GetForegroundWindow()!=foreground:
         raise permission.PermissionDenied('Foreground changed before shortcut')
