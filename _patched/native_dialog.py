@@ -23,6 +23,7 @@ BUTTON_ADVANCED = 102
 BUTTON_RENEW = 103
 BUTTON_REVOKE = 104
 BUTTON_QUIT = 105
+BUTTON_PENDING = 106
 
 PRESETS = (
     ('常用', '读取整个桌面 + 鼠标键盘 + 文字输入',
@@ -148,7 +149,7 @@ def preset_for(scopes) -> int:
         candidate = set(preset_scopes)
         if wanted <= candidate and (best is None or len(candidate) < len(PRESETS[best][2])):
             best = index
-    return len(PRESETS) - 1 if best is None else best
+    return -1 if best is None else best
 
 
 def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
@@ -166,9 +167,17 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
         TASKDIALOG_BUTTON(BUTTON_GRANT, '一键授权'),
         TASKDIALOG_BUTTON(BUTTON_CANCEL, '取消'),
     )
-    radios = (TASKDIALOG_BUTTON * len(PRESETS))(
+    from computer_mcp import capabilities
+    requested = sorted(set(needs or []))
+    if not set(requested) <= capabilities.SCOPES:
+        raise ValueError('Requested capability is not supported')
+    choices = list(PRESETS)
+    if requested:
+        choices.append(('本次所需', '仅授予：' + '、'.join(requested), tuple(requested)))
+        default_preset = len(choices) - 1
+    radios = (TASKDIALOG_BUTTON * len(choices))(
         *[TASKDIALOG_BUTTON(200 + index, f'{name}：{detail}')
-          for index, (name, detail, _scopes) in enumerate(PRESETS)])
+          for index, (name, detail, _scopes) in enumerate(choices)])
 
     needed = ''
     if needs:
@@ -178,8 +187,10 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
         f'目标：{target_text}{needed}\r\n\r\n'
         '批准范围（单选）：'
     )
-    verification = f'{lease_minutes} 分钟内，本工作区的新进程自动沿用这次授权'
-    expanded = ('目标不对？先关掉这个窗口，把要操作的应用切到前台，再按热键重新打开。\r\n'
+    if note:
+        content += '\r\n' + note
+    verification = f'{lease_minutes} 分钟内，仅此 Agent 会话和所选应用可使用本次授权'
+    expanded = ('请核对请求方、目标和缺少的能力。切换 Agent 会原子替换原授权，不会授权给其他会话。\r\n'
                 '授权只覆盖这一次列出的范围；60 分钟到期或托盘撤销后立即失效。')
 
     config = TASKDIALOGCONFIG()
@@ -208,9 +219,11 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
                                         ctypes.byref(radio), ctypes.byref(checked))
     if result != 0:
         raise OSError(result, 'TaskDialogIndirect failed')
-    chosen = max(0, min(len(PRESETS) - 1, radio.value - 200))
+    chosen = radio.value - 200
+    if not 0 <= chosen < len(choices):
+        raise ValueError("Invalid capability selection")
     return dict(button=button.value, preset=chosen,
-                scopes=list(PRESETS[chosen][2]),
+                scopes=list(choices[chosen][2]),
                 lease_minutes=lease_minutes if checked.value else None,
                 accepted=button.value == BUTTON_GRANT)
 
@@ -252,7 +265,8 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
         ctypes.POINTER(TASKDIALOGCONFIG), ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
     library.TaskDialogIndirect.restype = ctypes.c_long
-    buttons = (TASKDIALOG_BUTTON * 4)(
+    buttons = (TASKDIALOG_BUTTON * 5)(
+        TASKDIALOG_BUTTON(BUTTON_PENDING, '处理当前待授权请求'),
         TASKDIALOG_BUTTON(BUTTON_RENEW, '续 60 分钟'),
         TASKDIALOG_BUTTON(BUTTON_REVOKE, '立即撤销'),
         TASKDIALOG_BUTTON(BUTTON_QUIT, '退出 Icon Control'),
@@ -276,8 +290,54 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
                                         ctypes.byref(radio), ctypes.byref(checked))
     if result != 0:
         raise OSError(result, 'TaskDialogIndirect failed')
-    action = {BUTTON_RENEW: 'renew', BUTTON_REVOKE: 'revoke', BUTTON_QUIT: 'quit'}.get(button.value, 'close')
+    action = {BUTTON_RENEW: 'renew', BUTTON_REVOKE: 'revoke', BUTTON_QUIT: 'quit', BUTTON_PENDING: 'pending'}.get(button.value, 'close')
     return dict(button=button.value, action=action)
+
+
+def _choose_record(agents, headline, descriptions):
+    """Explicit radio selection for a manually opened window without a request."""
+    if not agents or not available():
+        return None
+    if len(agents) == 1:
+        return agents[0]
+    library = _common_controls()
+    buttons = (TASKDIALOG_BUTTON * 2)(
+        TASKDIALOG_BUTTON(BUTTON_GRANT, '选择此会话'),
+        TASKDIALOG_BUTTON(BUTTON_CANCEL, '取消'))
+    radios = (TASKDIALOG_BUTTON * len(agents))(*[
+        TASKDIALOG_BUTTON(300+i, descriptions[i])
+        for i, a in enumerate(agents)])
+    config = TASKDIALOGCONFIG()
+    config.cbSize = ctypes.sizeof(config)
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_SIZE_TO_CONTENT
+    config.pszWindowTitle = 'Icon Control'
+    config.pszMainInstruction = headline
+    config.pszContent = '请选择实际目标，随后将显示完整授权范围。'
+    config.cButtons, config.pButtons = len(buttons), buttons
+    config.cRadioButtons, config.pRadioButtons = len(radios), radios
+    config.nDefaultButton = BUTTON_CANCEL
+    config.nDefaultRadioButton = 0
+    button, radio, checked = ctypes.c_int(BUTTON_CANCEL), ctypes.c_int(0), wintypes.BOOL(0)
+    library.TaskDialogIndirect.argtypes = [
+        ctypes.POINTER(TASKDIALOGCONFIG), ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
+    library.TaskDialogIndirect.restype = ctypes.c_long
+    result = library.TaskDialogIndirect(ctypes.byref(config), ctypes.byref(button),
+                                        ctypes.byref(radio), ctypes.byref(checked))
+    if result != 0:
+        raise OSError(result, 'Agent selection failed')
+    index = radio.value - 300
+    return agents[index] if button.value == BUTTON_GRANT and 0 <= index < len(agents) else None
+
+
+def choose_agent(agents):
+    return _choose_record(agents, '请选择需要授权的实际 Agent',
+                          [f"{a.get('label', 'Agent')} · {a['id'][:10]} · PID {a['pid']}" for a in agents])
+
+
+def choose_application(applications):
+    return _choose_record(applications, '请选择允许操作的应用',
+                          [f"{a.get('title', '')} · PID {a['pid']} · {os.path.basename(a['exe'])}" for a in applications])
 
 
 def _probe() -> int:

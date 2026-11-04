@@ -93,6 +93,11 @@ def _expire(now):
                 owner_dead = psutil.Process(int(pid)).create_time() != float(created)
             except (ValueError, psutil.Error):
                 owner_dead = True
+        peer = _authorization.get('agent_peer')
+        if peer:
+            from computer_mcp import agent_session
+            session_record = agent_session.lookup(_authorization.get('agent_session'), peer['pid'])
+            owner_dead = owner_dead or not session_record or session_record['created'] != peer['created']
         if (owner_dead or now-timestamp >= CLIENT_ACTION_TTL_S or
                 now-CLIENTS.get(owner,{}).get('ts',0) >= min(CLIENT_HB_TTL_S,STATE_LEASE_S) or
                 (_authorization.get('lease_expires_at') and

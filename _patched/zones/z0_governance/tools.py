@@ -32,9 +32,9 @@ SPECS: list[ToolSpec] = [
         name='control_status',
         effects=('observe',),
         zone='Z0',
-        description='读桌面控制权归属：ai / user / idle，以及用户接管后还有多久恢复',
+        description='Read control ownership and actual-caller authorization_diagnostic. Optional hwnd and requested_scopes report target and missing capabilities; this does not grant permissions.',
         read_only=True,
-        schema={'type': 'object', 'properties': {}},
+        schema={'type': 'object', 'properties': {'hwnd': {'type': 'integer'}, 'requested_scopes': {'type': 'array', 'items': {'type': 'string'}}}, 'additionalProperties': False},
     ),
     ToolSpec(
         name='control_claim',

@@ -3,7 +3,7 @@
 This module provides a stateless API for computer control.
 """
 
-__version__ = "1.3.6"
+__version__ = "1.3.7rc1"
 
 from computer_mcp.input_guard import KeyboardController, MouseController
 
@@ -23,7 +23,7 @@ _default_keyboard_controller = KeyboardController()
 
 
 # Mouse actions
-def click(button: str = "left") -> dict:
+def click(button: str = "left", *, x: float | None = None, y: float | None = None) -> dict:
     """Perform a mouse click at the current cursor position.
     
     Args:
@@ -32,7 +32,7 @@ def click(button: str = "left") -> dict:
     Returns:
         Dictionary with action result
     """
-    return mouse_actions.click(button, _default_mouse_controller)
+    return mouse_actions.click(button, _default_mouse_controller, x=x, y=y)
 
 
 def double_click(button: str = "left") -> dict:

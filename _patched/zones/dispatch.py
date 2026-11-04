@@ -59,7 +59,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
     if name == "click":
         result = mouse_actions.click(
             button=arguments.get("button", "left"),
-            controller=mouse_controller
+            controller=mouse_controller,
+            x=arguments.get("x"), y=arguments.get("y")
         )
     elif name == "double_click":
         result = mouse_actions.double_click(
@@ -606,6 +607,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
     if name == "control_status":
         from computer_mcp import control as _ctl
         result = _ctl.status()
+        from computer_mcp.permission import caller_diagnostic
+        result["authorization_diagnostic"] = caller_diagnostic(arguments.get("requested_scopes"), arguments.get("hwnd"))
 
     elif name == "control_claim":
         from computer_mcp import control as _ctl

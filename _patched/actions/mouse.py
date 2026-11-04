@@ -8,7 +8,7 @@ from computer_mcp.input_guard import Button, MouseController as Controller
 from computer_mcp.core.utils import button_from_string
 
 
-def click(button: str = "left", controller: Controller | None = None) -> dict[str, Any]:
+def click(button: str = "left", controller: Controller | None = None, *, x: float | None = None, y: float | None = None) -> dict[str, Any]:
     """Perform a mouse click.
     
     Args:
@@ -21,9 +21,33 @@ def click(button: str = "left", controller: Controller | None = None) -> dict[st
     if controller is None:
         controller = Controller()
     
+    import math
+    if (x is None) != (y is None):
+        raise ValueError('click requires both x and y, or neither')
+    target = None
+    if x is not None:
+        if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (x, y)):
+            raise ValueError('click coordinates must be finite numbers')
+        import win32gui, win32process
+        from computer_mcp import capabilities
+        point = (int(x), int(y))
+        hwnd = win32gui.WindowFromPoint(point)
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        target = capabilities.process_record(pid)
+        capabilities.require_target(point=point)
+        controller.position = point
+        current_hwnd = win32gui.WindowFromPoint(point)
+        _, current_pid = win32process.GetWindowThreadProcessId(current_hwnd)
+        if capabilities.process_record(current_pid) != target or tuple(controller.position) != point:
+            raise ValueError('Target changed while positioning the pointer')
+        capabilities.require_target(point=point)
     btn = button_from_string(button)
-    controller.click(btn)
-    return {"success": True, "action": "click", "button": button}
+    if target is None:
+        controller.click(btn)
+    else:
+        controller.click(btn, expected_target=target, expected_point=point)
+    return {"success": True, "action": "click", "button": button,
+            **({"x": int(x), "y": int(y)} if x is not None else {})}
 
 
 def double_click(button: str = "left", controller: Controller | None = None) -> dict[str, Any]:

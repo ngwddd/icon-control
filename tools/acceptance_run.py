@@ -121,18 +121,23 @@ def stop_latch_clear() -> bool:
     return False
 
 
+CALLER_DIAGNOSTIC = None
+
 def approval() -> bool:
-    env = dict(os.environ, ICON_CONTROL_HOME=str(HOME))
-    # A bare interpreter has no registered session and the authority
-    # round-trip requires one, so the probe must register like a real agent.
-    code = ('from computer_mcp import agent_session, permission;'
-            'agent_session.register("preflight approval probe");'
-            'print(1 if permission.status().get("granted") else 0)')
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, env=env)
-    if out.stdout.strip().endswith('1'):
-        say('ok', '授权有效')
-        return True
-    say('fail', '当前没有有效授权：按 Ctrl+Alt+Shift+F9，窗口里回车')
+    if CALLER_DIAGNOSTIC is None:
+        say('fail', '需通过实际 MCP 的 control_status 导出 authorization_diagnostic，传入 --caller-diagnostic。独立 Python 会话不能证明 DSH 已授权。')
+        return False
+    try:
+        raw = json.loads(CALLER_DIAGNOSTIC.read_text(encoding='utf-8'))
+        data = raw.get('authorization_diagnostic', raw)
+        fresh = 0 <= time.time() - float(data['checked_at']) <= 30
+        say('caller', json.dumps(data, ensure_ascii=False))
+        if fresh and data.get('caller_granted') is True:
+            say('ok', '诊断记录显示该调用者已授权；运行用例的进程仍须独立通过权限闸门')
+            return True
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    say('fail', '实际调用者诊断缺失、过期或未获授权')
     return False
 
 
@@ -270,8 +275,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--cases', required=True)
     parser.add_argument('--wait-grant', type=float, default=0)
+    parser.add_argument('--caller-diagnostic', type=Path)
     parser.add_argument('--repeat', type=int, default=1)
     args = parser.parse_args()
+    global CALLER_DIAGNOSTIC
+    CALLER_DIAGNOSTIC = args.caller_diagnostic
     cases = [case.strip() for case in args.cases.split(',') if case.strip()]
 
     print('== preflight ==')

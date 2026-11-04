@@ -73,6 +73,8 @@ def _check_held():
         for controller in pending:
             with controller._mutex:
                 if not controller.held:
+                    with _lock:
+                        _held_controllers.discard(controller)
                     continue
                 state=permission.status(agent_session_id=controller.agent_session)
                 revision=(state.get('session'),state.get('revision'))
@@ -168,19 +170,28 @@ class MouseController(_Held):
         require_target(point=(x+dx,y+dy))
         self.raw.move(dx, dy)
 
-    def press(self, button):
+    def press(self, button, *, expected_target=None, expected_point=None):
         with self._mutex:
             check('button_down')
             from computer_mcp.capabilities import require_target
             require_target(point=self.raw.position)
             _retain(self, 'button_down', point=self.raw.position)
+            if expected_target is not None:
+                import win32gui, win32process
+                from computer_mcp import capabilities, permission
+                position = tuple(self.raw.position)
+                hwnd = win32gui.WindowFromPoint(position)
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                if position != expected_point or capabilities.process_record(pid) != expected_target:
+                    raise permission.PermissionDenied('Point-click target changed before button-down')
+                capabilities.require_target(point=position)
             self.held.add(button)
             self.raw.press(button)
 
-    def click(self, button, count=1):
+    def click(self, button, count=1, *, expected_target=None, expected_point=None):
         for _ in range(count):
             check('click')
-            self.press(button)
+            self.press(button, expected_target=expected_target, expected_point=expected_point)
             self.release(button)
 
     def scroll(self, dx, dy):

@@ -114,30 +114,33 @@ def _io(pipe, payload=None, timeout_ms=200):
         return bytes(buffer[:count]) if payload is None else None
     finally: operation.hEvent.Close()
 
+from computer_mcp.consent_requests import RequestQueue
+_requests = RequestQueue()
+
+
 def dispatch(message, pid):
+    from computer_mcp import permission_bridge as bridge
+    # Requests and grants are serialized together. A dialog cannot approve a
+    # replaced snapshot or interleave grant ownership with another request.
+    with bridge._lock:
+        return _dispatch(message, pid)
+
+
+def _dispatch(message, pid):
     from computer_mcp import permission_bridge as bridge
     command = message.get('command')
     if command == 'open':
-        # Remember who asked and what they want to touch, so the window approves
-        # the caller's target instead of whatever happens to be in front.
-        prefer = message.get('prefer_session')
-        if isinstance(prefer, str):
-            try:
-                if any(a['id'] == prefer for a in agent_session.active()):
-                    bridge._pending_agent = prefer
-            except Exception:
-                pass
-        app = message.get('prefer_app')
-        if isinstance(app, dict) and isinstance(app.get('pid'), int):
-            try:
-                if capabilities.process_record(app['pid']) == app:
-                    bridge._pending_app = app
-            except Exception:
-                pass
-        scopes = message.get('prefer_scopes')
-        if isinstance(scopes, list) and scopes and set(scopes) <= capabilities.SCOPES:
-            bridge._pending_scopes = [scope for scope in scopes if scope in capabilities.SCOPES]
-        return open_native()
+        session = message.get('prefer_session')
+        request_id = None
+        if session is not None:
+            record = _requests.create(pid, session, message.get('prefer_app'),
+                                      message.get('prefer_scopes'))
+            request_id = record['request_id']
+        elif any(key in message for key in ('prefer_app', 'prefer_scopes')):
+            raise PermissionError('An application request requires a verified caller')
+        return {**open_native(), 'request_id': request_id}
+    if command == 'diagnose':
+        return _diagnose(message, pid)
     if command == 'authority':
         with bridge._lock:
             granted, _ = bridge.effective_state()
@@ -145,10 +148,7 @@ def dispatch(message, pid):
             matches = agent_session.lookup(ident, pid) is not None
             auth = bridge._authorization or {}
             same_session = auth.get('agent_session') == ident
-            # A lease follows the identity, which is derived from the caller's
-            # own process, never asserted by it.
-            same_identity = bool(auth.get('agent_id')) and auth.get('agent_id') == agent_session.identity(pid)
-            return dict(granted=bool(granted and matches and (same_session or same_identity) and
+            return dict(granted=bool(granted and matches and same_session and
                 message.get('session') == bridge._session and
                 message.get('revision') == bridge._revision))
     if command == 'emergency':
@@ -160,9 +160,22 @@ def dispatch(message, pid):
     owner = 'native-'+str(pid)+'-'+str(psutil.Process(pid).create_time())
     if command == 'status':
         return dict(state=bridge.current_state(), agents=list(agent_session.active()),
-                    pending=getattr(bridge, '_pending_agent', None),
-                    pending_app=getattr(bridge, '_pending_app', None),
-                    pending_scopes=getattr(bridge, '_pending_scopes', None))
+                    requests=_requests.pending())
+    if command == 'request_show':
+        return _requests.get(message['request_id'], display=True)
+    if command == 'request_target':
+        app = message['application']
+        if _native_instance(app['pid']):
+            raise PermissionError('Permission UI is never a target')
+        return _requests.bind_target(message['request_id'], app)
+    if command == 'request_deny':
+        return _requests.finish(message['request_id'], 'denied')
+    if command == 'request_satisfied':
+        request_id = message['request_id']
+        satisfied, _ = _requests.satisfies(request_id, bridge.current_state())
+        if not satisfied:
+            raise PermissionError('The current authorization does not satisfy this request')
+        return _requests.finish(request_id, 'consumed')
     if command == 'grant':
         session = message.get('agent_session')
         live = list(agent_session.active())
@@ -182,15 +195,22 @@ def dispatch(message, pid):
         for record_file in read_files:
             if capabilities.file_record(record_file['path']) != record_file:
                 raise ValueError('External file changed; approve again')
+        request_id = message.get('request_id')
+        if request_id is not None:
+            pending = _requests.get(request_id)
+            if (pending['status'] != 'displayed' or pending['agent_session'] != session or
+                    pending['application'] is None or applications != [pending['application']] or
+                    not set(pending['scopes']) <= set(scopes or [])):
+                raise PermissionError('Grant does not match the displayed request')
         auth = dict(agent_session=session, scopes=scopes, applications=applications,
-                    launches=launches, read_files=read_files)
+                    launches=launches, read_files=read_files,
+                    agent_peer={'pid': record['pid'], 'created': record['created']})
         lease_minutes = message.get('lease_minutes')
         if lease_minutes is not None:
             if not isinstance(lease_minutes, int) or not 1 <= lease_minutes <= 240:
                 raise ValueError('Invalid lease length')
-            # Derive the identity from the granted process itself: a new process
-            # in the same workspace inherits the lease without another prompt.
-            auth['agent_id'] = agent_session.identity(record['pid'])
+            # The lease names this exact transport session within its workspace.
+            auth['agent_id'] = agent_session.identity(record['pid'], session)
             auth['lease_expires_at'] = time.time() + lease_minutes * 60
         if not capabilities.validate(auth): raise ValueError('Invalid scope selection')
         # Validate actual PID/create-time/executable, not caller supplied display names.
@@ -198,11 +218,57 @@ def dispatch(message, pid):
             if capabilities.process_record(app['pid']) != app:
                 raise ValueError('Application identity changed; select it again')
             if _native_instance(app['pid']): raise ValueError('Permission UI is never a target')
-        return bridge.write_state(True, client=owner, event='action', authorization=auth)
+        # Approve the displayed snapshot under the same broker lock as the
+        # grant write. Approved requests are consumed once, never re-displayed.
+        if request_id is not None:
+            _requests.finish(request_id, 'approved')
+        try:
+            state = bridge.write_state(True, client=owner, event='action', authorization=auth)
+        except Exception:
+            if request_id is not None:
+                _requests.finish(request_id, 'denied')
+            try:
+                bridge.write_state(False, client=owner, event='action')
+            except Exception:
+                pass
+            raise
+        if request_id is not None:
+            _requests.finish(request_id, 'consumed' if state.get('granted') else 'denied')
+        return state
     if command == 'revoke': return bridge.write_state(False, client=owner, event='action')
     if command == 'heartbeat':
         return bridge.write_state(message.get('granted') is True, client=owner, event='hb')
     raise ValueError('Unsupported consent request')
+
+def _diagnose(message, pid):
+    from computer_mcp import permission_bridge as bridge
+    session = message.get('agent_session')
+    peer = agent_session.lookup(session, pid)
+    if peer is None:
+        raise PermissionError('Diagnostics must originate from the actual Agent')
+    scopes = message.get('scopes', [])
+    if not isinstance(scopes, list) or not set(scopes) <= capabilities.SCOPES:
+        raise ValueError('Unknown diagnostic capabilities')
+    app = message.get('application')
+    if app is not None and capabilities.process_record(app['pid']) != app:
+        raise PermissionError('Diagnostic target identity changed')
+    state = bridge.current_state()
+    auth = state.get('authorization') or {}
+    same = auth.get('agent_session') == session
+    missing = sorted(set(scopes) - set(auth.get('scopes', []))) if same else sorted(set(scopes))
+    target_ok = app is None or app in auth.get('applications', [])
+    granted = bool(state.get('granted') and same and target_ok and not missing)
+    reason = ('approved' if granted else 'bridge_not_authorized' if not state.get('granted')
+              else 'different_agent' if not same else 'target_not_approved' if not target_ok
+              else 'missing_scopes')
+    return dict(agent_session=session, peer_pid=pid, peer_created=peer['created'],
+                workspace_id=agent_session.workspace_identity(pid),
+                caller_identity=agent_session.identity(pid, session),
+                approved_agent=(auth.get('agent_session') or '')[:10],
+                requested_scopes=sorted(set(scopes)), approved_scopes=auth.get('scopes', []),
+                missing_scopes=missing, target=app, bridge_granted=bool(state.get('granted')),
+                caller_granted=granted, reason=reason, checked_at=time.time())
+
 
 def serve(ready=None, failures=None):
     import pywintypes

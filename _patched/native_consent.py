@@ -71,6 +71,7 @@ class ConsentHost:
         self.hotkey = ''
         self._stopping = False
         self._showing = False
+        self.state_unknown = False
         self._wndproc = WNDPROC(self._on_message)
 
     # -- plumbing ---------------------------------------------------------
@@ -78,10 +79,12 @@ class ConsentHost:
         return consent_ipc.request(command, ui_nonce=self.nonce, **fields)
 
     def _tip(self) -> str:
+        if self.state_unknown:
+            return 'Icon Control · 状态未知 · 请检查连接'
         if not self.granted:
             return f'Icon Control · 未授权 · {self.hotkey or "热键"} 打开'
         left = max(0, int(self.lease_until - time.time()))
-        return f'Icon Control · 已授权 · 剩 {left // 60}:{left % 60:02d}'
+        return f'Icon Control · {(self.authorization.get("agent_session") or "")[:10]} 已授权 · 剩 {left // 60}:{left % 60:02d}'
 
     def _refresh_tray(self):
         if self.tray:
@@ -97,7 +100,8 @@ class ConsentHost:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(dict(pid=os.getpid(), hwnd=int(self.hwnd),
                                             hotkey=self.hotkey, tray=bool(self.tray),
-                                            granted=self.granted,
+                                            granted=self.granted if not self.state_unknown else None,
+                                            agent_session=self.authorization.get('agent_session'),
                                             lease_expires_at=self.lease_until),
                                        ensure_ascii=False), encoding='utf-8')
         except Exception:
@@ -116,6 +120,7 @@ class ConsentHost:
             while hwnd:
                 candidates.append(hwnd)
                 hwnd = win32gui.GetWindow(hwnd, 2)      # GW_HWNDNEXT
+            applications, seen = [], set()
             for hwnd in candidates:
                 title = win32gui.GetWindowText(hwnd)
                 if not title or title.startswith('Icon Control'):
@@ -123,28 +128,32 @@ class ConsentHost:
                 if not win32gui.IsWindowVisible(hwnd):
                     continue
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                if not pid or pid == os.getpid():
+                if not pid or pid == os.getpid() or pid in seen:
                     continue
                 record = capabilities.process_record(pid)
                 record['title'] = title[:80]
-                return record
+                applications.append(record)
+                seen.add(pid)
+            return native_dialog.choose_application(applications)
         except Exception:
             pass
         return None
 
     def _pick_agent(self, pending=None):
         live = [a for a in agent_session.active() if a.get('pid') != os.getpid()]
-        if not live:
-            return None
-        preferred = next((a for a in live if a.get('id') == pending), None)
-        return preferred or max(live, key=lambda a: a.get('created', 0))
+        if pending is not None:
+            return next((a for a in live if a['id'] == pending), None)
+        return native_dialog.choose_agent(live)
 
     def _sync(self):
         """Trust the bridge, never the local flag, before showing anything."""
         try:
             state = (self.ipc('status') or {}).get('state') or {}
         except Exception:
-            return
+            self.state_unknown = True
+            self.granted = False
+            return False
+        self.state_unknown = False
         if state.get('granted') and state.get('authorization'):
             self.granted = True
             self.authorization = state['authorization']
@@ -154,6 +163,7 @@ class ConsentHost:
             self.granted = False
             self.authorization = {}
             self.lease_until = 0.0
+        return True
 
     def show(self):
         if self._showing:
@@ -165,75 +175,106 @@ class ConsentHost:
             self._showing = False
 
     def _show_once(self):
-        self._sync()
-        if self.granted:
+        if not self._sync():
+            native_dialog.ask_notice('授权状态未知', '无法连接授权桥，请稍后重试。')
+            return
+        try:
+            status = self.ipc('status')
+            pending = (status.get('requests') or [None])[0]
+            if pending:
+                pending = self.ipc('request_show', request_id=pending['request_id'])
+        except Exception as exc:
+            native_dialog.ask_notice('授权请求不可用', str(exc)[:200])
+            return
+        if pending is None and self.granted:
             left = max(0, int(self.lease_until - time.time()))
             answer = native_dialog.ask_status(
-                'Icon Control 已授权',
-                f'Agent：{(self.authorization.get("agent_session") or "")[:10]}\r\n'
-                f'范围：{", ".join(self.authorization.get("scopes") or [])}',
+                '已确认的会话授权',
+                f"Agent：{self.authorization.get('agent_session', '')[:10]}" + chr(13) + chr(10) +
+                f"范围：{', '.join(self.authorization.get('scopes') or [])}",
                 remaining=f'剩余 {left // 60} 分 {left % 60} 秒')
-            if answer is None:
-                return
-            if answer['action'] == 'revoke':
-                self.revoke()
-            elif answer['action'] == 'renew':
-                self._renew()
-            elif answer['action'] == 'quit':
-                self.revoke()
-                self.user32.DestroyWindow(self.hwnd)
+            if answer:
+                if answer['action'] == 'revoke':
+                    self.revoke()
+                elif answer['action'] == 'renew':
+                    self._renew()
+                elif answer['action'] == 'pending':
+                    self._show_once()
+                elif answer['action'] == 'quit':
+                    self.revoke()
+                    self.user32.DestroyWindow(self.hwnd)
             return
-
-        pending = None
-        pending_app = None
-        pending_scopes = None
-        try:
-            status = self.ipc('status') or {}
-            pending = status.get('pending')
-            pending_app = status.get('pending_app')
-            pending_scopes = status.get('pending_scopes')
-        except Exception:
-            pass
-        agent = self._pick_agent(pending)
+        agent = self._pick_agent(pending['agent_session'] if pending else None)
         if agent is None:
-            native_dialog.ask_notice('没有活跃的 Agent 会话',
-                                     '先在宿主里发起一次操作，再按热键或点托盘打开授权窗口。')
+            native_dialog.ask_notice('请求方不可用', '请选择活跃会话；失效请求不会转交给其他 Agent。')
             return
-        app = None
-        if pending_app:
+        app = pending['application'] if pending else None
+        if app is not None:
             try:
-                if capabilities.process_record(pending_app['pid']) == pending_app:
-                    app = dict(pending_app)
-            except Exception:
-                app = None
-        if app is None:
+                if capabilities.process_record(app['pid']) != app:
+                    raise ValueError('请求的目标进程已改变')
+            except Exception as exc:
+                native_dialog.ask_notice('目标应用不可用', str(exc)[:200])
+                return
+        else:
             app = self._foreground_app()
-        if app is None:
-            native_dialog.ask_notice('找不到前台应用',
-                                     '先把要操作的应用切到前台，再按热键或点托盘打开授权窗口。')
-            return
+            if app is None:
+                native_dialog.ask_notice('请选择目标应用', '请先切换到目标应用，再处理本次请求。')
+                return
+            if pending:
+                try:
+                    app = {k: app[k] for k in ('pid', 'created', 'exe')}
+                    pending = self.ipc('request_target', request_id=pending['request_id'], application=app)
+                except Exception as exc:
+                    native_dialog.ask_notice('目标选择失败', str(exc)[:200])
+                    return
+        needs = pending['scopes'] if pending else None
+        note = ''
+        if pending:
+            auth = self.authorization
+            if self.granted and auth.get('agent_session') != agent['id']:
+                note = '授权属于其他会话。确认后将为当前请求方原子替换原授权。'
+            elif self.granted and app not in auth.get('applications', []):
+                note = '当前请求的应用尚未授权。'
+            elif self.granted:
+                missing = set(needs) - set(auth.get('scopes', []))
+                if not missing:
+                    try:
+                        self.ipc('request_satisfied', request_id=pending['request_id'])
+                        native_dialog.ask_notice('当前请求已满足', '实际请求方、目标应用和权限均已匹配。')
+                    except Exception as exc:
+                        native_dialog.ask_notice('请求已失效', str(exc)[:200])
+                    return
+                note = '需要补授权：' + ', '.join(sorted(missing))
         answer = native_dialog.ask_grant(
-            agent_label=f"{agent.get('label', 'Agent')} · {agent['id'][:10]}",
+            agent_label=(f"{agent.get('label', 'Agent')} · {agent['id'][:10]} · PID {agent['pid']}"
+                         + (f" · 工作区 {pending['workspace_id'][:10]} · 请求 {pending['request_id'][:10]}" if pending else "")),
             target_text=f"{os.path.basename(app['exe'])} · PID {app['pid']}",
-            default_preset=native_dialog.preset_for(pending_scopes),
-            lease_minutes=LEASE_MINUTES, note=app.get('title', ''),
-            needs=pending_scopes)
+            default_preset=native_dialog.preset_for(needs),
+            lease_minutes=LEASE_MINUTES, note=note, needs=needs)
         if answer is None or not answer['accepted']:
+            if pending:
+                try:
+                    self.ipc('request_deny', request_id=pending['request_id'])
+                except Exception:
+                    pass
             return
-        self._apply(agent['id'], answer['scopes'], app, answer['lease_minutes'])
+        self._apply(agent['id'], answer['scopes'], app, answer['lease_minutes'],
+                    request_id=pending['request_id'] if pending else None)
 
-    def _apply(self, agent_session_id, scopes, app, lease_minutes):
+    def _apply(self, agent_session_id, scopes, app, lease_minutes, request_id=None):
         try:
             result = self.ipc('grant', agent_session=agent_session_id, scopes=list(scopes),
                               applications=[{k: app[k] for k in ('pid', 'created', 'exe')}],
-                              launches=[], read_files=[], lease_minutes=lease_minutes)
+                              launches=[], read_files=[], lease_minutes=lease_minutes, request_id=request_id)
         except Exception as exc:
-            native_dialog.ask_grant('授权失败', str(exc)[:300])
+            native_dialog.ask_notice('授权失败', str(exc)[:300])
             return
         if result.get('granted') is not True:
-            native_dialog.ask_grant('后端未确认授权', str(result)[:300])
+            native_dialog.ask_notice('后端未确认授权', str(result)[:300])
             return
         auth = result.get('authorization') or {}
+        self.state_unknown = False
         self.granted = True
         self.authorization = auth
         self.lease_until = float(auth.get('lease_expires_at') or (time.time() + LEASE_MINUTES * 60))
@@ -254,13 +295,20 @@ class ConsentHost:
         self._apply(agent, scopes, record, LEASE_MINUTES)
 
     def revoke(self):
+        # Stop positive renewal before the IPC request. A failed revoke is
+        # repaired by negative heartbeats and remains visibly unknown meanwhile.
+        self.granted = False
         try:
-            self.ipc('revoke')
-        finally:
-            self.granted = False
+            state = self.ipc('revoke')
+            if state.get('granted') is not False:
+                raise RuntimeError('Backend did not confirm revocation')
+            self.state_unknown = False
             self.authorization = {}
             self.lease_until = 0.0
-            self._refresh_tray()
+        except Exception:
+            self.state_unknown = True
+            native_dialog.ask_notice('撤销状态未知', '通信未确认撤销，已停止正向续期，将重试否定心跳。')
+        self._refresh_tray()
 
     # -- message handling -------------------------------------------------
     def _on_message(self, hwnd, message, wparam, lparam):
@@ -298,6 +346,15 @@ class ConsentHost:
 
     def _heartbeat(self):
         if not self.granted:
+            if self.state_unknown:
+                try:
+                    state = self.ipc('heartbeat', granted=False)
+                    if state.get('granted') is False:
+                        self.state_unknown = False
+                        self.authorization = {}
+                except Exception:
+                    pass
+                self._refresh_tray()
             return
         if time.time() >= self.lease_until:
             self.granted = False
@@ -309,8 +366,12 @@ class ConsentHost:
         try:
             state = self.ipc('heartbeat', granted=True)
         except Exception:
+            self.granted = False
+            self.state_unknown = True
+            self._refresh_tray()
             return
-        if not (state or {}).get('granted'):
+        auth = (state or {}).get('authorization') or {}
+        if not (state or {}).get('granted') or auth.get('agent_session') != self.authorization.get('agent_session'):
             self.granted = False
             self.authorization = {}
             self._refresh_tray()
@@ -353,6 +414,8 @@ class ConsentHost:
         while self.user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
             self.user32.TranslateMessage(ctypes.byref(message))
             self.user32.DispatchMessageW(ctypes.byref(message))
+        self._stopping = True
+        self.revoke()
         if self.tray:
             native_tray.remove(self.hwnd, 1)
         self.user32.UnregisterHotKey(self.hwnd, 1)

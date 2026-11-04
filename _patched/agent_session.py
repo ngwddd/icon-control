@@ -18,24 +18,22 @@ def current():
     return _context.get() or _stdio_id
 
 
-def identity(pid=None) -> str:
-    """Stable agent identity: installation home + workspace.
-
-    A restart keeps the same identity, so a time-boxed lease can cover a whole
-    work session instead of one process. The workspace is the process cwd, which
-    is what the host sets for an MCP child.
-    """
+def workspace_identity(pid=None) -> str:
     import hashlib
+    process = psutil.Process(pid or os.getpid())
+    workspace = str(Path(process.cwd()).resolve()).lower()
     home = str(security.data_home().resolve()).lower()
-    workspace = ''
-    try:
-        workspace = str(Path(psutil.Process(pid or os.getpid()).cwd()).resolve()).lower()
-    except (psutil.Error, OSError):
-        try:
-            workspace = str(Path.cwd().resolve()).lower()
-        except OSError:
-            workspace = ''
     return hashlib.sha256((home + '|' + workspace).encode('utf-8')).hexdigest()[:32]
+
+
+def identity(pid=None, session=None) -> str:
+    """A workspace and a transport-assigned session form an isolated subject."""
+    import hashlib
+    pid = pid or os.getpid()
+    session = session or current()
+    if lookup(session, pid) is None:
+        raise PermissionError('Agent session does not belong to the actual caller')
+    return hashlib.sha256((workspace_identity(pid) + '|' + session).encode('utf-8')).hexdigest()[:32]
 
 @contextmanager
 def bind(identity):
@@ -45,7 +43,7 @@ def bind(identity):
 
 def register(label=None):
     process = psutil.Process(os.getpid())
-    record = dict(id=current(), pid=process.pid, created=process.create_time(),
+    record = dict(id=current(), pid=process.pid, created=process.create_time(), exe=process.exe(),
                   label=(label or 'MCP process '+str(process.pid))[:120], checked_at=time.time())
     record['signature'] = security.signature(record, security.load_token())
     folder = security.data_home()/'state'/'sessions'
@@ -80,7 +78,8 @@ def lookup(identity, pid):
         record = json.loads(path.read_text(encoding='utf-8'))
         if (record.get('id') == identity and record.get('pid') == pid and
                 security.authentic(record) and
-                psutil.Process(pid).create_time() == record['created']):
+                psutil.Process(pid).create_time() == record['created'] and
+                (not record.get('exe') or psutil.Process(pid).exe() == record['exe'])):
             return record
     except (OSError, ValueError, KeyError, TypeError, psutil.Error):
         pass

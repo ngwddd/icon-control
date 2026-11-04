@@ -54,10 +54,7 @@ def check_scope(state, spec, args):
     if not validate(auth):
         return 'Approval is missing or invalid; open the native control center'
     if auth['agent_session'] != agent_session.current():
-        # A time-boxed lease covers every new process of the same identity.
-        leased = auth.get('agent_id') and auth['agent_id'] == agent_session.identity()
-        if not leased:
-            return 'Approval belongs to a different Agent session; open the native control center'
+        return 'Approval belongs to a different Agent session; open the native control center'
     missing = required(spec, args) - set(auth['scopes'])
     if missing: return 'Human approval required for: '+', '.join(sorted(missing))
     return None

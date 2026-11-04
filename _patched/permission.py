@@ -239,10 +239,7 @@ def status(force: bool = False, agent_session_id=None) -> dict:
                     now >= float(auth['lease_expires_at']):
                 return dict(granted=False, source='bridge', reason='Lease expired')
             if cached.get('granted') and auth['agent_session'] != (agent_session_id or agent_session.current()):
-                # A time-boxed lease covers every new process of the same identity.
-                leased = auth.get('agent_id') and auth['agent_id'] == agent_session.identity()
-                if not leased:
-                    return dict(granted=False, source='bridge', reason='Approval belongs to another Agent session')
+                return dict(granted=False, source='bridge', reason='Approval belongs to another Agent session')
             if cached.get('granted'):
                 from computer_mcp.consent_ipc import live_valid
                 if not live_valid(cached, agent_session_id or agent_session.current()):
@@ -254,7 +251,7 @@ def status(force: bool = False, agent_session_id=None) -> dict:
                 checked_at='', reason='Missing, expired or unauthenticated bridge state')
 
 
-_last_consent_request = 0.0
+_last_consent_request = {}
 CONSENT_POPUP_INTERVAL_S = 20.0
 
 
@@ -263,13 +260,20 @@ def _request_consent(arguments: dict | None = None, missing=None) -> None:
     global _last_consent_request
     if os.environ.get('ICON_CONTROL_AUTO_CONSENT') == '0':
         return
-    now = time.time()
-    if now - _last_consent_request < CONSENT_POPUP_INTERVAL_S:
-        return
-    _last_consent_request = now
+    from computer_mcp import agent_session
+    now = time.monotonic()
+    key = (agent_session.current(), tuple(sorted(missing or [])),
+           str((arguments or {}).get('hwnd')), str((arguments or {}).get('x')),
+           str((arguments or {}).get('y')))
+    previous = _last_consent_request.get(key)
+    if previous and now - previous[0] < CONSENT_POPUP_INTERVAL_S:
+        return previous[1]
     prefer_app = None
     try:
         hwnd = (arguments or {}).get('hwnd')
+        if not hwnd and 'x' in (arguments or {}) and 'y' in arguments:
+            import win32gui
+            hwnd = win32gui.WindowFromPoint((int(arguments['x']), int(arguments['y'])))
         if hwnd:
             import win32process
             from computer_mcp import capabilities
@@ -280,12 +284,35 @@ def _request_consent(arguments: dict | None = None, missing=None) -> None:
         prefer_app = None
     try:
         from computer_mcp import agent_session, consent_ipc
-        consent_ipc.request('open', timeout_ms=300,
+        result = consent_ipc.request('open', timeout_ms=300,
                             prefer_session=agent_session.current(),
                             prefer_app=prefer_app,
                             prefer_scopes=sorted(missing) if missing else None)
+        request_id = result.get('request_id')
+        if request_id:
+            if len(_last_consent_request) >= 128:
+                _last_consent_request.pop(next(iter(_last_consent_request)))
+            _last_consent_request[key] = (now, request_id)
+        return request_id
     except Exception:
         pass
+
+
+def caller_diagnostic(scopes=None, hwnd=None):
+    """Read-only diagnostic from this real MCP transport context."""
+    from computer_mcp import agent_session, consent_ipc, capabilities
+    app = None
+    try:
+        if hwnd is not None:
+            import win32process
+            _, pid = win32process.GetWindowThreadProcessId(int(hwnd))
+            app = capabilities.process_record(pid)
+        return consent_ipc.request('diagnose', agent_session=agent_session.current(),
+                                   scopes=list(scopes or []), application=app)
+    except Exception as exc:
+        return dict(agent_session=agent_session.current(), caller_granted=False,
+                    reason='diagnostic_unavailable', error=type(exc).__name__)
+
 
 
 def check_tool(name: str, arguments: dict | None = None) -> dict | None:
@@ -306,8 +333,8 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
                 missing = capabilities.required(spec, arguments) - granted_scopes
             except Exception:
                 missing = set()
-            _request_consent(arguments, missing)
-            return dict(success=False, blocked=True, tool=name, error=why)
+            request_id = _request_consent(arguments, capabilities.required(spec, arguments))
+            return dict(success=False, blocked=True, tool=name, error=why, request_id=request_id, diagnostic=caller_diagnostic(capabilities.required(spec, arguments), (arguments or {}).get("hwnd")))
         if set(spec.effects_for(arguments)) <= {'screen_read','observe'}:
             return None
         emergency = panic.default()
@@ -340,14 +367,16 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         needed = _caps.required(spec, arguments)
     except Exception:
         needed = None
-    _request_consent(arguments, needed)
+    request_id = _request_consent(arguments, needed)
     return {
+        "request_id": request_id,
+        "diagnostic": caller_diagnostic(needed, (arguments or {}).get("hwnd")),
         "success": False,
         "blocked": True,
         "error": "桌面助手未授权：按 Ctrl+Alt+Shift+F9（或点托盘图标）打开授权窗口，点「一键授权」后重试。",
         "tool": name,
         "permission": st,
-        "hint": "授权只由人触发；60 分钟内同一工作区的新进程自动沿用。",
+        "hint": "授权只由人触发；授权绑定当前实际请求会话、目标应用和所选权限。",
     }
 
 
