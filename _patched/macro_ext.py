@@ -456,6 +456,7 @@ _MACRO_SCOPES = {
     **dict.fromkeys("learn_region learn_item capture_template set_baseline".split(), ('screen_read','file_write')),
     'anchor_click': ('screen_read','file_write'), 'launch': ('process',), 'close_windows': ('window_close',), 'exit_app': ('window_close',),
     'assert_file': ('file_read',),
+    'paste': ('text_entry', 'clipboard_read'),
 }
 
 def _check_macro_action(action):
@@ -469,6 +470,9 @@ def _check_macro_action(action):
 
 def _clipboard_text():
     """Current clipboard text, or None. Never raises for a non-text clipboard."""
+    from computer_mcp import capabilities, permission
+    if not capabilities.has_scope('clipboard_read'):
+        raise permission.PermissionDenied('Clipboard read approval required')
     import win32clipboard as clipboard
     clipboard.OpenClipboard()
     try:
@@ -1118,6 +1122,8 @@ def run_macro(
                     txt = str(step.get("text", ""))
                     previous = None
                     sequence = None
+                    if not capabilities.has_scope('clipboard_read'):
+                        raise permission.PermissionDenied('Macro paste requires clipboard_read')
                     if txt:
                         if not capabilities.has_scope('clipboard_write'):
                             raise permission.PermissionDenied('Macro action requires clipboard_write')

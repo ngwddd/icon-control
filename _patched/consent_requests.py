@@ -7,6 +7,7 @@ from computer_mcp import agent_session, capabilities, security
 
 TTL = 120
 MAX_REQUESTS = 128
+MAX_REQUESTS_PER_AGENT = 16
 TERMINAL = {'denied', 'expired', 'consumed'}
 
 class RequestQueue:
@@ -36,6 +37,12 @@ class RequestQueue:
                 self._sign(record)
         return record['status'] not in TERMINAL
 
+    def prune(self):
+        for request_id, record in list(self.records.items()):
+            self._active(record)
+            if record['status'] in TERMINAL:
+                del self.records[request_id]
+
     def create(self, pid, session, app, scopes):
         peer = agent_session.lookup(session, pid)
         if peer is None:
@@ -45,15 +52,21 @@ class RequestQueue:
         if app is not None and capabilities.process_record(app['pid']) != app:
             raise PermissionError('Requested application identity changed')
         now = time.time()
-        for request_id, record in list(self.records.items()):
-            self._active(record)
-            if now - record['created_at'] > TTL * 2:
-                del self.records[request_id]
+        self.prune()
+        # Duplicate active requests share one ID; they never overwrite a
+        # displayed target or extend its original expiration.
+        for record in self.records.values():
+            if (record['agent_session'] == session and record['application'] == app and
+                    record['scopes'] == sorted(set(scopes)) and
+                    record['status'] in ('pending', 'displayed')):
+                return copy.deepcopy(record)
+        if sum(r['agent_session'] == session for r in self.records.values()) >= MAX_REQUESTS_PER_AGENT:
+            raise ValueError('This Agent already has too many pending requests')
         if len(self.records) >= MAX_REQUESTS:
             raise ValueError('Consent request queue is full')
         record = dict(request_id=secrets.token_hex(24), agent_session=session,
                       agent_id=agent_session.identity(pid, session),
-                      workspace_id=agent_session.workspace_identity(pid),
+                      workspace_id=peer['workspace_id'],
                       peer={'pid': pid, 'created': peer['created'], 'label': peer['label'], 'exe': peer.get('exe')},
                       application=copy.deepcopy(app), scopes=sorted(set(scopes)),
                       created_at=now, expires_at=now+TTL, status='pending')
@@ -70,6 +83,7 @@ class RequestQueue:
         return copy.deepcopy(record)
 
     def pending(self):
+        self.prune()
         return [copy.deepcopy(r) for r in self.records.values()
                 if self._active(r) and r['status'] in ('pending', 'displayed')]
 

@@ -89,7 +89,10 @@ def check_target(state, hwnd=None, point=None):
 def require_target(hwnd=None, point=None):
     from computer_mcp import permission
     why = check_target(permission.status(), hwnd=hwnd, point=point)
-    if why: raise permission.PermissionDenied(why)
+    if why:
+        if why == 'Target application is outside the human-approved application list':
+            permission.request_target_consent(hwnd=hwnd, point=point)
+        raise permission.PermissionDenied(why)
 
 
 def file_record(path):

@@ -9,6 +9,9 @@ import ctypes
 import os
 import sys
 import time
+import threading
+import queue
+from functools import wraps
 from ctypes import wintypes
 
 from computer_mcp import agent_session, capabilities, consent_ipc, native_dialog, native_tray, permission
@@ -16,6 +19,7 @@ from computer_mcp import agent_session, capabilities, consent_ipc, native_dialog
 WM_APP = 0x8000
 WM_TRAY = WM_APP + 1
 WM_SHOW = WM_APP + 2
+WM_HEARTBEAT_RESULT = WM_APP + 3
 WM_TIMER_HEARTBEAT = 1
 WM_CLOSE = 0x0010
 WM_DESTROY = 0x0002
@@ -58,8 +62,20 @@ class MSG(ctypes.Structure):
                 ('time', wintypes.DWORD), ('pt', POINT)]
 
 
+def _state_action(method):
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._state_lock:
+            self._state_generation += 1
+            return method(self, *args, **kwargs)
+    return guarded
+
+
 class ConsentHost:
     def __init__(self, nonce: str):
+        self._state_lock = threading.RLock()
+        self._state_generation = 0
+        self._heartbeat_results = queue.Queue(maxsize=4)
         self.nonce = nonce
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
         self.kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
@@ -145,6 +161,7 @@ class ConsentHost:
             return next((a for a in live if a['id'] == pending), None)
         return native_dialog.choose_agent(live)
 
+    @_state_action
     def _sync(self):
         """Trust the bridge, never the local flag, before showing anything."""
         try:
@@ -262,13 +279,17 @@ class ConsentHost:
         self._apply(agent['id'], answer['scopes'], app, answer['lease_minutes'],
                     request_id=pending['request_id'] if pending else None)
 
+    @_state_action
     def _apply(self, agent_session_id, scopes, app, lease_minutes, request_id=None):
         try:
-            result = self.ipc('grant', agent_session=agent_session_id, scopes=list(scopes),
+            result = consent_ipc.confirmed_grant(self.ipc, agent_session=agent_session_id, scopes=list(scopes),
                               applications=[{k: app[k] for k in ('pid', 'created', 'exe')}],
                               launches=[], read_files=[], lease_minutes=lease_minutes, request_id=request_id)
         except Exception as exc:
-            native_dialog.ask_notice('授权失败', str(exc)[:300])
+            self.granted = False
+            self.state_unknown = True
+            self._refresh_tray()
+            native_dialog.ask_notice('授权状态未知', str(exc)[:300])
             return
         if result.get('granted') is not True:
             native_dialog.ask_notice('后端未确认授权', str(result)[:300])
@@ -294,6 +315,7 @@ class ConsentHost:
         record = dict(apps[0])
         self._apply(agent, scopes, record, LEASE_MINUTES)
 
+    @_state_action
     def revoke(self):
         # Stop positive renewal before the IPC request. A failed revoke is
         # repaired by negative heartbeats and remains visibly unknown meanwhile.
@@ -317,6 +339,9 @@ class ConsentHost:
             return 0
         if message == WM_HOTKEY:
             self.show()
+            return 0
+        if message == WM_HEARTBEAT_RESULT:
+            self._receive_heartbeat()
             return 0
         if message == WM_TIMER_HEARTBEAT:
             self._heartbeat()
@@ -345,38 +370,51 @@ class ConsentHost:
                 pass
 
     def _heartbeat(self):
-        if not self.granted:
-            if self.state_unknown:
-                try:
-                    state = self.ipc('heartbeat', granted=False)
-                    if state.get('granted') is False:
-                        self.state_unknown = False
-                        self.authorization = {}
-                except Exception:
-                    pass
-                self._refresh_tray()
-            return
-        if time.time() >= self.lease_until:
-            self.granted = False
-            self.authorization = {}
-            self._refresh_tray()
-            if self.tray:
-                native_tray.balloon(self.hwnd, 1, 'Icon Control', '授权已到期', warning=True)
-            return
+        # Only IPC runs on the worker. UI/tray and local state mutate on the
+        # window thread, with a generation fence around grant/revoke/renew.
+        with self._state_lock:
+            if not self.granted and not self.state_unknown:
+                return
+            generation = self._state_generation
+            desired = self.granted and time.time() < self.lease_until
+            try:
+                state = self.ipc('heartbeat', granted=desired)
+                if not isinstance(state, dict) or type(state.get('granted')) is not bool:
+                    raise ValueError('Invalid heartbeat acknowledgement')
+                result = (generation, state, None)
+            except Exception as exc:
+                result = (generation, None, type(exc).__name__)
         try:
-            state = self.ipc('heartbeat', granted=True)
-        except Exception:
-            self.granted = False
-            self.state_unknown = True
-            self._refresh_tray()
-            return
-        auth = (state or {}).get('authorization') or {}
-        if not (state or {}).get('granted') or auth.get('agent_session') != self.authorization.get('agent_session'):
-            self.granted = False
-            self.authorization = {}
-            self._refresh_tray()
-            return
-        self._refresh_tray()
+            self._heartbeat_results.put_nowait(result)
+        except queue.Full:
+            try:
+                self._heartbeat_results.get_nowait()
+            except queue.Empty:
+                pass
+            self._heartbeat_results.put_nowait(result)
+        self.user32.PostMessageW(self.hwnd, WM_HEARTBEAT_RESULT, 0, 0)
+
+    def _receive_heartbeat(self):
+        with self._state_lock:
+            while True:
+                try:
+                    generation, state, error = self._heartbeat_results.get_nowait()
+                except queue.Empty:
+                    return
+                if generation != self._state_generation:
+                    continue
+                if error:
+                    self.granted = False
+                    self.state_unknown = True
+                else:
+                    auth = (state or {}).get('authorization') or {}
+                    self.granted = bool(state.get('granted') and
+                                        auth.get('agent_session') == self.authorization.get('agent_session'))
+                    self.state_unknown = False
+                    if not self.granted:
+                        self.authorization = {}
+                        self.lease_until = 0.0
+                self._refresh_tray()
 
     def _menu(self):
         """Tray click opens the same window: grant, or the live lease actions."""

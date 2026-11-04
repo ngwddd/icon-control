@@ -116,6 +116,32 @@ def _io(pipe, payload=None, timeout_ms=200):
 
 from computer_mcp.consent_requests import RequestQueue
 _requests = RequestQueue()
+_grant_operations = {}
+GRANT_RECEIPT_TTL = 600
+
+
+def _prune_operations():
+    now = time.time()
+    for key, record in list(_grant_operations.items()):
+        if now - record['created_at'] > GRANT_RECEIPT_TTL:
+            del _grant_operations[key]
+
+
+def confirmed_grant(ipc, **fields):
+    """A lost reply is unknown until read-back; cancel by ID on any failure."""
+    operation_id = secrets.token_hex(24)
+    try:
+        ipc('grant', operation_id=operation_id, **fields)
+        receipt = ipc('grant_status', operation_id=operation_id)
+        if receipt.get('status') != 'confirmed':
+            raise PermissionError('Grant read-back did not confirm this operation')
+        return receipt['state']
+    except Exception:
+        try:
+            ipc('cancel_grant', operation_id=operation_id)
+        except Exception:
+            pass
+        raise
 
 
 def dispatch(message, pid):
@@ -158,6 +184,27 @@ def _dispatch(message, pid):
     if not _native_client(pid,message.get('ui_nonce')):
         raise PermissionError('Broker-launched native consent instance required')
     owner = 'native-'+str(pid)+'-'+str(psutil.Process(pid).create_time())
+    if command in ('grant_status', 'cancel_grant'):
+        _prune_operations()
+        operation_id = message.get('operation_id')
+        if not isinstance(operation_id, str) or len(operation_id) != 48:
+            raise ValueError('Invalid grant operation ID')
+        receipt = _grant_operations.get(operation_id)
+        if receipt and receipt['owner'] != owner:
+            raise PermissionError('Grant receipt belongs to another native client')
+        if command == 'cancel_grant':
+            if receipt is None and len(_grant_operations) >= 256:
+                raise ValueError('Grant receipt queue is full')
+            _grant_operations[operation_id] = dict(owner=owner, status='cancelled', created_at=time.time())
+            if bridge._authorization.get('grant_operation') == operation_id:
+                bridge.write_state(False, client=owner, event='action')
+            return dict(status='cancelled')
+        state = bridge.current_state()
+        confirmed = (receipt and receipt['status'] == 'confirmed' and
+                     state.get('granted') and
+                     state.get('authorization', {}).get('grant_operation') == operation_id)
+        return dict(status='confirmed' if confirmed else 'unavailable',
+                    **({'state': state} if confirmed else {}))
     if command == 'status':
         return dict(state=bridge.current_state(), agents=list(agent_session.active()),
                     requests=_requests.pending())
@@ -177,6 +224,16 @@ def _dispatch(message, pid):
             raise PermissionError('The current authorization does not satisfy this request')
         return _requests.finish(request_id, 'consumed')
     if command == 'grant':
+        operation_id = message.get('operation_id')
+        if operation_id is not None:
+            _prune_operations()
+            if not isinstance(operation_id, str) or len(operation_id) != 48:
+                raise ValueError('Invalid grant operation ID')
+            if operation_id in _grant_operations:
+                raise PermissionError('Grant operation has already been used or cancelled')
+            if len(_grant_operations) >= 256:
+                raise ValueError('Grant receipt queue is full')
+            _grant_operations[operation_id] = dict(owner=owner, status='pending', created_at=time.time())
         session = message.get('agent_session')
         live = list(agent_session.active())
         record = next((a for a in live if a['id'] == session), None)
@@ -204,7 +261,8 @@ def _dispatch(message, pid):
                 raise PermissionError('Grant does not match the displayed request')
         auth = dict(agent_session=session, scopes=scopes, applications=applications,
                     launches=launches, read_files=read_files,
-                    agent_peer={'pid': record['pid'], 'created': record['created']})
+                    agent_peer={'pid': record['pid'], 'created': record['created']},
+                    grant_operation=operation_id)
         lease_minutes = message.get('lease_minutes')
         if lease_minutes is not None:
             if not isinstance(lease_minutes, int) or not 1 <= lease_minutes <= 240:
@@ -226,7 +284,10 @@ def _dispatch(message, pid):
             state = bridge.write_state(True, client=owner, event='action', authorization=auth)
         except Exception:
             if request_id is not None:
-                _requests.finish(request_id, 'denied')
+                try:
+                    _requests.finish(request_id, 'denied')
+                except Exception:
+                    pass
             try:
                 bridge.write_state(False, client=owner, event='action')
             except Exception:
@@ -234,6 +295,8 @@ def _dispatch(message, pid):
             raise
         if request_id is not None:
             _requests.finish(request_id, 'consumed' if state.get('granted') else 'denied')
+        if operation_id is not None:
+            _grant_operations[operation_id]['status'] = 'confirmed' if state.get('granted') else 'denied'
         return state
     if command == 'revoke': return bridge.write_state(False, client=owner, event='action')
     if command == 'heartbeat':
@@ -262,7 +325,7 @@ def _diagnose(message, pid):
               else 'different_agent' if not same else 'target_not_approved' if not target_ok
               else 'missing_scopes')
     return dict(agent_session=session, peer_pid=pid, peer_created=peer['created'],
-                workspace_id=agent_session.workspace_identity(pid),
+                workspace_id=agent_session.workspace_identity(pid, session),
                 caller_identity=agent_session.identity(pid, session),
                 approved_agent=(auth.get('agent_session') or '')[:10],
                 requested_scopes=sorted(set(scopes)), approved_scopes=auth.get('scopes', []),

@@ -9,7 +9,13 @@ from authority_fixture import AuthorityCase
 from computer_mcp import agent_session, capabilities, control, native_dialog
 
 
-class IdentityTests(unittest.TestCase):
+class RegisteredAuthorityCase(AuthorityCase):
+    def setUp(self):
+        super().setUp()
+        agent_session.register('isolated identity regression')
+
+
+class IdentityTests(RegisteredAuthorityCase, unittest.TestCase):
     def test_identity_is_stable_and_32_hex(self):
         first = agent_session.identity()
         second = agent_session.identity()
@@ -21,7 +27,7 @@ class IdentityTests(unittest.TestCase):
         self.assertNotEqual(agent_session.identity(), agent_session.current())
 
 
-class LeaseValidationTests(AuthorityCase, unittest.TestCase):
+class LeaseValidationTests(RegisteredAuthorityCase, unittest.TestCase):
     fixture_authorized = True
 
     def _auth(self, **extra):
@@ -39,12 +45,12 @@ class LeaseValidationTests(AuthorityCase, unittest.TestCase):
     def test_malformed_identity_is_rejected(self):
         self.assertFalse(capabilities.validate(self._auth(agent_id='too-short')))
 
-    def test_lease_covers_another_session_of_the_same_identity(self):
+    def test_identity_lease_does_not_cover_another_session(self):
         spec = type('Spec', (), {'effects_for': lambda self, args: ('input',)})()
         state = dict(granted=True, authorization=self._auth(
             scopes=['input'], agent_id=agent_session.identity()))
         with patch.object(agent_session, 'current', return_value='c' * 48):
-            self.assertIsNone(capabilities.check_scope(state, spec, {}))
+            self.assertIn('different Agent session', capabilities.check_scope(state, spec, {}))
 
     def test_foreign_session_is_still_rejected_without_identity(self):
         spec = type('Spec', (), {'effects_for': lambda self, args: ('input',)})()
@@ -76,7 +82,7 @@ class HandoverTests(unittest.TestCase):
         self.assertEqual(control.STATE['owner'], 'user')
 
 
-class LeaseExpiryTests(AuthorityCase, unittest.TestCase):
+class LeaseExpiryTests(RegisteredAuthorityCase, unittest.TestCase):
     fixture_authorized = True
 
     def _signed_state(self, authorization):
@@ -114,8 +120,8 @@ class AutoConsentTests(unittest.TestCase):
     def test_blocked_tool_requests_the_window_once(self):
         from computer_mcp import permission
         with patch.object(permission, "status", return_value=dict(granted=False, reason="no")), \
-                patch("computer_mcp.consent_ipc.request", return_value={"opened": True}) as request, \
-                patch.object(permission, "_last_consent_request", 0.0):
+                patch("computer_mcp.consent_ipc.request", return_value={"opened": True, "request_id": "request-fixture"}) as request, \
+                patch.object(permission, "_last_consent_request", {}), patch.object(permission, "caller_diagnostic", return_value={}):
             first = permission.check_tool("screenshot", {})
             second = permission.check_tool("screenshot", {})
         self.assertTrue(first and first.get("blocked"))
@@ -132,8 +138,8 @@ class AutoConsentTests(unittest.TestCase):
         with patch.object(permission, "status", return_value=state), \
                 patch("computer_mcp.tool_registry.get", return_value=spec), \
                 patch("computer_mcp.tool_registry.allowed", return_value=True), \
-                patch("computer_mcp.consent_ipc.request") as request, \
-                patch.object(permission, "_last_consent_request", 0.0):
+                patch("computer_mcp.consent_ipc.request", return_value={"request_id": "request-fixture"}) as request, \
+                patch.object(permission, "_last_consent_request", {}), patch.object(permission, "caller_diagnostic", return_value={}):
             denial = permission.check_tool("click", {})
         self.assertIn("input", denial["error"])
         request.assert_called_once()

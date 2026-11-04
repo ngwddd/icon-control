@@ -18,22 +18,26 @@ def current():
     return _context.get() or _stdio_id
 
 
-def workspace_identity(pid=None) -> str:
+def _workspace_digest(process):
     import hashlib
-    process = psutil.Process(pid or os.getpid())
     workspace = str(Path(process.cwd()).resolve()).lower()
     home = str(security.data_home().resolve()).lower()
     return hashlib.sha256((home + '|' + workspace).encode('utf-8')).hexdigest()[:32]
 
 
+def workspace_identity(pid=None, session=None) -> str:
+    record = lookup(session or current(), pid or os.getpid())
+    if record is None or not record.get('workspace_id'):
+        raise PermissionError('Register this transport session before requesting its workspace')
+    return record['workspace_id']
+
+
 def identity(pid=None, session=None) -> str:
-    """A workspace and a transport-assigned session form an isolated subject."""
+    """Freeze a subject to its first signed registration, independent of chdir."""
     import hashlib
-    pid = pid or os.getpid()
-    session = session or current()
-    if lookup(session, pid) is None:
-        raise PermissionError('Agent session does not belong to the actual caller')
-    return hashlib.sha256((workspace_identity(pid) + '|' + session).encode('utf-8')).hexdigest()[:32]
+    pid, session = pid or os.getpid(), session or current()
+    workspace = workspace_identity(pid, session)
+    return hashlib.sha256((workspace + '|' + session).encode('utf-8')).hexdigest()[:32]
 
 @contextmanager
 def bind(identity):
@@ -43,7 +47,9 @@ def bind(identity):
 
 def register(label=None):
     process = psutil.Process(os.getpid())
-    record = dict(id=current(), pid=process.pid, created=process.create_time(), exe=process.exe(),
+    previous = lookup(current(), process.pid)
+    workspace_id = (previous or {}).get('workspace_id') or _workspace_digest(process)
+    record = dict(workspace_id=workspace_id, id=current(), pid=process.pid, created=process.create_time(), exe=process.exe(),
                   label=(label or 'MCP process '+str(process.pid))[:120], checked_at=time.time())
     record['signature'] = security.signature(record, security.load_token())
     folder = security.data_home()/'state'/'sessions'
@@ -63,8 +69,7 @@ def active():
     for path in (security.data_home()/'state'/'sessions').glob('*.json'):
         try:
             record = json.loads(path.read_text(encoding='utf-8'))
-            if (security.authentic(record) and
-                    psutil.Process(record['pid']).create_time() == record['created']):
+            if lookup(record['id'], record['pid']) is not None:
                 yield record
         except (OSError, ValueError, KeyError, psutil.Error):
             continue

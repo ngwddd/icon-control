@@ -262,12 +262,6 @@ def _request_consent(arguments: dict | None = None, missing=None) -> None:
         return
     from computer_mcp import agent_session
     now = time.monotonic()
-    key = (agent_session.current(), tuple(sorted(missing or [])),
-           str((arguments or {}).get('hwnd')), str((arguments or {}).get('x')),
-           str((arguments or {}).get('y')))
-    previous = _last_consent_request.get(key)
-    if previous and now - previous[0] < CONSENT_POPUP_INTERVAL_S:
-        return previous[1]
     prefer_app = None
     try:
         hwnd = (arguments or {}).get('hwnd')
@@ -282,6 +276,12 @@ def _request_consent(arguments: dict | None = None, missing=None) -> None:
                 prefer_app = capabilities.process_record(pid)
     except Exception:
         prefer_app = None
+    import json
+    key = (agent_session.current(), tuple(sorted(missing or [])),
+           json.dumps(prefer_app, sort_keys=True))
+    previous = _last_consent_request.get(key)
+    if previous and now - previous[0] < CONSENT_POPUP_INTERVAL_S:
+        return previous[1]
     try:
         from computer_mcp import agent_session, consent_ipc
         result = consent_ipc.request('open', timeout_ms=300,
@@ -296,6 +296,21 @@ def _request_consent(arguments: dict | None = None, missing=None) -> None:
         return request_id
     except Exception:
         pass
+
+
+def request_target_consent(hwnd=None, point=None):
+    """An actual execution target outside the approved list needs consent too."""
+    try:
+        if point is not None:
+            import win32gui
+            hwnd = win32gui.WindowFromPoint(tuple(map(int, point)))
+        from computer_mcp import execution, capabilities, tool_registry
+        task = execution._current.get()
+        spec = tool_registry.get(task['tool']) if task else None
+        scopes = capabilities.required(spec, task.get('arguments')) if spec else {'input'}
+        return _request_consent({'hwnd': hwnd}, scopes)
+    except Exception:
+        return None
 
 
 def caller_diagnostic(scopes=None, hwnd=None):

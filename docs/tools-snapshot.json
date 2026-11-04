@@ -7,11 +7,18 @@
  "tools": [
   {
    "name": "click",
-   "description": "Perform a mouse click at the current cursor position",
+   "description": "Click the current cursor position when x/y are absent. Optional x and y together move to physical screen coordinates and click after rechecking the target process. Alternatively use mouse_move then click.",
    "block_sha1": "bffe406a62b6fee0f7c35b0ca5a14a35e8d016c3",
    "schema": {
     "type": "object",
+    "additionalProperties": false,
     "properties": {
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     },
      "button": {
       "type": "string",
       "enum": [

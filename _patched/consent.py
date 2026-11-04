@@ -28,8 +28,12 @@ def main(argv=None):
         from computer_mcp import native_consent, native_dialog
         if native_dialog.available():
             return native_consent.main(['--broker-session', args.broker_session])
-    def ipc(command,**fields):
-        return consent_ipc.request(command,ui_nonce=args.broker_session,**fields)
+    def ipc(command, **fields):
+        def transport(cmd, **values):
+            return consent_ipc.request(cmd, ui_nonce=args.broker_session, **values)
+        if command == 'grant':
+            return consent_ipc.confirmed_grant(transport, **fields)
+        return transport(command, **fields)
     root = tk.Tk(); root.title('Icon Control — Permissions')
     scale=max(1.0,root.winfo_fpixels('1i')/96.0)
     width=min(int(650*scale),root.winfo_screenwidth()-80)
