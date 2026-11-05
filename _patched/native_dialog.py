@@ -25,6 +25,7 @@ BUTTON_RENEW = 103
 BUTTON_REVOKE = 104
 BUTTON_QUIT = 105
 BUTTON_PENDING = 106
+BUTTON_TRUST = 107
 
 PRESETS = (
     ('常用', '读取整个桌面 + 鼠标键盘 + 文字输入',
@@ -312,9 +313,10 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
         ctypes.POINTER(TASKDIALOGCONFIG), ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
     library.TaskDialogIndirect.restype = ctypes.c_long
-    buttons = (TASKDIALOG_BUTTON * 5)(
+    buttons = (TASKDIALOG_BUTTON * 6)(
         TASKDIALOG_BUTTON(BUTTON_PENDING, '处理当前待授权请求'),
         TASKDIALOG_BUTTON(BUTTON_RENEW, '续 60 分钟'),
+        TASKDIALOG_BUTTON(BUTTON_TRUST, '信任此助手 30 天'),
         TASKDIALOG_BUTTON(BUTTON_REVOKE, '立即撤销'),
         TASKDIALOG_BUTTON(BUTTON_QUIT, '退出 Icon Control'),
         TASKDIALOG_BUTTON(BUTTON_CANCEL, '关闭'),
@@ -337,7 +339,7 @@ def ask_status(headline: str, detail: str, *, remaining: str = '') -> dict | Non
                                         ctypes.byref(radio), ctypes.byref(checked))
     if result != 0:
         raise OSError(result, 'TaskDialogIndirect failed')
-    action = {BUTTON_RENEW: 'renew', BUTTON_REVOKE: 'revoke', BUTTON_QUIT: 'quit', BUTTON_PENDING: 'pending'}.get(button.value, 'close')
+    action = {BUTTON_RENEW: 'renew', BUTTON_TRUST: 'trust', BUTTON_REVOKE: 'revoke', BUTTON_QUIT: 'quit', BUTTON_PENDING: 'pending'}.get(button.value, 'close')
     return dict(button=button.value, action=action)
 
 

@@ -4,6 +4,8 @@
 - 状态文件新增 `revocation_generation` / `revoked_at`；`permission.status()` 对撤销后的状态返回 `code='permission_revoked'`（未授权但未撤销返回 `permission_denied`）。
 - `execution.authority_stamp()` 与 `check()` 的取消判据加入代际：运行中的宏在下一次边界检查就会被中止，而不是只看会话/修订号。
 - **撤销压过信任**：`trust.validate()` 会比较桥的代际与信任记录里记录的代际；桥的代际更高即判定信任失效（旧记录无代际时回退到时间比较，避免同一时钟刻度下的误判）。
+- **撤销即停**：`execution.authority_stamp()` 在判定撤销或接管时先释放所有按住的键鼠（`input_guard.release_all()`），再抛 `PermissionDenied`。
+- 授权窗口新增「信任此助手 30 天」按钮（`ask_status` 第三个按钮）；「立即撤销」会**同时撤销会话授权与 30 天信任**，一次点击不留残留。
 - 新增测试 `tests/test_v139_revocation.py`（9 项）：代际单调、持久化、状态块、执行戳取消、信任被撤销压制。
 - 本地全量 689 项中 2 项因“用户正在动鼠标”被控制权守卫拦截（环境相关，非回归）；CI 仍为权威全量结果。
 

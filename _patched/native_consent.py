@@ -264,6 +264,8 @@ class ConsentHost:
             if answer:
                 if answer['action'] == 'revoke':
                     self.revoke()
+                elif answer['action'] == 'trust':
+                    self._trust(days=30)
                 elif answer['action'] == 'renew':
                     self._renew()
                 elif answer['action'] == 'pending':
@@ -375,9 +377,30 @@ class ConsentHost:
         self._apply(agent, scopes, record, LEASE_MINUTES)
 
     def revoke(self):
+        # "立即撤销" must also drop a 30-day trust: one click, no leftovers.
+        try:
+            from computer_mcp import trust
+            if trust.load():
+                trust.revoke()
+        except Exception:
+            pass
         notice = self._revoke_state()
         if notice:
             native_dialog.ask_notice(*notice)
+
+    def _trust(self, days: int = 30):
+        """The dialog click is the user gesture; grant the record and confirm."""
+        try:
+            from computer_mcp import trust
+            record = trust.grant(days=days, confirm=lambda: True)
+        except Exception as exc:
+            native_dialog.ask_notice('无法建立信任', str(exc)[:200])
+            return
+        self._refresh_tray()
+        native_dialog.ask_notice(
+            '已信任此助手',
+            f'接下来 {record.get("days")} 天无需再次授权。\n'
+            '升级助手、更换工作区、点「立即撤销」或急停后，信任自动失效。')
 
     @_state_action
     def _revoke_state(self):

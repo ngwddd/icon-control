@@ -12,15 +12,26 @@ _current = ContextVar('icon_execution', default=None)
 _operation_lock = threading.RLock()
 _UNSET = object()
 
+def _release_held_input() -> None:
+    """A revoked authority must let go of anything the agent is holding down."""
+    try:
+        from computer_mcp import input_guard
+        input_guard.release_all()
+    except Exception:
+        pass
+
+
 def authority_stamp(state):
     """Validate a final authority snapshot before committing an input event."""
     from computer_mcp import permission, control
     if not state.get('granted'):
+        _release_held_input()
         raise permission.PermissionDenied('Live authority unavailable or revoked')
     stamp = ((state.get('session'), state.get('revision'),
               state.get('revocation_generation')), control.status()['generation'])
     task = _current.get()
     if task and stamp != (task['revision'], task['generation']):
+        _release_held_input()
         raise permission.PermissionDenied('Execution cancelled by takeover or authority change')
     return stamp
 

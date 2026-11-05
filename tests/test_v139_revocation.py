@@ -92,6 +92,23 @@ class ExecutionStampTests(unittest.TestCase):
                 with self.assertRaises(permission.PermissionDenied):
                     execution.authority_stamp(self._state(revocation_generation=1))
 
+    def test_revocation_releases_held_input(self):
+        with patch('computer_mcp.input_guard.release_all') as release:
+            with self.assertRaises(permission.PermissionDenied):
+                execution.authority_stamp(self._state(granted=False))
+        release.assert_called_once()
+
+    def test_takeover_stamp_mismatch_releases_held_input(self):
+        with patch.object(execution, '_current') as current, \
+                patch('computer_mcp.control.status', return_value={'generation': 0}), \
+                patch('computer_mcp.input_guard.release_all') as release:
+            current.get.return_value = dict(generation=0,
+                                            revision=('s' * 16, 3, 0),
+                                            tool='click', arguments={})
+            with self.assertRaises(permission.PermissionDenied):
+                execution.authority_stamp(self._state(revocation_generation=1))
+        release.assert_called_once()
+
 
 class TrustRevocationTests(AuthorityCase, unittest.TestCase):
     def _advance_bridge_generation(self, generation=5, revoked_at=None):
