@@ -437,7 +437,7 @@ def main() -> int:
     except OSError:
         singleton.close(); print('Permission authority already running',file=sys.stderr); return 2
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    write_state(False, origin='startup', client='startup', event='action')
+    write_state(False, origin='startup', client='startup', event='hb')
     from computer_mcp import consent_ipc
     ready = threading.Event()
     thread = threading.Thread(target=consent_ipc.serve, args=(ready,), daemon=True, name='icon-consent-ipc')
@@ -453,7 +453,7 @@ def main() -> int:
         pass
     finally:
         srv.server_close()
-        write_state(False, origin='shutdown', client='shutdown', event='action')
+        write_state(False, origin='shutdown', client='shutdown', event='hb')
         singleton.close()
     return 0
 
