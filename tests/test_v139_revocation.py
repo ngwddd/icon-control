@@ -92,15 +92,8 @@ class ExecutionStampTests(unittest.TestCase):
                 with self.assertRaises(permission.PermissionDenied):
                     execution.authority_stamp(self._state(revocation_generation=1))
 
-    def test_revocation_releases_held_input(self):
+    def test_revocation_without_a_running_task_touches_no_input(self):
         with patch('computer_mcp.input_guard._held_controllers', {object()}), \
-                patch('computer_mcp.input_guard.release_all') as release:
-            with self.assertRaises(permission.PermissionDenied):
-                execution.authority_stamp(self._state(granted=False))
-        release.assert_called_once()
-
-    def test_revocation_without_held_input_touches_nothing(self):
-        with patch('computer_mcp.input_guard._held_controllers', set()), \
                 patch('computer_mcp.input_guard.release_all') as release:
             with self.assertRaises(permission.PermissionDenied):
                 execution.authority_stamp(self._state(granted=False))

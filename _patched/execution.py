@@ -32,7 +32,6 @@ def authority_stamp(state):
     """Validate a final authority snapshot before committing an input event."""
     from computer_mcp import permission, control
     if not state.get('granted'):
-        _release_held_input()
         raise permission.PermissionDenied('Live authority unavailable or revoked')
     stamp = ((state.get('session'), state.get('revision'),
               state.get('revocation_generation')), control.status()['generation'])

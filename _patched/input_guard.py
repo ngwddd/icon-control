@@ -85,7 +85,8 @@ def _check_held():
                         _held_controllers.discard(controller)
                     continue
                 state=permission.status(agent_session_id=controller.agent_session)
-                revision=(state.get('session'),state.get('revision'))
+                revision=(state.get('session'),state.get('revision'),
+                          state.get('revocation_generation'))
                 generation=control.status()['generation']
                 stopped=bool(panic._DEFAULT and panic._DEFAULT.triggered)
                 invalid=not state.get('granted') or stopped or controller.authority!=(revision,generation)
