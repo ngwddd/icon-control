@@ -242,8 +242,21 @@ class ConsentHost:
         finally:
             self._showing = False
 
+    def _sync_with_retry(self, attempts: int = 4, delay: float = 0.5) -> bool:
+        """The host often starts before the bridge; retry instead of giving up.
+
+        Without this the panel keeps saying "无法连接授权桥" for the rest of the
+        host's life, because only startup ever attempted a sync.
+        """
+        for attempt in range(max(1, attempts)):
+            if self._sync():
+                return True
+            if attempt + 1 < attempts:
+                time.sleep(delay)
+        return False
+
     def _show_once(self):
-        if not self._sync():
+        if not self._sync_with_retry():
             native_dialog.ask_notice('授权状态未知', '无法连接授权桥，请稍后重试。')
             return
         try:

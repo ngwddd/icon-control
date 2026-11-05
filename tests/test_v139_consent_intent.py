@@ -190,5 +190,40 @@ class StartupSyncTests(unittest.TestCase):
         notice.assert_called_once()
 
 
+class SyncRetryTests(unittest.TestCase):
+    def _host(self):
+        from computer_mcp import native_consent
+        host = native_consent.ConsentHost.__new__(native_consent.ConsentHost)
+        host._state_lock = __import__('threading').RLock()
+        host._state_generation = 0
+        return host
+
+    def test_sync_retries_until_the_bridge_answers(self):
+        host = self._host()
+        calls = []
+
+        def fake_sync():
+            calls.append(1)
+            return len(calls) >= 3
+
+        host._sync = fake_sync
+        self.assertTrue(host._sync_with_retry(attempts=4, delay=0.01))
+        self.assertEqual(len(calls), 3)
+
+    def test_sync_gives_up_after_the_last_attempt(self):
+        host = self._host()
+        calls = []
+        host._sync = lambda: calls.append(1) or False
+        self.assertFalse(host._sync_with_retry(attempts=3, delay=0.01))
+        self.assertEqual(len(calls), 3)
+
+    def test_success_on_first_try_does_not_sleep(self):
+        host = self._host()
+        calls = []
+        host._sync = lambda: calls.append(1) or True
+        self.assertTrue(host._sync_with_retry(attempts=4, delay=5))
+        self.assertEqual(len(calls), 1)
+
+
 if __name__ == '__main__':
     unittest.main()
