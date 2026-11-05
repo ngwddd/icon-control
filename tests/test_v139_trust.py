@@ -6,6 +6,7 @@ the gate: permission.status() still runs on every call.
 """
 import os
 import sys
+import threading
 import time
 import types
 import unittest
@@ -169,6 +170,37 @@ class TrustCliTests(AuthorityCase, unittest.TestCase):
         trust.revoke()
         state = permission.status(force=True)
         self.assertFalse(state['granted'])
+
+
+class HostShutdownTests(unittest.TestCase):
+    """run() exits through _revoke_state; only the dialog button clears trust."""
+
+    def test_revoke_button_clears_trust(self):
+        from computer_mcp import native_consent
+        host = native_consent.ConsentHost.__new__(native_consent.ConsentHost)
+        host._state_lock = threading.RLock()
+        host._state_generation = 0
+        with patch.object(native_consent.ConsentHost, '_revoke_state', return_value=None), \
+                patch('computer_mcp.trust.load', return_value={'subject': 'x'}), \
+                patch('computer_mcp.trust.revoke') as revoked:
+            host.revoke()
+        revoked.assert_called_once()
+
+    def test_shutdown_revoke_state_leaves_trust_alone(self):
+        from computer_mcp import native_consent
+        host = native_consent.ConsentHost.__new__(native_consent.ConsentHost)
+        host._state_lock = threading.RLock()
+        host._state_generation = 0
+        host.granted = False
+        host.authorization = {}
+        host.lease_until = 0.0
+        host.tray = False
+        host.hwnd = 0
+        host.state_unknown = False
+        host.ipc = lambda *a, **k: {'granted': False}
+        with patch('computer_mcp.trust.revoke') as revoked:
+            host._revoke_state()
+        revoked.assert_not_called()
 
 
 class WildcardTargetTests(unittest.TestCase):

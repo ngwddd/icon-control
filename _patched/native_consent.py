@@ -548,7 +548,9 @@ class ConsentHost:
             self.user32.TranslateMessage(ctypes.byref(message))
             self.user32.DispatchMessageW(ctypes.byref(message))
         self._stopping = True
-        self.revoke()
+        # Shutdown drops the session lease only. A 30-day trust must survive a
+        # host restart; only the explicit 立即撤销 button clears it.
+        self._revoke_state()
         if self.tray:
             native_tray.remove(self.hwnd, 1)
         self.user32.UnregisterHotKey(self.hwnd, 1)
