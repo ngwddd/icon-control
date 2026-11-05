@@ -221,6 +221,80 @@ def _ttl_for(cached: dict) -> float:
     return NEG_TTL_S
 
 
+# --------------------------------------------------------------------------- #
+# Diagnostics: machine-readable reason codes
+# --------------------------------------------------------------------------- #
+ERROR_CODES = frozenset({
+    'authority_unavailable',   # permission service / bridge / consent host unreachable
+    'permission_revoked',      # user pressed stop, authority was withdrawn
+    'permission_denied',       # approval exists but does not cover this call
+    'target_changed',          # the app/window moved between observe and act
+    'stale_frame',             # screenshot-backed coordinates are out of date
+    'invalid_argument',        # the call itself is malformed
+    'internal_error',
+})
+
+_REASON_CODES = (
+    ('Lease expired', 'permission_denied'),
+    ('another Agent session', 'permission_denied'),
+    ('Approval record is invalid', 'permission_denied'),
+    ('Live permission authority unavailable', 'authority_unavailable'),
+    ('Missing, expired or unauthenticated', 'authority_unavailable'),
+)
+
+_AUTHORITY_CACHE = {'at': 0.0, 'value': None}
+
+
+def code_for_reason(reason: str | None) -> str:
+    text = str(reason or '')
+    for needle, code in _REASON_CODES:
+        if needle in text:
+            return code
+    return 'permission_denied'
+
+
+def authority(probe: bool = False, ttl: float = 2.0) -> dict:
+    """Read-only health block; never grants and never raises.
+
+    ``probe=False`` (the default) must stay off the status() hot path: opening a
+    socket on every tool call pushed short-lived fixtures past their lease and
+    changed timing-sensitive tests. Callers that can afford a probe (doctor.py,
+    a blocked call) pass ``probe=True``.
+    """
+    port = _bridge_port()
+    checked = time.strftime('%Y-%m-%d %H:%M:%S')
+    if not probe:
+        return dict(ok=None, probed=False, bridge_up=None, port=port,
+                    consent_host=None, checked_at=checked)
+    now = time.time()
+    cached = _AUTHORITY_CACHE['value']
+    if cached is not None and now - _AUTHORITY_CACHE['at'] < ttl:
+        return dict(cached, probed=True)
+    try:
+        up = bool(_port_open(port))
+    except Exception:
+        up = False
+    host = None
+    try:
+        import win32gui
+        host = bool(win32gui.FindWindow('IconControlConsentHost', None))
+    except Exception:
+        host = None
+    value = dict(ok=up, probed=True, bridge_up=up, port=port,
+                 consent_host=host, checked_at=checked)
+    _AUTHORITY_CACHE.update(at=now, value=value)
+    return dict(value)
+
+
+def _decorate(payload: dict, code: str | None = None) -> dict:
+    """Attach the health block (and a reason code) to a status payload."""
+    out = dict(payload)
+    out['authority'] = authority()
+    if code:
+        out['code'] = code
+    return out
+
+
 def status(force: bool = False, agent_session_id=None) -> dict:
     """Only a fresh, signed bridge action is authority; OCR is diagnostic only."""
     now = time.time()
@@ -234,21 +308,29 @@ def status(force: bool = False, agent_session_id=None) -> dict:
             from computer_mcp import capabilities, agent_session
             auth = cached.get('authorization', {})
             if cached.get('granted') and not capabilities.validate(auth):
-                return dict(granted=False, source='bridge', reason='Approval record is invalid')
+                return _decorate(dict(granted=False, source='bridge',
+                                      reason='Approval record is invalid'), 'permission_denied')
             if cached.get('granted') and auth.get('lease_expires_at') and \
                     now >= float(auth['lease_expires_at']):
-                return dict(granted=False, source='bridge', reason='Lease expired')
+                return _decorate(dict(granted=False, source='bridge',
+                                      reason='Lease expired'), 'permission_denied')
             if cached.get('granted') and auth['agent_session'] != (agent_session_id or agent_session.current()):
-                return dict(granted=False, source='bridge', reason='Approval belongs to another Agent session')
+                return _decorate(dict(granted=False, source='bridge',
+                                      reason='Approval belongs to another Agent session'),
+                                 'permission_denied')
             if cached.get('granted'):
                 from computer_mcp.consent_ipc import live_valid
                 if not live_valid(cached, agent_session_id or agent_session.current()):
-                    return dict(granted=False, source='unknown', reason='Live permission authority unavailable or revoked')
-            return dict(cached, age_s=round(age, 3))
+                    return _decorate(dict(granted=False, source='unknown',
+                                          reason='Live permission authority unavailable or revoked'),
+                                     'authority_unavailable')
+            return _decorate(dict(cached, age_s=round(age, 3)))
     except (ValueError, TypeError, KeyError):
         pass
-    return dict(granted=False, source='unknown', age_s=0.0, screen_text='',
-                checked_at='', reason='Missing, expired or unauthenticated bridge state')
+    return _decorate(dict(granted=False, source='unknown', age_s=0.0, screen_text='',
+                          checked_at='',
+                          reason='Missing, expired or unauthenticated bridge state'),
+                     'authority_unavailable')
 
 
 _last_consent_request = {}
@@ -346,7 +428,8 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
     from computer_mcp import tool_registry, panic
     spec = tool_registry.get(name)
     if spec is None or not tool_registry.allowed(name):
-        return dict(success=False, blocked=True, tool=name, error='Tool disabled or unknown')
+        return dict(success=False, blocked=True, tool=name, code='invalid_argument',
+                    error='Tool disabled or unknown')
     if not spec.needs_authority(arguments):
         return None
     st = status()
@@ -360,7 +443,9 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
             except Exception:
                 missing = set()
             request_id = _request_consent(arguments, capabilities.required(spec, arguments))
-            return dict(success=False, blocked=True, tool=name, error=why, request_id=request_id, diagnostic=caller_diagnostic(capabilities.required(spec, arguments), (arguments or {}).get("hwnd")))
+            return dict(success=False, blocked=True, tool=name, error=why,
+                        code='permission_denied',
+                        request_id=request_id, diagnostic=caller_diagnostic(capabilities.required(spec, arguments), (arguments or {}).get("hwnd")))
         if set(spec.effects_for(arguments)) <= {'screen_read','observe'}:
             return None
         emergency = panic.default()
@@ -370,6 +455,7 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
             emergency.reset()
         if emergency.triggered or not emergency.ready:
             return dict(success=False, blocked=True, tool=name, permission=st,
+                        code='permission_revoked',
                         error='Emergency stop active or listener unavailable')
         # P0-1：授权之外还看「控制权是否在用户手上」（用户随时可以夺回）
         try:
@@ -379,6 +465,7 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
                 return {
                     "success": False,
                     "blocked": True,
+                    "code": "permission_denied",
                     "error": f"控制权在用户手上：{why}",
                     "tool": name,
                     "permission": st,
@@ -386,7 +473,9 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
                     "hint": "真人鼠标持续移动满 1 秒才接管；键盘、点击和滚轮立即接管。闲置后可重新申请，原任务不会恢复。",
                 }
         except Exception as exc:
-            return dict(success=False, blocked=True, tool=name, error=f'Control guard unavailable: {exc}')
+            return dict(success=False, blocked=True, tool=name,
+                        code='authority_unavailable',
+                        error=f'Control guard unavailable: {exc}')
         return None
     try:
         from computer_mcp import capabilities as _caps
@@ -399,9 +488,11 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
         "diagnostic": caller_diagnostic(needed, (arguments or {}).get("hwnd")),
         "success": False,
         "blocked": True,
+        "code": st.get('code') or code_for_reason(st.get('reason')),
         "error": "桌面助手未授权：按 Ctrl+Alt+Shift+F9（或点托盘图标）打开授权窗口，点「一键授权」后重试。",
         "tool": name,
         "permission": st,
+        "authority": authority(probe=True),
         "hint": "授权只由人触发；授权绑定当前实际请求会话、目标应用和所选权限。",
     }
 

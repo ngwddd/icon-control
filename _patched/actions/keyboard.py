@@ -5,7 +5,15 @@ from typing import Any
 from computer_mcp.input_guard import KeyboardController as Controller, KeyCode
 
 from computer_mcp.core.platform import IS_DARWIN, IS_LINUX, IS_WINDOWS
-from computer_mcp.core.utils import key_from_string
+from computer_mcp.core.utils import key_from_string, split_chord
+
+
+def _reject_chord(action: str, key: str) -> None:
+    """key_down/key_up hold one physical key; chords are not expressible there."""
+    modifiers, _ = split_chord(key)
+    if modifiers:
+        raise ValueError(
+            f"{action} does not accept chords ({key!r}); use key_press instead")
 
 
 def type_text(text: str, controller: Controller | None = None) -> dict[str, Any]:
@@ -42,6 +50,7 @@ def key_down(key: str, controller: Controller | None = None) -> dict[str, Any]:
     if controller is None:
         controller = Controller()
     
+    _reject_chord("key_down", key)
     key_obj = key_from_string(key)
     controller.press(key_obj)
     return {"success": True, "action": "key_down", "key": key}
@@ -60,6 +69,7 @@ def key_up(key: str, controller: Controller | None = None) -> dict[str, Any]:
     if controller is None:
         controller = Controller()
     
+    _reject_chord("key_up", key)
     key_obj = key_from_string(key)
     controller.release(key_obj)
     return {"success": True, "action": "key_up", "key": key}
@@ -77,7 +87,22 @@ def key_press(key: str, controller: Controller | None = None) -> dict[str, Any]:
     """
     if controller is None:
         controller = Controller()
-    
+
+    modifiers, base = split_chord(key)
+    if modifiers:
+        pressed = []
+        try:
+            for modifier in modifiers:
+                controller.press(key_from_string(modifier))
+                pressed.append(modifier)
+            controller.press(key_from_string(base))
+            controller.release(key_from_string(base))
+        finally:
+            for modifier in reversed(pressed):
+                controller.release(key_from_string(modifier))
+        return {"success": True, "action": "key_press", "key": key,
+                "chord": True, "modifiers": modifiers, "base": base}
+
     key_obj = key_from_string(key)
     controller.press(key_obj)
     controller.release(key_obj)

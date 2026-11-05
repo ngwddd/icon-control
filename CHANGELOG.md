@@ -1,3 +1,14 @@
+## [1.3.9-alpha] - 2026-11-06
+
+- 授权宿主新增 `--intent=background|show`（默认 background）。安装、重启、MCP 重连后的宿主只常驻托盘与续期，**不再自动弹窗**；只有用户主动（托盘、热键、`icon-control://`、需要批准的调用）才 `show`。
+- 单实例 mutex 命中时，后台意图不再向已有窗口发送 `WM_SHOW`，因此刷新页面/重连不会把授权窗顶到前台；后台启动只刷新托盘与 `consent-host.json`（新增 `intent`、`last_sync_ok` 字段）。
+- 授权桥不可用时，后台启动**不再弹「无法连接授权桥」模态框**：托盘显示“状态未知”，状态文件记录 `last_sync_ok=false`，工具侧返回 `authority_unavailable`。
+- 修复 `DefWindowProcW` 未声明原型导致的 `OverflowError: int too long to convert`（64 位 lParam 消息会让 ctypes 回调反复抛异常）。
+- 授权桥 `/status` 增加只读 `health` 字段（pid/transport/clients/revision/lease/uptime），供 doctor 与工具诊断；不新增写入路径。
+- 工具拒绝结果新增机器可读 `code`（`authority_unavailable` / `permission_denied` / `permission_revoked` / `invalid_argument` / `internal_error` 等），权限闸门异常按类型分类，不再一律报「未授权」。
+- `key_press` 支持 `ctrl+f`、`ctrl+shift+f` 形式的组合键（修饰键先按、逆序释放）；`key_down`/`key_up` 明确拒绝组合键并返回 `invalid_argument`；`batch` 内的 `key_down`/`key_up` 步骤给出明确提示而不是报成权限问题。
+- 新增测试：`test_v139_consent_intent.py`、`test_v139_error_codes.py`、`test_v139_gate_codes.py`、`test_v139_key_chords.py`；全量 660 项通过（3 项跳过）。
+
 ## [1.3.8] - 2026-11-05
 
 - PR #8 审计整改：统一包内工具名称清单供安装/协议验证使用；修正旧测试契约、必填宏参数声明和窗口夹具。

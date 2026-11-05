@@ -68,6 +68,25 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[Union[TextCont
     )
 
 
+def classify_gate_exception(exc: BaseException) -> tuple[str, str]:
+    """Map a gate failure to a recovery-oriented code.
+
+    Still fail-closed: every branch blocks the call. The point is that a
+    malformed argument must not be reported as "not authorized", and an
+    unreachable permission service must not be reported as a user decision.
+    Values from the arguments are never echoed back.
+    """
+    from computer_mcp import permission as _perm
+    denied = getattr(_perm, 'PermissionDenied', ())
+    if denied and isinstance(exc, denied):
+        return 'permission_denied', '权限不足：本次调用未获授权'
+    if isinstance(exc, (ValueError, TypeError, KeyError, IndexError)):
+        return 'invalid_argument', f'参数错误：{type(exc).__name__}'
+    if isinstance(exc, (OSError, TimeoutError, ConnectionError)):
+        return 'authority_unavailable', '权限服务不可用，已按未授权处理'
+    return 'internal_error', f'权限闸门异常，已按未授权处理：{type(exc).__name__}'
+
+
 async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[TextContent, ImageContent]]:
     """真正的路由实现（被 call_tool 的 tee 包住）。"""
     try:
@@ -94,9 +113,10 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
                 return format_response(_gate_denial, computer_state,
                                        screenshot_data={"error": "blocked by permission gate"})
         except Exception as _gate_exc:      # 闸门自身出错时 fail closed
+            _code, _message = classify_gate_exception(_gate_exc)
             return format_response(
-                {"success": False, "blocked": True,
-                 "error": f"权限闸门异常，按未授权处理：{type(_gate_exc).__name__}", "tool": name},
+                {"success": False, "blocked": True, "code": _code,
+                 "error": _message, "tool": name},
                 computer_state, screenshot_data={"error": "blocked by permission gate"})
 
         

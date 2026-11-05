@@ -455,10 +455,25 @@ def run_batch(
                 entry["ok"] = True
                 entry["chars"] = len(str(step.get("text", "")))
             elif action == "key":
-                key = resolve_key(str(step.get("key", "enter")))
-                keyboard.press(key)
-                keyboard.release(key)
+                from computer_mcp.core.utils import split_chord
+                modifiers, base = split_chord(str(step.get("key", "enter")))
+                for modifier in modifiers:
+                    keyboard.press(resolve_key(modifier))
+                try:
+                    keyboard.press(resolve_key(base))
+                    keyboard.release(resolve_key(base))
+                finally:
+                    for modifier in reversed(modifiers):
+                        keyboard.release(resolve_key(modifier))
                 entry["ok"] = True
+                if modifiers:
+                    entry["chord"] = True
+            elif action in ("key_down", "key_up"):
+                # Holding a key across batch steps leaves modifiers stuck when a
+                # later step fails; the top-level tools exist for that.
+                raise ValueError(
+                    f"batch does not support {action}; use the top-level {action} tool "
+                    f"or a single key_press chord")
             elif action == "sleep":
                 ms = int(step.get("ms", default_sleep_ms))
                 _execution.sleep(ms / 1000.0)

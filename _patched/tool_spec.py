@@ -107,7 +107,7 @@ class ToolSpec:
                 kind = str(step.get('action' if batch else 'kind','')).strip().lower()
                 if batch and kind in ('move','click','right_click','double_click','sleep'):
                     effects.add('input')
-                elif batch and kind in ('type','key'):
+                elif batch and kind in ('type','key','key_down','key_up'):
                     effects.add('text_entry')
                 elif batch and kind in ('ui_click','wait_change','screen_state'):
                     effects.add('screen_read')

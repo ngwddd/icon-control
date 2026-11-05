@@ -80,6 +80,21 @@ _last_event_stamp = int(time.time()*1000)
 CLIENT_HB_TTL_S = 30.0          # 心跳多久内算这个窗口还活着
 CLIENT_ACTION_TTL_S = 3600.0    # 用户动作的有效期（60 分钟租约）
 STATE_LEASE_S = 15.0
+_STARTED_AT = time.time()
+
+
+def health() -> dict:
+    """Read-only runtime facts for doctor/agent diagnostics; never grants."""
+    with _lock:
+        _expire(time.time())
+        lease = (_authorization or {}).get('lease_expires_at')
+        return dict(pid=os.getpid(), transport='http', port=DEFAULT_PORT,
+                    clients=len(CLIENTS),
+                    last_action_at=(_last_action[0] if _last_action else None),
+                    last_action_granted=(bool(_last_action[1]) if _last_action else None),
+                    lease_expires_at=lease,
+                    revision=_revision,
+                    uptime_s=round(time.time() - _STARTED_AT, 1))
 
 def _expire(now):
     global _last_action, _revision, _authorization
@@ -301,9 +316,13 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == '/status' and not parsed.query and self._source_ok():
             state = current_state()
             now = time.time()
-            body = json.dumps({'granted':bool(state.get('granted') and
+            payload = {'granted':bool(state.get('granted') and
                 now < state.get('expires_at',0) and not security.stopped(state)),
-                'revision':state.get('revision',0),'session':state.get('session','')}).encode()
+                'revision':state.get('revision',0),'session':state.get('session','')}
+            # Additive diagnostics for doctor.py and the agent gate: a caller
+            # that cannot reach the bridge now has a machine-readable reason.
+            payload['health'] = health()
+            body = json.dumps(payload).encode()
             self.send_response(200);self._cors()
             self.send_header('Content-Type','application/json')
             self.send_header('Cache-Control','no-store')

@@ -7,10 +7,37 @@ from pynput.keyboard import Key, KeyCode
 from pynput.mouse import Button
 
 
+CHORD_MODIFIERS = frozenset({
+    "ctrl", "control", "alt", "shift",
+    "cmd", "command", "win", "windows", "meta",
+})
+
+
+def split_chord(key_str: str) -> tuple[list[str], str]:
+    """Split an accelerator such as ``ctrl+shift+f`` into modifiers and key.
+
+    A plain key name returns ``([], name)``. Unknown modifiers, empty parts and
+    modifier-only chords raise ``ValueError`` so callers can surface
+    ``invalid_argument`` instead of injecting a half-pressed chord.
+    """
+    raw = str(key_str or "").strip()
+    if "+" not in raw:
+        return [], raw
+    parts = [part.strip() for part in raw.split("+") if part.strip()]
+    if len(parts) < 2:
+        raise ValueError(f"invalid chord: {key_str!r}")
+    *modifiers, base = parts
+    for modifier in modifiers:
+        if modifier.lower() not in CHORD_MODIFIERS:
+            raise ValueError(f"unknown modifier in chord: {modifier!r}")
+    if not base or base.lower() in CHORD_MODIFIERS:
+        raise ValueError(f"chord needs a non-modifier key: {key_str!r}")
+    return modifiers, base
+
+
 def key_from_string(key_str: str):
     """Convert string key name to pynput Key or KeyCode."""
     key_str = key_str.lower().strip()
-    
     key_map = {
         "ctrl": Key.ctrl, "control": Key.ctrl,
         "alt": Key.alt,
