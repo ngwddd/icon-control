@@ -51,7 +51,24 @@ python tools\verify.py --pattern "test_*.py"
 
 新增 `tests/test_v139_trust.py`（20 项）：签名与篡改、过期、撤销、主体变化、急停优先、CLI 拒绝路径、通配目标、权限 UI 排除。
 
+## 真机验收（坐标契约，2026-11-06）
+
+脚本：`tests/manual/verify_v139_frames.py`（自建 Tk 窗口，不动用户窗口）
+
+```
+PASS map_window_centre
+  frame_id=f_416fc7b2  source_rect=[0,0,2560,1440]  image_size=[1280,720]
+  window_rect=[220,180,562,436]  image_point=[195.5,154.0]
+  expected=[391,308]  mapped=[391,308]  delta_px=[0,0]  inside_window=true
+PASS moved_window_rejects_frame
+  moved_by=[80,60]  rejected=true
+  message="stale frame_id; the target window moved or resized"
+```
+
+结论：1280×720 预览坐标 0 像素误差落到 2560×1440 的真实窗口内；窗口移动后旧帧被拒。
+
 ## 仍未包含（下一轮）
+
 
 - **撤销代际的全局硬撤销**：撤销后正在跑的任务中断、按键释放、旧凭证作废的完整链路（本版已记录 `revocation_generation` 字段，但尚未接入所有执行路径）
 - 托盘/授权窗口里的「信任 30 天」按钮（当前入口是 CLI 的原生弹窗）
