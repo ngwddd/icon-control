@@ -3,7 +3,7 @@
 This module provides a stateless API for computer control.
 """
 
-__version__ = "1.3.9b3"
+__version__ = "1.3.9b4"
 
 from computer_mcp.input_guard import KeyboardController, MouseController
 

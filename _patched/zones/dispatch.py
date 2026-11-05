@@ -66,7 +66,9 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
     elif name == "double_click":
         result = mouse_actions.double_click(
             button=arguments.get("button", "left"),
-            controller=mouse_controller
+            controller=mouse_controller,
+            x=arguments.get("x"), y=arguments.get("y"),
+            frame_id=arguments.get("frame_id")
         )
     elif name == "triple_click":
         result = mouse_actions.triple_click(
@@ -88,7 +90,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             start=arguments["start"],
             end=arguments["end"],
             button=arguments.get("button", "left"),
-            controller=mouse_controller
+            controller=mouse_controller,
+            frame_id=arguments.get("frame_id")
         )
     elif name == "scroll":
         result = mouse_actions.scroll(dy=arguments['dy'], dx=arguments.get('dx', 0),

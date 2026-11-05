@@ -116,23 +116,74 @@ class CaptureFieldsTests(unittest.TestCase):
         self.assertEqual(capture.to_physical(result['frame_id'], 100, 50), (264, 132))
 
 
+class WindowInvalidationTests(unittest.TestCase):
+    def setUp(self):
+        self._saved = dict(capture._frames)
+        capture._frames.clear()
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        capture._frames.clear()
+        capture._frames.update(self._saved)
+
+    def _frame(self, window):
+        with patch.object(capture, '_window_snapshot', return_value=window), \
+                patch.object(capture, '_dpi_context', return_value=96):
+            return capture._register_frame({'x': 0, 'y': 0, 'w': 800, 'h': 600},
+                                           800, 600, 400, 300, 0.5)
+
+    def test_window_that_did_not_move_still_maps(self):
+        window = dict(rect=[10, 20, 810, 620], dpi=96, valid=True)
+        frame_id = self._frame(window)
+        with patch.object(capture, '_window_snapshot', return_value=window):
+            self.assertEqual(capture.to_physical(frame_id, 0, 0), (0, 0))
+
+    def test_moved_window_invalidates_the_frame(self):
+        frame_id = self._frame(dict(rect=[10, 20, 810, 620], dpi=96, valid=True))
+        moved = dict(rect=[40, 60, 840, 660], dpi=96, valid=True)
+        with patch.object(capture, '_window_snapshot', return_value=moved):
+            with self.assertRaises(ValueError) as caught:
+                capture.to_physical(frame_id, 10, 10)
+        self.assertIn('moved', str(caught.exception))
+
+    def test_dpi_change_invalidates_the_frame(self):
+        frame_id = self._frame(dict(rect=[10, 20, 810, 620], dpi=96, valid=True))
+        scaled = dict(rect=[10, 20, 810, 620], dpi=144, valid=True)
+        with patch.object(capture, '_window_snapshot', return_value=scaled):
+            with self.assertRaises(ValueError):
+                capture.to_physical(frame_id, 10, 10)
+
+    def test_closed_window_invalidates_the_frame(self):
+        frame_id = self._frame(dict(rect=[10, 20, 810, 620], dpi=96, valid=True))
+        gone = dict(rect=None, dpi=None, valid=False)
+        with patch.object(capture, '_window_snapshot', return_value=gone):
+            with self.assertRaises(ValueError):
+                capture.to_physical(frame_id, 10, 10)
+
+    def test_frame_without_a_window_is_not_invalidated(self):
+        frame_id = self._frame(None)
+        self.assertEqual(capture.to_physical(frame_id, 0, 0), (0, 0))
+
+
 class FakeMouse:
     def __init__(self):
         self.position = (0, 0)
         self.clicks = []
+        self.presses = []
 
     def click(self, button, *args, **kwargs):
         self.clicks.append((button, self.position))
 
     def press(self, button):
-        self.clicks.append(('press', self.position))
+        self.presses.append(button)
 
     def release(self, button):
-        self.clicks.append(('release', self.position))
+        self.presses.append(('release', button))
 
 
 class ClickFrameTests(AuthorityCase, unittest.TestCase):
     fixture_authorized = True
+
     def _win32(self):
         gui = types.ModuleType('win32gui')
         gui.WindowFromPoint = lambda point: 111
@@ -166,6 +217,75 @@ class ClickFrameTests(AuthorityCase, unittest.TestCase):
                    side_effect=ValueError('unknown frame_id')):
             with self.assertRaises(ValueError):
                 mouse_actions.click(controller=FakeMouse(), frame_id='f_nope', x=1, y=1)
+
+
+class DoubleClickAndDragFrameTests(AuthorityCase, unittest.TestCase):
+    fixture_authorized = True
+
+    def test_double_click_converts_and_positions(self):
+        mouse = FakeMouse()
+        with patch('computer_mcp.core.screenshot.to_physical', return_value=(640, 360)) as mapper:
+            result = mouse_actions.double_click(controller=mouse, frame_id='f_9', x=10, y=20)
+        mapper.assert_called_once_with('f_9', 10, 20)
+        self.assertEqual(mouse.position, (640, 360))
+        self.assertEqual(result['frame_id'], 'f_9')
+        self.assertEqual(result['image_point'], [10.0, 20.0])
+
+    def test_double_click_without_coordinates_uses_the_cursor(self):
+        mouse = FakeMouse()
+        result = mouse_actions.double_click(controller=mouse)
+        self.assertEqual(mouse.position, (0, 0))
+        self.assertNotIn('frame_id', result)
+
+    def test_drag_converts_both_points(self):
+        mouse = FakeMouse()
+        calls = {'n': 0}
+
+        def mapper(frame_id, x, y):
+            calls['n'] += 1
+            return (int(x) * 2, int(y) * 2)
+
+        with patch('computer_mcp.core.screenshot.to_physical', side_effect=mapper):
+            result = mouse_actions.drag({'x': 10, 'y': 20}, {'x': 30, 'y': 40},
+                                        controller=mouse, frame_id='f_9')
+        self.assertEqual(calls['n'], 2)
+        self.assertEqual(result['start'], {'x': 20, 'y': 40})
+        self.assertEqual(result['end'], {'x': 60, 'y': 80})
+        self.assertEqual(result['image_start'], [10.0, 20.0])
+        self.assertEqual(mouse.position, (60, 80))
+
+    def test_drag_without_frame_keeps_physical_coordinates(self):
+        mouse = FakeMouse()
+        result = mouse_actions.drag({'x': 1, 'y': 2}, {'x': 3, 'y': 4}, controller=mouse)
+        self.assertEqual(result['start'], {'x': 1, 'y': 2})
+        self.assertNotIn('frame_id', result)
+
+
+class ScreenStateFrameTests(unittest.TestCase):
+    def setUp(self):
+        self._saved = dict(capture._frames)
+        capture._frames.clear()
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        capture._frames.clear()
+        capture._frames.update(self._saved)
+
+    def test_screen_state_reports_the_latest_usable_frame(self):
+        image = Image.new('RGB', (200, 100), (5, 5, 5))
+        with patch.object(capture, '_grab', return_value=(image, 200, 100)), \
+                patch.object(capture, '_origin', return_value=(0, 0)), \
+                patch.object(capture, '_dpi_context', return_value=96), \
+                patch.object(capture, '_foreground_hwnd', return_value=None):
+            frame_id = capture._register_frame(None, 200, 100, 200, 100, 1.0)
+            state = capture.screen_state()
+        self.assertEqual(state['frame_id'], frame_id)
+
+    def test_screen_state_has_no_frame_when_registry_is_empty(self):
+        image = Image.new('RGB', (200, 100), (5, 5, 5))
+        with patch.object(capture, '_grab', return_value=(image, 200, 100)):
+            state = capture.screen_state()
+        self.assertIsNone(state['frame_id'])
 
 
 if __name__ == '__main__':

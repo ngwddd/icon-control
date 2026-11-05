@@ -69,22 +69,36 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
                if frame_id is not None and image_point is not None else {})}
 
 
-def double_click(button: str = "left", controller: Controller | None = None) -> dict[str, Any]:
-    """Perform a double mouse click.
-    
-    Args:
-        button: Mouse button ("left", "right", "middle")
-        controller: Mouse controller instance (creates one if None)
-    
-    Returns:
-        Dictionary with action result
+def double_click(button: str = "left", controller: Controller | None = None, *,
+                 x: float | None = None, y: float | None = None,
+                 frame_id: str | None = None) -> dict[str, Any]:
+    """Perform a double mouse click, optionally at screenshot coordinates.
+
+    With ``frame_id`` the x/y are image coordinates of that frame and are
+    converted to physical pixels here; without coordinates the cursor is used.
     """
     if controller is None:
         controller = Controller()
-    
+
+    image_point = None
+    if frame_id is not None:
+        if x is None or y is None:
+            raise ValueError('frame_id requires x and y in image coordinates')
+        from computer_mcp.core import screenshot as capture_core
+        image_point = (float(x), float(y))
+        x, y = capture_core.to_physical(frame_id, x, y)
+    elif (x is None) != (y is None):
+        raise ValueError('double_click requires both x and y, or neither')
+
     btn = button_from_string(button)
+    if x is not None:
+        controller.position = (int(x), int(y))
     controller.click(btn, 2)
-    return {"success": True, "action": "double_click", "button": button}
+    return {"success": True, "action": "double_click", "button": button,
+            **({"x": int(x), "y": int(y)} if x is not None else {}),
+            **({"frame_id": frame_id,
+                "image_point": [round(image_point[0], 2), round(image_point[1], 2)]}
+               if image_point else {})}
 
 
 def triple_click(button: str = "left", controller: Controller | None = None) -> dict[str, Any]:
@@ -141,23 +155,25 @@ def button_up(button: str = "left", controller: Controller | None = None) -> dic
     return {"success": True, "action": "button_up", "button": button}
 
 
-def drag(start: dict[str, int], end: dict[str, int], button: str = "left", controller: Controller | None = None) -> dict[str, Any]:
-    """Drag mouse from start to end position.
-    
-    Args:
-        start: Start position with "x" and "y" keys
-        end: End position with "x" and "y" keys
-        button: Mouse button to use ("left", "right", "middle")
-        controller: Mouse controller instance (creates one if None)
-    
-    Returns:
-        Dictionary with action result
+def drag(start: dict[str, int], end: dict[str, int], button: str = "left",
+         controller: Controller | None = None, *, frame_id: str | None = None) -> dict[str, Any]:
+    """Drag the mouse from start to end.
+
+    With ``frame_id`` both points are image coordinates of that screenshot and
+    are converted to physical pixels here.
     """
     if controller is None:
         controller = Controller()
-    
+
     btn = button_from_string(button)
-    
+    image_start = image_end = None
+    if frame_id is not None:
+        from computer_mcp.core import screenshot as capture_core
+        image_start = (float(start["x"]), float(start["y"]))
+        image_end = (float(end["x"]), float(end["y"]))
+        start = dict(zip(("x", "y"), capture_core.to_physical(frame_id, *image_start)))
+        end = dict(zip(("x", "y"), capture_core.to_physical(frame_id, *image_end)))
+
     # Move to start, press button, move to end, release button
     controller.position = (start["x"], start["y"])
     controller.press(btn)
@@ -165,8 +181,12 @@ def drag(start: dict[str, int], end: dict[str, int], button: str = "left", contr
     controller.position = (end["x"], end["y"])
     time.sleep(0.01)
     controller.release(btn)
-    
-    return {"success": True, "action": "drag", "start": start, "end": end, "button": button}
+
+    return {"success": True, "action": "drag", "start": start, "end": end, "button": button,
+            **({"frame_id": frame_id,
+                "image_start": [round(image_start[0], 2), round(image_start[1], 2)],
+                "image_end": [round(image_end[0], 2), round(image_end[1], 2)]}
+               if image_start and image_end else {})}
 
 
 def move_mouse(x: int, y: int, controller: Controller | None = None) -> dict[str, Any]:

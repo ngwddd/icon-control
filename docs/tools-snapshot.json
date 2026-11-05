@@ -38,11 +38,22 @@
   },
   {
    "name": "double_click",
-   "description": "Perform a double mouse click at the current cursor position",
+   "description": "Double-click. With frame_id and x/y, x/y are IMAGE coordinates of that screenshot and the server converts them; without coordinates it double-clicks at the current cursor.",
    "block_sha1": "ee742604855e99ef2384f2e926487fe019a229fe",
    "schema": {
     "type": "object",
+    "additionalProperties": false,
     "properties": {
+     "frame_id": {
+      "type": "string",
+      "description": "Screenshot frame_id; x/y are then image coordinates of that frame"
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     },
      "button": {
       "type": "string",
       "enum": [
@@ -118,19 +129,24 @@
   },
   {
    "name": "drag",
-   "description": "Drag mouse from start to end position",
+   "description": "Drag from start to end. Each point is {\"x\",\"y\"}; with frame_id both are IMAGE coordinates of that screenshot and the server converts them.",
    "block_sha1": "768fe5099c96c42a733350442c6ae8bf335c6b26",
    "schema": {
     "type": "object",
+    "additionalProperties": false,
     "properties": {
+     "frame_id": {
+      "type": "string",
+      "description": "Screenshot frame_id; start/end are then image coordinates"
+     },
      "start": {
       "type": "object",
       "properties": {
        "x": {
-        "type": "integer"
+        "type": "number"
        },
        "y": {
-        "type": "integer"
+        "type": "number"
        }
       },
       "required": [
@@ -143,10 +159,10 @@
       "type": "object",
       "properties": {
        "x": {
-        "type": "integer"
+        "type": "number"
        },
        "y": {
-        "type": "integer"
+        "type": "number"
        }
       },
       "required": [

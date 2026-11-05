@@ -210,6 +210,37 @@ def _dpi_context() -> int | None:
         return None
 
 
+def _window_snapshot(hwnd: int | None) -> dict[str, Any] | None:
+    """Geometry of the window a frame belongs to, used to detect movement."""
+    if not hwnd:
+        return None
+    try:
+        import ctypes
+        import win32gui
+        left, top, right, bottom = win32gui.GetWindowRect(int(hwnd))
+        try:
+            dpi = int(ctypes.windll.user32.GetDpiForWindow(int(hwnd)))
+        except Exception:
+            dpi = None
+        return dict(rect=[int(left), int(top), int(right), int(bottom)],
+                    dpi=dpi, valid=bool(win32gui.IsWindow(int(hwnd))))
+    except Exception:
+        return dict(rect=None, dpi=None, valid=False)
+
+
+def _window_moved(record: dict[str, Any]) -> bool:
+    window = record.get("window")
+    if not window:
+        return False
+    if window.get("rect") is None:
+        return False          # geometry was unknown at capture; nothing to compare
+    current = _window_snapshot(record.get("hwnd"))
+    if not current or not current.get("valid"):
+        return True
+    return (current.get("rect") != window.get("rect") or
+            current.get("dpi") != window.get("dpi"))
+
+
 def _foreground_hwnd() -> int | None:
     try:
         import win32gui
@@ -228,11 +259,13 @@ def _register_frame(region, src_w: int, src_h: int, out_w: int, out_h: int,
         oldest = min(_frames, key=lambda key: _frames[key]["captured_at"])
         _frames.pop(oldest, None)
     x0, y0 = _origin(region)
+    hwnd = _foreground_hwnd()
     frame_id = "f_" + secrets.token_hex(4)
     _frames[frame_id] = dict(frame_id=frame_id, captured_at=now,
                              source_rect=[x0, y0, int(src_w), int(src_h)],
                              image_size=[int(out_w), int(out_h)], scale=float(scale),
-                             dpi=_dpi_context(), hwnd=_foreground_hwnd(),
+                             dpi=_dpi_context(), hwnd=hwnd,
+                             window=_window_snapshot(hwnd),
                              region=dict(region) if region else None)
     return frame_id
 
@@ -243,6 +276,8 @@ def get_frame(frame_id: str) -> dict[str, Any]:
         raise ValueError("unknown frame_id; take a screenshot first")
     if time.time() - float(record["captured_at"]) > FRAME_TTL_S:
         raise ValueError("stale frame_id; capture again before clicking")
+    if _window_moved(record):
+        raise ValueError("stale frame_id; the target window moved or resized")
     return record
 
 
@@ -309,6 +344,19 @@ def capture_screenshot(region: dict[str, int] | None = None) -> dict[str, Any]:
     }
 
 
+def _last_frame_id() -> str | None:
+    """Newest frame that is still usable, so a capture then click can chain."""
+    for frame_id, record in sorted(_frames.items(),
+                                   key=lambda item: item[1]["captured_at"],
+                                   reverse=True):
+        try:
+            get_frame(frame_id)
+        except ValueError:
+            continue
+        return frame_id
+    return None
+
+
 def screen_state(region: dict[str, int] | None = None) -> dict[str, Any]:
     """Cheap state check: no image in the return value (~25 ms)."""
     global _prev_small
@@ -326,6 +374,7 @@ def screen_state(region: dict[str, int] | None = None) -> dict[str, Any]:
         "ms_since_last_change": round((time.time() - _last_change_ts) * 1000, 0) if _last_change_ts else None,
         "frames_seen": _change_count,
         "state_ms": round((time.perf_counter() - t0) * 1000, 1),
+        "frame_id": _last_frame_id(),
     }
 
 

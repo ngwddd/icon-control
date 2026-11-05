@@ -1,3 +1,11 @@
+## [1.3.9-beta.4] - 2026-11-06
+
+- **帧失效判定**：截图会记录目标窗口的矩形与 DPI；`to_physical()` 在使用前复核，窗口被移动、改尺寸、DPI 变化或已关闭 → 直接拒绝该 `frame_id`（"stale frame_id; the target window moved or resized"）。截图时若几何未知，则不做误判。
+- `double_click` 接受 `frame_id` + `x/y`（图像坐标）；`drag` 接受 `frame_id`，起止点都按图像坐标换算。
+- `screen_state` 返回最新可用帧的 `frame_id`，让"看一眼 → 点一下"可以串成一次调用。
+- 快照 `docs/tools-snapshot.json` 同步 `click/double_click/drag` 三条；工具总数仍 90。
+- 新增测试到 `tests/test_v139_frames.py`（共 22 项）：窗口移动/DPI 变化/窗口关闭失效、几何未知不误判、双击与拖拽换算、`screen_state` 帧号。全量 713 项通过。
+
 ## [1.3.9-beta.3] - 2026-11-06
 
 - **坐标契约（PR-1 第一步）**：`screenshot` 现在返回 `frame_id`、`source_rect`（物理屏幕区域，支持副屏负坐标）、`image_size`、`dpi`、`hwnd`，并保留原有 `width/height/scale`。
