@@ -388,6 +388,17 @@ class ConsentHost:
         if notice:
             native_dialog.ask_notice(*notice)
 
+    def _release_lease(self):
+        """Drop the live lease without counting as a user revocation."""
+        self.granted = False
+        self.authorization = {}
+        self.lease_until = 0.0
+        try:
+            self.ipc('heartbeat', granted=False)
+        except Exception:
+            pass
+        self._refresh_tray()
+
     def _trust(self, days: int = 30):
         """The dialog click is the user gesture; grant the record and confirm."""
         try:
@@ -548,9 +559,10 @@ class ConsentHost:
             self.user32.TranslateMessage(ctypes.byref(message))
             self.user32.DispatchMessageW(ctypes.byref(message))
         self._stopping = True
-        # Shutdown drops the session lease only. A 30-day trust must survive a
-        # host restart; only the explicit 立即撤销 button clears it.
-        self._revoke_state()
+        # Shutdown drops the session lease only. It must not bump the revocation
+        # generation, otherwise every host restart would invalidate a 30-day
+        # trust; only the explicit revoke button does that.
+        self._release_lease()
         if self.tray:
             native_tray.remove(self.hwnd, 1)
         self.user32.UnregisterHotKey(self.hwnd, 1)

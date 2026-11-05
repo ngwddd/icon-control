@@ -203,6 +203,29 @@ class HostShutdownTests(unittest.TestCase):
         revoked.assert_not_called()
 
 
+    def test_shutdown_releases_lease_without_revoking(self):
+        from computer_mcp import native_consent
+        host = native_consent.ConsentHost.__new__(native_consent.ConsentHost)
+        host._state_lock = threading.RLock()
+        host._state_generation = 0
+        host.granted = True
+        host.authorization = {'agent_session': 'x'}
+        host.lease_until = 123.0
+        host.tray = False
+        host.hwnd = 0
+        host.state_unknown = False
+        calls = []
+        host.ipc = lambda *a, **k: calls.append((a, k)) or {'granted': False}
+        with patch.object(native_consent.ConsentHost, '_write_status'), \
+                patch('computer_mcp.trust.revoke') as revoked:
+            host._release_lease()
+        revoked.assert_not_called()
+        self.assertFalse(host.granted)
+        self.assertEqual(host.authorization, {})
+        self.assertEqual(calls[0][0][0], 'heartbeat')
+        self.assertIs(calls[0][1]['granted'], False)
+
+
 class WildcardTargetTests(unittest.TestCase):
     """A trusted install covers any ordinary app, never the permission UI."""
 
