@@ -33,14 +33,20 @@ def _stop_path() -> Path:
     return security.data_home() / 'state' / 'emergency-stop.json'
 
 
-def _bridge_revocation() -> tuple[int, float]:
-    """Latest revocation the bridge persisted; beats any trust granted earlier."""
+def _bridge_revocation() -> tuple[int, float, str]:
+    """Latest revocation the bridge persisted, with who produced it.
+
+    Startup and shutdown write a negative state too, but they are lease endings,
+    not user revocations; callers must not treat them as revoking trust.
+    """
     try:
         payload = json.loads((security.data_home() / 'state' / 'mouse-permission.json')
                              .read_text(encoding='utf-8'))
-        return int(payload.get('revocation_generation') or 0), float(payload.get('revoked_at') or 0)
+        return (int(payload.get('revocation_generation') or 0),
+                float(payload.get('revoked_at') or 0),
+                str(payload.get('origin') or ''))
     except (OSError, ValueError, TypeError):
-        return 0, 0.0
+        return 0, 0.0, ""
 
 
 _TOOLS_CACHE = {"value": None}
@@ -195,12 +201,14 @@ def validate(now: float | None = None) -> dict:
         return dict(ok=False, reason='trust expired', subject=record.get('subject'))
     if _stopped_after(record):
         return dict(ok=False, reason='emergency stop after trust was granted', subject=record.get('subject'))
-    current_generation, revoked_at = _bridge_revocation()
+    current_generation, revoked_at, origin = _bridge_revocation()
     record_generation = int(record.get('revocation_generation') or 0)
-    if current_generation > record_generation:
+    lease_ending_only = origin in ('startup', 'shutdown')
+    if current_generation > record_generation and not lease_ending_only:
         return dict(ok=False, reason='revoked (bridge generation advanced)',
                     subject=record.get('subject'))
-    if not record_generation and revoked_at and revoked_at >= float(record.get('granted_at') or 0):
+    if (not record_generation and not lease_ending_only and revoked_at
+            and revoked_at >= float(record.get('granted_at') or 0)):
         # Legacy record without a generation: fall back to timestamps.
         return dict(ok=False, reason='revoked after trust was granted',
                     subject=record.get('subject'))
