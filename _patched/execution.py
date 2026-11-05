@@ -13,9 +13,16 @@ _operation_lock = threading.RLock()
 _UNSET = object()
 
 def _release_held_input() -> None:
-    """A revoked authority must let go of anything the agent is holding down."""
+    """A revoked authority must let go of anything the agent is holding down.
+
+    Only touches input_guard when something is actually held: release_all()
+    otherwise starts the held-input monitor, whose first check records a
+    physical takeover and would leak into later operations.
+    """
     try:
         from computer_mcp import input_guard
+        if not getattr(input_guard, '_held_controllers', None):
+            return
         input_guard.release_all()
     except Exception:
         pass
