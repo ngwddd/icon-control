@@ -295,6 +295,26 @@ def _decorate(payload: dict, code: str | None = None) -> dict:
     return out
 
 
+def _trust_authority() -> dict | None:
+    """Fallback authority for a trusted installation (v1.3.9-beta).
+
+    Only reached when no live bridge grant matched. The trust record is signed,
+    subject-bound, expiry-checked and beaten by the emergency stop; the lease it
+    mints is short and re-derived on every call.
+    """
+    try:
+        from computer_mcp import trust
+        authorization = trust.authorization()
+    except Exception:
+        return None
+    if not authorization:
+        return None
+    return _decorate(dict(granted=True, source='trust', age_s=0.0, screen_text='',
+                          checked_at=time.strftime('%Y-%m-%d %H:%M:%S'),
+                          authorization=authorization,
+                          agent_session=authorization.get('agent_session')))
+
+
 def status(force: bool = False, agent_session_id=None) -> dict:
     """Only a fresh, signed bridge action is authority; OCR is diagnostic only."""
     now = time.time()
@@ -327,6 +347,9 @@ def status(force: bool = False, agent_session_id=None) -> dict:
             return _decorate(dict(cached, age_s=round(age, 3)))
     except (ValueError, TypeError, KeyError):
         pass
+    trusted = _trust_authority()
+    if trusted is not None:
+        return trusted
     return _decorate(dict(granted=False, source='unknown', age_s=0.0, screen_text='',
                           checked_at='',
                           reason='Missing, expired or unauthenticated bridge state'),

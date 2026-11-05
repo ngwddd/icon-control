@@ -229,6 +229,52 @@ def ask_grant(agent_label: str, target_text: str, *, default_preset: int = 0,
                 accepted=button.value == BUTTON_GRANT)
 
 
+def ask_trust(days: int = 30, subject: str = '') -> bool:
+    """One-click trust prompt. Returns True only when the user clicks trust.
+
+    This is the only supported way to create a long-lived trust record: the
+    record itself is written by ``trust.grant(confirm=...)`` with this answer,
+    so no code path can mint trust without a real click.
+    """
+    if not available():
+        return False
+    library = _common_controls()
+    library.TaskDialogIndirect.argtypes = [
+        ctypes.POINTER(TASKDIALOGCONFIG), ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(wintypes.BOOL)]
+    library.TaskDialogIndirect.restype = ctypes.c_long
+    buttons = (TASKDIALOG_BUTTON * 2)(
+        TASKDIALOG_BUTTON(BUTTON_GRANT, f'信任 {days} 天'),
+        TASKDIALOG_BUTTON(BUTTON_CANCEL, '取消'),
+    )
+    content = (f'允许此安装的助手在 {days} 天内直接操作普通桌面应用？'
+               '\r\n\r\n'
+               '信任只对当前安装、当前工作区和当前工具版本有效：'
+               '升级助手、更换工作区、点「撤销」或急停后都需要重新授权。'
+               '\r\n权限 UI 与撤销入口始终不会被自动化。')
+    if subject:
+        content += f'\r\n\r\n主体指纹：{subject[:16]}…'
+    config = TASKDIALOGCONFIG()
+    config.cbSize = ctypes.sizeof(TASKDIALOGCONFIG)
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_SIZE_TO_CONTENT
+    config.pszWindowTitle = 'Icon Control'
+    config.pszMainIcon = ctypes.c_void_p(TD_INFORMATION_ICON)
+    config.pszMainInstruction = f'信任此助手 {days} 天'
+    config.pszContent = content
+    config.cButtons = 2
+    config.pButtons = buttons
+    config.nDefaultButton = BUTTON_CANCEL
+    _force_foreground()
+    button = ctypes.c_int(BUTTON_CANCEL)
+    radio = ctypes.c_int(0)
+    checked = wintypes.BOOL(0)
+    result = library.TaskDialogIndirect(ctypes.byref(config), ctypes.byref(button),
+                                        ctypes.byref(radio), ctypes.byref(checked))
+    if result != 0:
+        raise OSError(result, 'TaskDialogIndirect failed')
+    return button.value == BUTTON_GRANT
+
+
 def ask_notice(title: str, message: str) -> None:
     """Plain native notice: no presets, no grant button."""
     if not available():

@@ -1,3 +1,15 @@
+## [1.3.9-beta] - 2026-11-06
+
+- 新增 **30 天信任**（`computer_mcp/trust.py`）：用户点一次「信任 30 天」后，同一安装、同一工作区、同一工具指纹的助手不再每次重授。
+  - 信任记录用安装令牌 HMAC 签名（`security.signature`），存在 `state/desktop-trust.json`，原子写入；
+  - 主体指纹 = `workspace_id + tools_sha256 + 主机名`：**升级助手（工具指纹变）、换工作区、换主机都会失效并要求重新授权**；
+  - 信任不是授权：`permission.status()` 仍然每次调用都跑，信任只提供一个 15 分钟的短租约，来源标记为 `source='trust'`；
+  - 撤销（`trust.revoke()`）与急停（`emergency-stop.json` 晚于授权时间）都会压过信任；
+  - 全局目标策略：信任授权带 `applications=['*']`，但仍保留目标身份校验，且**权限 UI 永不可被自动化**；
+  - 一次性授权只能经原生弹窗 `native_dialog.ask_trust()` 触发：`trust.grant()` 必须拿到确认回调，CLI `python -m computer_mcp.trust grant|revoke|status` 也只在弹窗返回 True 后写入。
+- 工具指纹在进程内缓存，避免 `status()` 热路径重复哈希全部工具 schema。
+- 新增测试 `tests/test_v139_trust.py`（20 项）：签名/篡改、过期、撤销、主体变化、急停优先、CLI 拒绝路径、通配目标与权限 UI 排除。全量 680 项通过。
+
 ## [1.3.9-alpha] - 2026-11-06
 
 - 授权宿主新增 `--intent=background|show`（默认 background）。安装、重启、MCP 重连后的宿主只常驻托盘与续期，**不再自动弹窗**；只有用户主动（托盘、热键、`icon-control://`、需要批准的调用）才 `show`。

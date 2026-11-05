@@ -80,7 +80,8 @@ def check_target(state, hwnd=None, point=None):
             return 'The native permission UI cannot be automated'
         record = process_record(pid)
         auth = state.get('authorization', {})
-        if record not in auth.get('applications', []):
+        applications = auth.get('applications', [])
+        if '*' not in applications and record not in applications:
             return 'Target application is outside the human-approved application list'
     except (OSError, ValueError, psutil.Error):
         return 'Target application identity unavailable'
