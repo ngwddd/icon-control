@@ -17,7 +17,8 @@ def authority_stamp(state):
     from computer_mcp import permission, control
     if not state.get('granted'):
         raise permission.PermissionDenied('Live authority unavailable or revoked')
-    stamp = ((state.get('session'), state.get('revision')), control.status()['generation'])
+    stamp = ((state.get('session'), state.get('revision'),
+              state.get('revocation_generation')), control.status()['generation'])
     task = _current.get()
     if task and stamp != (task['revision'], task['generation']):
         raise permission.PermissionDenied('Execution cancelled by takeover or authority change')
@@ -37,7 +38,8 @@ def check(tool, arguments=_UNSET):
         if spec and spec.needs_authority(arguments):
             authority_stamp(authority)
         elif (control.status()['generation'] != task['generation'] or
-              (authority.get('session'), authority.get('revision')) != task['revision']):
+              (authority.get('session'), authority.get('revision'),
+               authority.get('revocation_generation')) != task['revision']):
             raise permission.PermissionDenied('Execution cancelled by takeover or authority change')
 
 @contextmanager
@@ -54,7 +56,8 @@ def operation(tool, arguments=None):
         if previous is None:
             authority = permission.status()
             token = _current.set(dict(generation=control.status()['generation'],
-                                      revision=(authority.get('session'), authority.get('revision')),
+                                      revision=(authority.get('session'), authority.get('revision'),
+                                                authority.get('revocation_generation')),
                                       tool=tool, arguments=arguments))
         from computer_mcp.native_mouse import physical_coordinates
         with physical_coordinates():

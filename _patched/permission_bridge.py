@@ -83,6 +83,25 @@ STATE_LEASE_S = 15.0
 _STARTED_AT = time.time()
 
 
+def _load_revocation_generation() -> int:
+    """Revocation must survive a bridge restart; a reset would revive old leases."""
+    try:
+        with open(STATE_PATH, encoding='utf-8') as handle:
+            value = json.load(handle).get('revocation_generation')
+        return int(value) if isinstance(value, int) and value >= 0 else 0
+    except Exception:
+        return 0
+
+
+_revocation_generation = _load_revocation_generation()
+_revoked_at = 0.0
+
+
+def revocation() -> dict:
+    with _lock:
+        return dict(generation=_revocation_generation, revoked_at=_revoked_at)
+
+
 def health() -> dict:
     """Read-only runtime facts for doctor/agent diagnostics; never grants."""
     with _lock:
@@ -162,7 +181,7 @@ def write_state(granted: bool, origin: str = "bridge",
                 client: str = None, event: str = None, sequence=None, action_at=None,
                 authorization=None) -> dict:
     with _lock:
-        global _last_event_stamp, _authorization
+        global _last_event_stamp, _authorization, _revocation_generation, _revoked_at
         _expire(time.time())
         if event == 'action' and granted:
             from computer_mcp.capabilities import validate
@@ -181,6 +200,11 @@ def write_state(granted: bool, origin: str = "bridge",
             if type(sequence) is int:
                 _client_sequences[client] = max(sequence, _client_sequences.get(client, 0))
         if event == 'action': _authorization = authorization if granted else {}
+        if event == 'action' and not granted:
+            # Monotonic: every explicit revoke invalidates every older lease,
+            # including payloads cached by another process before this call.
+            _revocation_generation += 1
+            _revoked_at = time.time()
         _write_state_locked(granted, origin, client, event)
         return read_state()
 
@@ -208,6 +232,8 @@ def _write_state_locked(granted, origin, client, event):
         "screen_text": "",
         "origin": origin,
         "effective_from": why,
+        "revocation_generation": _revocation_generation,
+        "revoked_at": _revoked_at,
         "clients": {k: {"granted": v["granted"], "event": v["event"],
                         "age_s": round(now - v["ts"], 1)}
                     for k, v in list(CLIENTS.items())[:8]},

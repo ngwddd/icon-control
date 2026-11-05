@@ -286,10 +286,14 @@ def authority(probe: bool = False, ttl: float = 2.0) -> dict:
     return dict(value)
 
 
-def _decorate(payload: dict, code: str | None = None) -> dict:
+def _decorate(payload: dict, code: str | None = None, source_state: dict | None = None) -> dict:
     """Attach the health block (and a reason code) to a status payload."""
     out = dict(payload)
     out['authority'] = authority()
+    if source_state is not None:
+        out['revocation'] = dict(
+            generation=source_state.get('revocation_generation'),
+            revoked_at=source_state.get('revoked_at'))
     if code:
         out['code'] = code
     return out
@@ -329,22 +333,26 @@ def status(force: bool = False, agent_session_id=None) -> dict:
             auth = cached.get('authorization', {})
             if cached.get('granted') and not capabilities.validate(auth):
                 return _decorate(dict(granted=False, source='bridge',
-                                      reason='Approval record is invalid'), 'permission_denied')
+                                      reason='Approval record is invalid'), 'permission_denied', cached)
             if cached.get('granted') and auth.get('lease_expires_at') and \
                     now >= float(auth['lease_expires_at']):
                 return _decorate(dict(granted=False, source='bridge',
-                                      reason='Lease expired'), 'permission_denied')
+                                      reason='Lease expired'), 'permission_denied', cached)
             if cached.get('granted') and auth['agent_session'] != (agent_session_id or agent_session.current()):
                 return _decorate(dict(granted=False, source='bridge',
                                       reason='Approval belongs to another Agent session'),
-                                 'permission_denied')
+                                 'permission_denied', cached)
             if cached.get('granted'):
                 from computer_mcp.consent_ipc import live_valid
                 if not live_valid(cached, agent_session_id or agent_session.current()):
                     return _decorate(dict(granted=False, source='unknown',
                                           reason='Live permission authority unavailable or revoked'),
-                                     'authority_unavailable')
-            return _decorate(dict(cached, age_s=round(age, 3)))
+                                     'authority_unavailable', cached)
+                return _decorate(dict(cached, age_s=round(age, 3)), source_state=cached)
+            if cached.get('revoked_at'):
+                return _decorate(dict(granted=False, source='bridge',
+                                      reason='Revoked by the user'), 'permission_revoked', cached)
+            return _decorate(dict(cached, age_s=round(age, 3)), 'permission_denied', cached)
     except (ValueError, TypeError, KeyError):
         pass
     trusted = _trust_authority()

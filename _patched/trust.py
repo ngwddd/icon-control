@@ -33,6 +33,16 @@ def _stop_path() -> Path:
     return security.data_home() / 'state' / 'emergency-stop.json'
 
 
+def _bridge_revocation() -> tuple[int, float]:
+    """Latest revocation the bridge persisted; beats any trust granted earlier."""
+    try:
+        payload = json.loads((security.data_home() / 'state' / 'mouse-permission.json')
+                             .read_text(encoding='utf-8'))
+        return int(payload.get('revocation_generation') or 0), float(payload.get('revoked_at') or 0)
+    except (OSError, ValueError, TypeError):
+        return 0, 0.0
+
+
 _TOOLS_CACHE = {"value": None}
 
 
@@ -101,7 +111,8 @@ def grant(days: int = DEFAULT_DAYS, confirm=None) -> dict:
     payload = dict(schema=1, subject=subject_id(), workspace=workspace(),
                    tools_sha256=tools_fingerprint(),
                    granted_at=now, expires_at=now + max(1, int(days)) * 86400,
-                   days=int(days), revoked_at=None, revocation_generation=0)
+                   days=int(days), revoked_at=None,
+                   revocation_generation=_bridge_revocation()[0])
     return _write(payload)
 
 
@@ -140,6 +151,15 @@ def validate(now: float | None = None) -> dict:
         return dict(ok=False, reason='trust expired', subject=record.get('subject'))
     if _stopped_after(record):
         return dict(ok=False, reason='emergency stop after trust was granted', subject=record.get('subject'))
+    current_generation, revoked_at = _bridge_revocation()
+    record_generation = int(record.get('revocation_generation') or 0)
+    if current_generation > record_generation:
+        return dict(ok=False, reason='revoked (bridge generation advanced)',
+                    subject=record.get('subject'))
+    if not record_generation and revoked_at and revoked_at >= float(record.get('granted_at') or 0):
+        # Legacy record without a generation: fall back to timestamps.
+        return dict(ok=False, reason='revoked after trust was granted',
+                    subject=record.get('subject'))
     return dict(ok=True, reason='trusted', subject=record.get('subject'),
                 expires_at=expires, days_left=round((expires - now) / 86400, 1),
                 generation=int(record.get('revocation_generation') or 0))
