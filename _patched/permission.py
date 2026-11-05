@@ -349,6 +349,11 @@ def status(force: bool = False, agent_session_id=None) -> dict:
                                           reason='Live permission authority unavailable or revoked'),
                                      'authority_unavailable', cached)
                 return _decorate(dict(cached, age_s=round(age, 3)), source_state=cached)
+            # A revoke only beats a trust that predates it; a trust granted
+            # afterwards must still work, so consult the trust record first.
+            trusted = _trust_authority()
+            if trusted is not None:
+                return trusted
             if cached.get('revoked_at'):
                 return _decorate(dict(granted=False, source='bridge',
                                       reason='Revoked by the user'), 'permission_revoked', cached)

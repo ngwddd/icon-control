@@ -9,6 +9,7 @@ import sys
 import time
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -144,6 +145,30 @@ class TrustCliTests(AuthorityCase, unittest.TestCase):
         self.assertEqual(trust.main(['status']), 3)     # nothing trusted yet
         trust.grant(confirm=lambda: True)
         self.assertEqual(trust.main(['status']), 0)
+
+
+    def test_trust_granted_after_a_revoke_is_effective(self):
+        """Live acceptance found this: a stale revoked state hid the new trust."""
+        import json
+        from computer_mcp import permission_bridge as bridge
+
+        revoked = dict(granted=False, revision=1, revocation_generation=1,
+                       revoked_at=time.time() - 60, source='bridge',
+                       checked_at_ts=time.time())
+        revoked['signature'] = __import__('computer_mcp.security', fromlist=['security']).signature(
+            revoked, __import__('computer_mcp.security', fromlist=['security']).load_token())
+        Path(bridge.STATE_PATH).write_text(json.dumps(revoked), encoding='utf-8')
+
+        trust.grant(confirm=lambda: True)          # user approves after the revoke
+        state = permission.status(force=True)
+        self.assertTrue(state['granted'], state)
+        self.assertEqual(state['source'], 'trust')
+
+    def test_trust_revoked_after_grant_is_still_denied(self):
+        trust.grant(confirm=lambda: True)
+        trust.revoke()
+        state = permission.status(force=True)
+        self.assertFalse(state['granted'])
 
 
 class WildcardTargetTests(unittest.TestCase):
