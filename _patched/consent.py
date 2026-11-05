@@ -17,6 +17,8 @@ def main(argv=None):
     import argparse
     parser=argparse.ArgumentParser()
     parser.add_argument('--broker-session')
+    parser.add_argument('--intent', choices=('background','show'), default='background',
+                        help='background: tray only, never raise a window')
     parser.add_argument('--tk', action='store_true', help='force the old Tk control center')
     args=parser.parse_args(argv)
     from computer_mcp import permission
@@ -27,7 +29,8 @@ def main(argv=None):
     if not args.tk:
         from computer_mcp import native_consent, native_dialog
         if native_dialog.available():
-            return native_consent.main(['--broker-session', args.broker_session])
+            return native_consent.main(['--broker-session', args.broker_session,
+                                        '--intent='+args.intent])
     def ipc(command, **fields):
         def transport(cmd, **values):
             return consent_ipc.request(cmd, ui_nonce=args.broker_session, **values)

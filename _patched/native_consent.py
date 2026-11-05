@@ -31,6 +31,26 @@ TIMER_MS = 4000
 LEASE_MINUTES = 60
 CLASS_NAME = 'IconControlConsentHost'
 MUTEX_NAME = 'IconControl.ConsentHost'
+INTENTS = ('background', 'show')
+DEFAULT_INTENT = 'background'
+
+
+def parse_intent(argv) -> str:
+    """Read --intent=background|show; every unknown value is rejected.
+
+    Default is ``background``: a host spawned by install, restart or a transport
+    reconnect must never steal focus. Only an explicit user-facing request may
+    ask for ``show``.
+    """
+    intent = DEFAULT_INTENT
+    for token in argv:
+        if not isinstance(token, str) or not token.startswith('--intent='):
+            continue
+        value = token.split('=', 1)[1].strip().lower()
+        if value not in INTENTS:
+            raise ValueError('Unknown consent intent: ' + value[:32])
+        intent = value
+    return intent
 MOD_ALT, MOD_CONTROL, MOD_SHIFT = 0x0001, 0x0002, 0x0004
 HOTKEYS = (
     ('Ctrl+Alt+Shift+F9', MOD_CONTROL | MOD_ALT | MOD_SHIFT, 0x78),
@@ -72,13 +92,23 @@ def _state_action(method):
 
 
 class ConsentHost:
-    def __init__(self, nonce: str):
+    def __init__(self, nonce: str, intent: str = DEFAULT_INTENT):
+        if intent not in INTENTS:
+            raise ValueError('Unknown consent intent: ' + str(intent)[:32])
         self._state_lock = threading.RLock()
         self._state_generation = 0
         self._heartbeat_results = queue.Queue(maxsize=4)
         self.nonce = nonce
+        self.intent = intent
+        self.last_sync_ok = None
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
         self.kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        # Without explicit prototypes ctypes rejects 64-bit lParam values with
+        # "int too long to convert", which spams the message loop on every
+        # unhandled message (WM_TIMER, WM_DPICHANGED, ...).
+        self.user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                               wintypes.WPARAM, ctypes.c_ssize_t]
+        self.user32.DefWindowProcW.restype = ctypes.c_ssize_t
         self.hwnd = 0
         self.tray = False
         self.granted = False
@@ -116,6 +146,8 @@ class ConsentHost:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(dict(pid=os.getpid(), hwnd=int(self.hwnd),
                                             hotkey=self.hotkey, tray=bool(self.tray),
+                                            intent=self.intent,
+                                            last_sync_ok=self.last_sync_ok,
                                             granted=self.granted if not self.state_unknown else None,
                                             agent_session=self.authorization.get('agent_session'),
                                             lease_expires_at=self.lease_until),
@@ -174,8 +206,10 @@ class ConsentHost:
         except Exception:
             self.state_unknown = True
             self.granted = False
+            self.last_sync_ok = False
             return False
         self.state_unknown = False
+        self.last_sync_ok = True
         if state.get('granted') and state.get('authorization'):
             self.granted = True
             self.authorization = state['authorization']
@@ -186,6 +220,18 @@ class ConsentHost:
             self.authorization = {}
             self.lease_until = 0.0
         return True
+
+    def _startup_sync(self):
+        """Background start: reflect bridge health in the tray, never a dialog.
+
+        A modal here is what produced the "无法连接授权桥" popup on every
+        reconnect while the bridge was still starting. Background starts must
+        stay silent; the heartbeat thread keeps the tray state fresh.
+        """
+        try:
+            self._sync()
+        finally:
+            self._refresh_tray()
 
     def show(self):
         if self._showing:
@@ -448,9 +494,12 @@ class ConsentHost:
         # ctypes.get_last_error(), not kernel32.GetLastError(): the latter is a
         # fresh call whose value is already clobbered by the marshalling.
         if ctypes.get_last_error() == 183:                # ERROR_ALREADY_EXISTS
-            existing = self.user32.FindWindowW(CLASS_NAME, None)
-            if existing:
-                self.user32.PostMessageW(existing, WM_SHOW, 0, 0)
+            # A background start must not wake the existing window; only an
+            # explicit show intent may pull it to the foreground.
+            if self.intent == 'show':
+                existing = self.user32.FindWindowW(CLASS_NAME, None)
+                if existing:
+                    self.user32.PostMessageW(existing, WM_SHOW, 0, 0)
             return 0
         class_ = WNDCLASSW(lpfnWndProc=self._wndproc, hInstance=None,
                            lpszClassName=CLASS_NAME)
@@ -467,7 +516,10 @@ class ConsentHost:
         import threading
         threading.Thread(target=self._heartbeat_loop, daemon=True).start()
         self._write_status()
-        self.show()
+        if self.intent == 'show':
+            self.show()
+        else:
+            self._startup_sync()
         message = MSG()
         while self.user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
             self.user32.TranslateMessage(ctypes.byref(message))
@@ -482,17 +534,23 @@ class ConsentHost:
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        intent = parse_intent(argv)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     nonce = None
     if '--broker-session' in argv:
         index = argv.index('--broker-session')
         nonce = argv[index + 1] if index + 1 < len(argv) else None
     if not nonce:
+        # Launch through the icon-control:// protocol: always a user action.
         permission._ensure_bridge()
         consent_ipc.request('open')
         return 0
     if not native_dialog.available():
         return 4
-    return ConsentHost(nonce).run()
+    return ConsentHost(nonce, intent=intent).run()
 
 
 if __name__ == '__main__':

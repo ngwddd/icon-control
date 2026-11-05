@@ -44,6 +44,22 @@ class _ConnectionQueue:
 
 _request_queue=_ConnectionQueue()
 
+def _matches_consent_command(command, nonce):
+    """True when ``command`` is this bridge's consent host for ``nonce``.
+
+    The trailing intent is optional so hosts started before v1.3.9 keep
+    validating, but an unknown intent is never accepted.
+    """
+    base = ['-I', '-m', 'computer_mcp.consent', '--broker-session', nonce]
+    tail = list(command[1:])
+    if tail[:len(base)] != base:
+        return False
+    rest = tail[len(base):]
+    if not rest:
+        return True
+    return rest in (['--intent=background'], ['--intent=show'])
+
+
 def _native_instance(pid):
     try:
         process = psutil.Process(pid)
@@ -54,7 +70,7 @@ def _native_instance(pid):
                 _native_instances.pop(nonce,None);continue
             # A Windows venv launcher may have exactly one interpreter child.
             if process.pid != root.pid and process.ppid() != root.pid: continue
-            if command[1:] != ['-I','-m','computer_mcp.consent','--broker-session',nonce]: continue
+            if not _matches_consent_command(command, nonce): continue
             allowed = {Path(sys.executable).with_name('pythonw.exe').resolve(),
                        Path(getattr(sys,'_base_executable',sys.executable)).with_name('pythonw.exe').resolve()}
             if Path(process.exe()).resolve() in allowed: return nonce
@@ -78,21 +94,50 @@ def _post_show():
     return False
 
 
-def open_native():
+def _host_window_exists():
+    try:
+        import win32gui
+        return bool(win32gui.FindWindow('IconControlConsentHost', None))
+    except Exception:
+        return False
+
+
+def open_native(intent='show'):
+    """Start (or wake) the consent host.
+
+    ``intent='show'`` is the explicit user path (protocol handler, tray, a tool
+    request that needs approval) and may raise the window. ``background`` starts
+    the host for its tray icon and lease upkeep only: it never wakes an existing
+    window and the new host starts silently.
+    """
+    if intent not in ('background', 'show'):
+        raise ValueError('Unknown consent intent: ' + str(intent)[:32])
+    if intent == 'background' and _host_window_exists():
+        return {'opened':True,'woken':False}
     for nonce, record in list(_native_instances.items()):
         if record['process'].is_running():
-            _post_show()
-            return {'opened':True}
+            if intent == 'show':
+                _post_show()
+            return {'opened':True,'woken':intent=='show'}
         _native_instances.pop(nonce,None)
     nonce=secrets.token_urlsafe(32)
     interpreter=Path(sys.executable).with_name('pythonw.exe')
     env=dict(os.environ,ICON_CONTROL_HOME=str(security.data_home()))
     env.pop('PYTHONPATH',None)
-    process=subprocess.Popen([str(interpreter),'-I','-m','computer_mcp.consent','--broker-session',nonce],
+    process=subprocess.Popen([str(interpreter),'-I','-m','computer_mcp.consent','--broker-session',nonce,
+                              '--intent='+intent],
         env=env,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
         creationflags=subprocess.CREATE_NO_WINDOW,cwd=str(interpreter.parent))
     _native_instances[nonce]={'process':psutil.Process(process.pid)}
-    return {'opened':True}
+    return {'opened':True,'woken':False}
+
+
+def ensure_background_host():
+    """Best-effort silent host so the tray exists without a window."""
+    try:
+        return open_native('background')
+    except Exception:
+        return {'opened':False}
 
 def _io(pipe, payload=None, timeout_ms=200):
     import pywintypes, win32event, win32file
