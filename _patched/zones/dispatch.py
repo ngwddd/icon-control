@@ -60,7 +60,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         result = mouse_actions.click(
             button=arguments.get("button", "left"),
             controller=mouse_controller,
-            x=arguments.get("x"), y=arguments.get("y")
+            x=arguments.get("x"), y=arguments.get("y"),
+            frame_id=arguments.get("frame_id")
         )
     elif name == "double_click":
         result = mouse_actions.double_click(

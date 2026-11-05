@@ -7,12 +7,16 @@
  "tools": [
   {
    "name": "click",
-   "description": "Click the current cursor position when x/y are absent. Optional x and y together move to physical screen coordinates and click after rechecking the target process. Alternatively use mouse_move then click.",
+   "description": "Click. Without coordinates it clicks the current cursor. With frame_id and x/y, x/y are IMAGE coordinates of that screenshot and the server converts them to physical pixels - prefer this. Without frame_id, x/y are physical screen pixels and are converted after rechecking the target process.",
    "block_sha1": "bffe406a62b6fee0f7c35b0ca5a14a35e8d016c3",
    "schema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
+     "frame_id": {
+      "type": "string",
+      "description": "Screenshot frame_id; x/y are then image coordinates of that frame"
+     },
      "x": {
       "type": "number"
      },

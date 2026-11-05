@@ -20,6 +20,7 @@ Tunable via env vars (read at import) or set_capture_config():
 import base64
 import hashlib
 import os
+import secrets
 import time
 from io import BytesIO
 from typing import Any
@@ -182,6 +183,83 @@ def _update_diff(img: Image.Image) -> tuple[bool, float, float]:
     return changed, diff, since_last
 
 
+# --------------------------------------------------------------------------- #
+# Frame identity: every capture records where its pixels came from, so a model
+# can click image coordinates instead of guessing physical screen pixels.
+# --------------------------------------------------------------------------- #
+FRAME_TTL_S = float(os.environ.get("DESK_FRAME_TTL_S", "15"))
+FRAME_MAX = 32
+_frames: dict[str, dict[str, Any]] = {}
+
+
+def _origin(region: dict[str, int] | None) -> tuple[int, int]:
+    if region is not None:
+        return int(region.get("x", 0)), int(region.get("y", 0))
+    try:
+        monitor = _sct().monitors[1]
+        return int(monitor["left"]), int(monitor["top"])
+    except Exception:
+        return 0, 0
+
+
+def _dpi_context() -> int | None:
+    try:
+        import ctypes
+        return int(ctypes.windll.user32.GetDpiForSystem())
+    except Exception:
+        return None
+
+
+def _foreground_hwnd() -> int | None:
+    try:
+        import win32gui
+        return int(win32gui.GetForegroundWindow()) or None
+    except Exception:
+        return None
+
+
+def _register_frame(region, src_w: int, src_h: int, out_w: int, out_h: int,
+                    scale: float) -> str:
+    now = time.time()
+    for key, value in list(_frames.items()):
+        if now - float(value["captured_at"]) > FRAME_TTL_S:
+            _frames.pop(key, None)
+    if len(_frames) >= FRAME_MAX:
+        oldest = min(_frames, key=lambda key: _frames[key]["captured_at"])
+        _frames.pop(oldest, None)
+    x0, y0 = _origin(region)
+    frame_id = "f_" + secrets.token_hex(4)
+    _frames[frame_id] = dict(frame_id=frame_id, captured_at=now,
+                             source_rect=[x0, y0, int(src_w), int(src_h)],
+                             image_size=[int(out_w), int(out_h)], scale=float(scale),
+                             dpi=_dpi_context(), hwnd=_foreground_hwnd(),
+                             region=dict(region) if region else None)
+    return frame_id
+
+
+def get_frame(frame_id: str) -> dict[str, Any]:
+    record = _frames.get(str(frame_id or ""))
+    if record is None:
+        raise ValueError("unknown frame_id; take a screenshot first")
+    if time.time() - float(record["captured_at"]) > FRAME_TTL_S:
+        raise ValueError("stale frame_id; capture again before clicking")
+    return record
+
+
+def to_physical(frame_id: str, x: float, y: float) -> tuple[int, int]:
+    """Map image coordinates of a frame onto physical screen pixels."""
+    record = get_frame(frame_id)
+    x0, y0, width, height = record["source_rect"]
+    image_w, image_h = record["image_size"]
+    if not image_w or not image_h:
+        raise ValueError("frame has no image size")
+    x, y = float(x), float(y)
+    if not (0 <= x <= image_w and 0 <= y <= image_h):
+        raise ValueError("point is outside the frame")
+    return (int(round(x0 + x * width / image_w)),
+            int(round(y0 + y * height / image_h)))
+
+
 def capture_screenshot(region: dict[str, int] | None = None) -> dict[str, Any]:
     """Capture the screen, downscale, encode, and compare against the previous frame."""
     t0 = time.perf_counter()
@@ -194,6 +272,8 @@ def capture_screenshot(region: dict[str, int] | None = None) -> dict[str, Any]:
     if scale != 1.0:
         img = img.resize((max(1, int(src_w * scale)), max(1, int(src_h * scale))), Image.BILINEAR)
     out_w, out_h = img.size
+    frame_id = _register_frame(region, src_w, src_h, out_w, out_h, scale)
+    frame = get_frame(frame_id)
 
     buffer = BytesIO()
     if str(_CONFIG["format"]) == "png":
@@ -221,6 +301,11 @@ def capture_screenshot(region: dict[str, int] | None = None) -> dict[str, Any]:
         "since_last_ms": round(since_last, 0),
         "frames_seen": _change_count,
         "hash": hashlib.md5(_prev_small or b"").hexdigest()[:12],
+        "frame_id": frame_id,
+        "source_rect": frame["source_rect"],
+        "image_size": frame["image_size"],
+        "dpi": frame["dpi"],
+        "hwnd": frame["hwnd"],
     }
 
 

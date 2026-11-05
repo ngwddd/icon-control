@@ -1,3 +1,12 @@
+## [1.3.9-beta.3] - 2026-11-06
+
+- **坐标契约（PR-1 第一步）**：`screenshot` 现在返回 `frame_id`、`source_rect`（物理屏幕区域，支持副屏负坐标）、`image_size`、`dpi`、`hwnd`，并保留原有 `width/height/scale`。
+- `click` 新增可选 `frame_id`：给了它，`x/y` 就被解释为**该帧的图像坐标**，由服务端换算成物理像素；不给则维持旧的物理坐标语义（兼容）。
+- `to_physical()` 校验：未知帧、超过 15 秒的陈旧帧、落在帧外的点一律 `ValueError`（上层映射为 `invalid_argument`）。
+- 帧登记表有上限（32 帧）并按 TTL 清理，不会无限增长。
+- `docs/tools-snapshot.json` 同步 `click` 的新描述与 schema；工具总数仍为 90。
+- 新增测试 `tests/test_v139_frames.py`（11 项）：几何换算、全屏负坐标、未知/陈旧帧、越界点、登记表上限、捕获返回字段、click 换算与拒绝路径。全量 702 项通过。
+
 ## [1.3.9-beta.2] - 2026-11-06
 
 - **撤销代际**（`revocation_generation`）：桥每收到一次显式撤销就 +1，并随状态文件持久化；桥重启后从文件恢复，不会把老租约“复活”。

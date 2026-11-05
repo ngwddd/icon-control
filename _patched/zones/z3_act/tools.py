@@ -34,9 +34,9 @@ SPECS: list[ToolSpec] = [
         name='click',
         effects=('input',),
         zone='Z3',
-        description='Click the current cursor position when x/y are absent. Optional x and y together move to physical screen coordinates and click after rechecking the target process. Alternatively use mouse_move then click.',
+        description='Click. Without coordinates it clicks the current cursor. With frame_id and x/y, x/y are IMAGE coordinates of that screenshot and the server converts them to physical pixels - prefer this. Without frame_id, x/y are physical screen pixels and are converted after rechecking the target process.',
         read_only=False,
-        schema={'type': 'object', 'additionalProperties': False, 'properties': {'x': {'type': 'number'}, 'y': {'type': 'number'}, 'button': {'type': 'string', 'enum': ['left', 'middle', 'right'], 'description': 'Mouse button to click', 'default': 'left'}}},
+        schema={'type': 'object', 'additionalProperties': False, 'properties': {'frame_id': {'type': 'string', 'description': 'Screenshot frame_id; x/y are then image coordinates of that frame'}, 'x': {'type': 'number'}, 'y': {'type': 'number'}, 'button': {'type': 'string', 'enum': ['left', 'middle', 'right'], 'description': 'Mouse button to click', 'default': 'left'}}},
     ),
     ToolSpec(
         name='click_template',

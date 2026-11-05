@@ -8,13 +8,16 @@ from computer_mcp.input_guard import Button, MouseController as Controller
 from computer_mcp.core.utils import button_from_string
 
 
-def click(button: str = "left", controller: Controller | None = None, *, x: float | None = None, y: float | None = None, expected_hwnd: int | None = None) -> dict[str, Any]:
+def click(button: str = "left", controller: Controller | None = None, *, x: float | None = None, y: float | None = None, expected_hwnd: int | None = None, frame_id: str | None = None) -> dict[str, Any]:
     """Perform a mouse click.
-    
+
     Args:
         button: Mouse button ("left", "right", "middle")
         controller: Mouse controller instance (creates one if None)
-    
+        x, y: physical screen coordinates, unless ``frame_id`` is given
+        frame_id: screenshot frame; x/y are then image coordinates and are
+            converted to physical pixels here, never by the caller
+
     Returns:
         Dictionary with action result
     """
@@ -24,6 +27,13 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
     import math
     if (x is None) != (y is None):
         raise ValueError('click requires both x and y, or neither')
+    image_point = None
+    if frame_id is not None:
+        if x is None or y is None:
+            raise ValueError('frame_id requires x and y in image coordinates')
+        from computer_mcp.core import screenshot as capture_core
+        image_point = (float(x), float(y))
+        x, y = capture_core.to_physical(frame_id, x, y)
     if expected_hwnd is not None and x is None:
         raise ValueError('A window-bound click requires explicit x/y coordinates')
     target = None
@@ -54,7 +64,9 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
             "status": "executed_unverified", "verified": False,
             "verification_method": "not_performed",
             "next_action": "Observe the intended page or control after this click; process identity does not prove navigation succeeded.",
-            **({"x": int(x), "y": int(y)} if x is not None else {})}
+            **({"x": int(x), "y": int(y)} if x is not None else {}),
+            **({"frame_id": frame_id, "image_point": [round(image_point[0], 2), round(image_point[1], 2)]}
+               if frame_id is not None and image_point is not None else {})}
 
 
 def double_click(button: str = "left", controller: Controller | None = None) -> dict[str, Any]:
