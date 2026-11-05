@@ -59,6 +59,12 @@ def tools_fingerprint() -> str:
 
 
 def workspace() -> str:
+    """Caller workspace, recorded for display only - never part of the subject.
+
+    workspace_identity() follows the process cwd, so the MCP server and the CLI
+    disagreed about the same installation and a trust granted by one never
+    matched the other.
+    """
     from computer_mcp import agent_session
     try:
         return agent_session.workspace_identity()
@@ -66,10 +72,43 @@ def workspace() -> str:
         return ''
 
 
+def install_home() -> str:
+    return str(security.data_home().resolve()).lower()
+
+
 def subject_id() -> str:
-    """Stable for an installation+workspace+tool set; changes on any of them."""
-    parts = [workspace(), tools_fingerprint(), os.environ.get('COMPUTERNAME', '')]
+    """Stable for one installation + tool set; independent of the caller's cwd."""
+    parts = [install_home(), tools_fingerprint(), os.environ.get('COMPUTERNAME', '')]
     return hashlib.sha256('|'.join(parts).encode('utf-8')).hexdigest()[:32]
+
+
+def migrate() -> bool:
+    """Re-sign an authentic record whose subject used the old cwd formula.
+
+    Safe: the stored signature already proves the user granted it, and the grant
+    time, expiry and tool fingerprint are preserved untouched.
+    """
+    record = load()
+    if not record:
+        return False
+    if int(record.get('schema') or 1) >= 2:
+        return False          # only the one-time formula change is migrated
+    subject = subject_id()
+    if record.get('subject') == subject:
+        return False
+    if record.get('revoked_at'):
+        return False
+    if float(record.get('expires_at') or 0) <= time.time():
+        return False
+    if str(record.get('tools_sha256') or '') != tools_fingerprint():
+        return False
+    previous = record.get('subject')
+    record['subject'] = subject
+    record['migrated_from'] = previous
+    record['install_home'] = install_home()
+    record['schema'] = 2
+    _write(record)
+    return True
 
 
 def _write(payload: dict) -> dict:
@@ -108,7 +147,8 @@ def grant(days: int = DEFAULT_DAYS, confirm=None) -> dict:
     if not callable(confirm) or not confirm():
         raise PermissionError('Trust requires an explicit user confirmation')
     now = time.time()
-    payload = dict(schema=1, subject=subject_id(), workspace=workspace(),
+    payload = dict(schema=2, subject=subject_id(), workspace=workspace(),
+                   install_home=install_home(),
                    tools_sha256=tools_fingerprint(),
                    granted_at=now, expires_at=now + max(1, int(days)) * 86400,
                    days=int(days), revoked_at=None,
@@ -138,6 +178,10 @@ def _stopped_after(record: dict) -> bool:
 
 def validate(now: float | None = None) -> dict:
     now = time.time() if now is None else now
+    try:
+        migrate()
+    except Exception:
+        pass
     record = load()
     if not record:
         return dict(ok=False, reason='no trust record', subject=None)

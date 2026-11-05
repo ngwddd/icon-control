@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "icon-control"
-version = "1.3.9b6"
+version = "1.3.9b7"
 description = "Windows desktop MCP with authenticated, cancellable execution"
 readme = "README.md"
 requires-python = ">=3.12"
