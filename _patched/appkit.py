@@ -328,7 +328,8 @@ def exit_app(process: str | None = None,
             try:
                 from computer_mcp import capabilities, permission
                 permission.require('close_window')
-                if capabilities.process_record(pid) not in permission.status().get('authorization',{}).get('applications',[]):
+                approved = permission.status().get('authorization', {}).get('applications', [])
+                if '*' not in approved and capabilities.process_record(pid) not in approved:
                     continue
                 _execution.checkpoint('run_script')
                 psutil.Process(pid).terminate()

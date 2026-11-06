@@ -101,6 +101,13 @@ check_tool() 在**每一次注入输入事件前**都会跑一遍，所以 polic
 
 ---
 
+## 四点五、急停契约（RC2 起）
+
+- 急停写入 `state/emergency-stop.json`，**任何记录缺失、损坏、删除都不会取消它**；
+- 恢复只有一个入口：`python -m computer_mcp.policy resume`（会删除急停闩并写入新授权时刻）；
+- 安装、升级、回滚**不会**调用 resume，只会在"全新安装"时创建记录（`ensure_initialised()`）；
+- `policy disable` / `policy enable` 会真正切换运行模式（环境变量优先，其次记录）。
+
 ## 五、切换回人工授权（保留能力）
 
 ```powershell
@@ -128,7 +135,7 @@ ICON_CONTROL_POLICY=human
 
 | 项 | 结果 |
 |---|---|
-| 全量回归 | **748 项，0 失败，0 错误，3 跳过**（旧 721 + headless 14 + 健壮性 13） |
+| 全量回归 | **762 项，0 失败，0 错误，3 跳过**（旧 721 + headless 14 + 健壮性 13 + 审计整改 14） |
 | 无桥冒烟（`tools/smoke_headless.py`） | `granted=true source=local scopes=12 apps=['*']`；`check_tool('click')` 放行；`require_launch` 放行；`control_status.policy={mode:local, runtime:ready}` |
 | 人工模式未被破坏 | 同一 HOME 切 `human` 后 `granted=false`，理由仍是 `Missing, expired or unauthenticated bridge state` |
 | 急停仍有效 | 停止闩晚于授权 → `granted=false`、`runtime=stopped`；`policy.resume()` 后恢复 |
