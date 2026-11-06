@@ -45,7 +45,8 @@ def require_launch(executable, arguments=''):
     if not has_scope('process'):
         raise permission.PermissionDenied('Process launch approval required')
     record = launch_record(executable, arguments)
-    if record not in permission.status().get('authorization',{}).get('launches',[]):
+    launches = permission.status().get('authorization', {}).get('launches', [])
+    if '*' not in launches and record not in launches:
         raise permission.PermissionDenied('Executable and arguments require exact human approval')
     return record
 

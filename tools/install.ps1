@@ -23,7 +23,11 @@ $env:ICON_CONTROL_HOME = $root
 function Revoke-CurrentAuthority {
     $currentPython = Join-Path $current 'Scripts\python.exe'
     if (Test-Path -LiteralPath $currentPython) {
-        & $currentPython -c "from computer_mcp import security,permission_bridge; security.latch_stop(); permission_bridge.write_state(False,client='installer',event='action')"
+        # v1.4.0: the local policy has no approval to revoke. Latching an
+        # emergency stop here would freeze the freshly installed agent, so the
+        # installer only revokes authority for the human-approval policy.
+        # The probe tolerates an older installed build that has no `policy`.
+        & $currentPython -c "try:`n    from computer_mcp import policy`nexcept Exception:`n    policy = None`nif policy is not None and policy.is_local():`n    print('headless policy: nothing to revoke'); policy.resume()`nelse:`n    from computer_mcp import security, permission_bridge; security.latch_stop(); permission_bridge.write_state(False, client='installer', event='action')"
         if ($LASTEXITCODE -ne 0) { throw 'Cannot confirm revoked authority; activation/rollback refused' }
     }
 }
@@ -74,6 +78,10 @@ try {
         & (Join-Path $current 'Scripts\python.exe') @initArguments
     }
     if ($LASTEXITCODE -ne 0) { throw 'Provisioning failed' }
+    # v1.4.0 headless: the previous build may have latched an emergency stop
+    # during Revoke-CurrentAuthority. The local policy starts authorised at
+    # activation, so an upgrade must not leave the fresh install frozen.
+    & (Join-Path $current 'Scripts\python.exe') -c "try:`n    from computer_mcp import policy`n    if policy.is_local(): policy.resume()`nexcept Exception:`n    pass"
 } catch {
     if (Test-Path -LiteralPath $current) {
         $failed = Assert-Managed (Join-Path $root ('candidate-' + $stamp))
@@ -85,4 +93,4 @@ try {
 Write-Output ('Installed candidate: ' + $current)
 Write-Output 'Use current\Scripts\python.exe -m computer_mcp.launcher stdio in your MCP client.'
 Write-Output 'For a custom InstallRoot, also set ICON_CONTROL_HOME to the same directory.'
-Write-Output 'Load plugin\client.js into the host using its documented plugin mechanism; user must click authorization.'
+Write-Output 'v1.4.0 runs headless: no approval window, no tray, no hotkey. Set ICON_CONTROL_POLICY=human to restore the approval flow.'

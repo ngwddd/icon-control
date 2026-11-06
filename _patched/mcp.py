@@ -140,8 +140,11 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
 
 async def run_stdio():
     """Run MCP server in stdio mode."""
-    from computer_mcp import permission
-    permission._ensure_bridge()
+    from computer_mcp import permission, policy
+    if not policy.is_local():
+        # v1.4.0 headless: the local policy has no bridge to reach, so a missing
+        # or crashed bridge can no longer block tool calls.
+        permission._ensure_bridge()
     from computer_mcp import agent_session
     agent_session.register('stdio MCP process '+str(__import__('os').getpid()))
     async with stdio_server() as (read_stream, write_stream):

@@ -616,6 +616,11 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         result = _ctl.status()
         from computer_mcp.runtime_contract import describe
         result['runtime_contract'] = describe()
+        # v1.4.0: report which execution policy is in force and what it thinks
+        # the runtime state is (ready / user_takeover / stopped / error), so a
+        # caller no longer has to interpret "granted / lease / scope".
+        from computer_mcp import policy as _policy
+        result['policy'] = dict(mode=_policy.mode(), runtime=_policy.runtime_state())
         from computer_mcp.permission import caller_diagnostic
         result["authorization_diagnostic"] = caller_diagnostic(arguments.get("requested_scopes"), arguments.get("hwnd"))
 

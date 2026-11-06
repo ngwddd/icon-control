@@ -97,13 +97,15 @@ def main():
     process_registry.register_current()
     if args.command=='http':asyncio.run(mcp.run_http(args.host,args.port))
     else:
-        # Start (or reuse) a silent consent host so the tray exists on install,
-        # restart and reconnect without ever raising a window.
-        try:
-            from computer_mcp import consent_ipc
-            consent_ipc.ensure_background_host()
-        except Exception:
-            pass
+        # v1.4.0 headless: the local policy needs no consent host, no tray and
+        # no bridge. Only the human-approval mode starts that background host.
+        from computer_mcp import policy
+        if not policy.is_local():
+            try:
+                from computer_mcp import consent_ipc
+                consent_ipc.ensure_background_host()
+            except Exception:
+                pass
         asyncio.run(mcp.run_stdio())
     return 0
 

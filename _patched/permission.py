@@ -320,7 +320,14 @@ def _trust_authority() -> dict | None:
 
 
 def status(force: bool = False, agent_session_id=None) -> dict:
-    """Only a fresh, signed bridge action is authority; OCR is diagnostic only."""
+    """Only a fresh, signed bridge action is authority; OCR is diagnostic only.
+
+    v1.4.0: when the local policy is active the MCP connection itself is the
+    authority and none of the bridge/trust machinery below is consulted.
+    """
+    from computer_mcp import policy
+    if policy.is_local():
+        return policy.state()
     now = time.time()
     cached = _read_state_file()
     try:
@@ -376,6 +383,9 @@ CONSENT_POPUP_INTERVAL_S = 20.0
 def _request_consent(arguments: dict | None = None, missing=None) -> str | None:
     """A blocked call should bring up the approval window, not just an error."""
     global _last_consent_request
+    from computer_mcp import policy
+    if policy.is_local():
+        return None          # headless: there is no window to raise
     if os.environ.get('ICON_CONTROL_AUTO_CONSENT') == '0':
         return
     from computer_mcp import agent_session

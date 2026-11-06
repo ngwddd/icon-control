@@ -2,7 +2,9 @@
 
 Windows 桌面控制 MCP：让 AI 通过截图、OCR、UI Automation、鼠标键盘和宏操作桌面，并在执行时检查授权、目标应用与用户接管状态。
 
-**当前正式版：[v1.3.8](https://github.com/ngwddd/icon-control/releases/tag/v1.3.8)** · **90 个 MCP 工具** · **MIT**
+**v1.4.0（headless）：连上即用，不再需要人工授权** · **90 个 MCP 工具** · **MIT**
+
+> v1.4.0 起默认走本地执行策略，授权窗口/托盘/热键不再启动；需要旧的人工授权流程时设 `ICON_CONTROL_POLICY=human`。设计与安全边界见 [docs/v1.4/HEADLESS.md](docs/v1.4/HEADLESS.md)。
 
 [下载正式版](https://github.com/ngwddd/icon-control/releases/tag/v1.3.8) · [更新日志](CHANGELOG.md) · [授权说明](docs/v1.3/CONSENT-USAGE.md) · [v1.3.8 发布说明](docs/v1.3/RELEASE-v1.3.8.md)
 

@@ -32,6 +32,12 @@ import sys
 import unittest
 from pathlib import Path
 
+# v1.4.0 ships the local (headless) policy as the product default. This suite
+# mostly asserts the retained human-approval policy, so a direct
+# ``python -m unittest`` run gets it pinned the same way tools/verify.py does.
+# test_v140_headless.py overrides per-test.
+os.environ.setdefault("ICON_CONTROL_POLICY", "human")
+
 HERE = Path(__file__).resolve().parent
 REEXEC_FLAG = "DSH_TEST_REEXEC"
 

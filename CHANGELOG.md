@@ -1,3 +1,16 @@
+## [1.4.0] - 2026-11-07
+
+- **架构：默认改为本地执行策略（headless）。** 工具调用不再需要人工授权窗口、授权桥心跳、scope 租约或 30 天信任记录；是否允许执行由「已连接的 MCP 会话 + 执行保护」决定。详见 `docs/v1.4/HEADLESS.md`。
+- 新增 `_patched/policy.py`：`LocalExecutionPolicy`，提供 `state()` / `runtime_state()` / `resume()`；授权时刻记录在 `state/local-policy.json`。
+- `permission.status()` 在本地模式下直接返回策略状态；`_request_consent()` 不再弹窗。
+- `capabilities.require_launch()` 与 `workspace.readable_path()` 支持通配授权 —— 修复了两个既有死角：**信任模式下无法启动程序、无法读取外部文件**。
+- `launcher.py` / `mcp.run_stdio()` 本地模式不再拉起授权桥与托盘宿主，桥缺失不再影响工具调用。
+- `control_status` 增加 `policy: {mode, runtime}`，运行时状态为 `ready / user_takeover / stopped / error`。
+- `tools/install.ps1` 安装与回滚不再无条件写急停闩；本地模式写策略记录。升级后无需重新授权。
+- 保留人工授权模式：`ICON_CONTROL_POLICY=human`，行为与 1.3.9 一致；`tools/verify.py` 默认用它跑旧回归。
+- 新增 `tests/test_v140_headless.py`（14 项）与 `tools/smoke_headless.py`（无桥冒烟）。
+- 回归：**735 项 / 0 失败 / 0 错误 / 3 跳过**。
+
 ## [1.3.9-beta.11] - 2026-11-06
 
 - **修复：授权面板永久显示「无法连接授权桥」**。宿主通常比桥先启动（后台宿主由 launcher 拉起，桥稍后就绪），启动同步失败后，面板打开时只试一次就放弃，于是整个宿主生命周期里热键/托盘都只能弹「授权状态未知」。

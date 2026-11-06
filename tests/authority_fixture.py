@@ -23,7 +23,11 @@ class AuthorityFixture:
     def __enter__(self):
         self.temp=tempfile.TemporaryDirectory();state=Path(self.temp.name)/'state';state.mkdir()
         self.old_control=copy.deepcopy(control.STATE)
-        self.patches=[patch.dict(os.environ,ICON_CONTROL_HOME=self.temp.name),
+        self.patches=[patch.dict(os.environ,ICON_CONTROL_HOME=self.temp.name,
+                                 # v1.4.0: the product defaults to the local
+                                 # policy; these tests exercise the retained
+                                 # human-approval policy, so pin it here.
+                                 ICON_CONTROL_POLICY='human'),
             patch.multiple(bridge,STATE_DIR=str(state),STATE_PATH=str(state/'mouse-permission.json'),
                 LOG_PATH=str(state/'bridge.log'),CLIENTS={},_last_action=None,_revision=0,_authorization={}),
             patch.object(bridge,'write_state',side_effect=grant_wrapper(bridge.write_state)),

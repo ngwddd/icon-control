@@ -47,7 +47,10 @@ def readable_path(name, root=None):
         if root is not None:
             raise
         state = permission.status()
-        if capabilities.file_record(name) not in state.get('authorization', {}).get('read_files', []):
+        allowed = state.get('authorization', {}).get('read_files', [])
+        # v1.4.0: the local policy grants a wildcard; the size and path checks
+        # below are what actually bound an external read.
+        if '*' not in allowed and capabilities.file_record(name) not in allowed:
             raise permission.PermissionDenied('External file needs an exact native approval')
         return Path(name).absolute()
 

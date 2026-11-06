@@ -33,6 +33,10 @@ def main():
     env = dict(os.environ, PYTHONPATH=str(runtime), PYTHONIOENCODING='utf-8',
                ICON_CONTROL_HOME=str(runtime), DSH_MOUSE_STATE=str(state / 'mouse-permission.json'),
                ICON_CONTROL_TEST_SOURCE_SHA=tested_commit,
+               # v1.4.0 ships the local (headless) policy by default. Most of
+               # this suite asserts the retained human-approval policy, so the
+               # runner pins it; test_v140_headless.py overrides to local.
+               ICON_CONTROL_POLICY='human',
                DSH_MOUSE_BRIDGE='off', DSH_E2E='0', DSH_LIVE='0')
     if args.baseline:
         code = ('import json; from computer_mcp import tool_registry as r; '
