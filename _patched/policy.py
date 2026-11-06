@@ -120,7 +120,9 @@ def resume() -> dict:
     record = _load()
     record.update(mode=LOCAL, authorized_at=now, resumed_at=now)
     record.setdefault('created_at', now)
-    return _save(record)
+    saved = _save(record)
+    _STATE_CACHE.update(signature=None, value=None)
+    return saved
 
 
 def subject() -> str:
@@ -141,11 +143,10 @@ def _stop_active(authorization_at: float) -> bool:
 
 
 def authorization() -> dict:
-    from computer_mcp import capabilities
     now = time.time()
     return dict(agent_session=agent_session.current(),
                 agent_id=subject(),
-                scopes=sorted(capabilities.SCOPES),
+                scopes=_all_scopes(),
                 applications=[WILDCARD],
                 launches=[WILDCARD],
                 read_files=[WILDCARD],
@@ -153,34 +154,79 @@ def authorization() -> dict:
                 source=LOCAL)
 
 
+_STATE_CACHE = {'signature': None, 'value': None}
+_SCOPES = {'value': None}
+
+
+def _all_scopes() -> list:
+    if _SCOPES['value'] is None:
+        from computer_mcp import capabilities
+        _SCOPES['value'] = tuple(sorted(capabilities.SCOPES))
+    return list(_SCOPES['value'])
+
+
+def _file_signature(path: Path):
+    try:
+        stat = path.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return None
+
+
+def _signature():
+    """Everything that can change the answer: the policy record and the latch."""
+    return (_file_signature(record_path()),
+            _file_signature(security.data_home() / 'state' / 'emergency-stop.json'))
+
+
 def state() -> dict:
-    """The payload ``permission.status()`` returns while the policy is local."""
+    """The payload ``permission.status()`` returns while the policy is local.
+
+    ``permission.check_tool`` runs before *every* injected input event, so this
+    is on the hot path: the answer is cached against the mtime of the two files
+    that can change it and rebuilt only when one of them moves.
+    """
+    signature = _signature()
+    cached = _STATE_CACHE
+    if cached['value'] is not None and cached['signature'] == signature:
+        return cached['value']
     started = authorized_at()
     now = time.time()
     if _stop_active(started):
-        return dict(granted=False, source='local', code='permission_revoked',
-                    reason='Emergency stop active; resume with policy.resume()',
-                    checked_at=time.strftime('%Y-%m-%d %H:%M:%S'),
-                    checked_at_ts=now, expires_at=now + LEASE_SECONDS,
-                    authorized_at=started, session=agent_session.current(),
-                    revision=1, authorization={})
-    return dict(granted=True, source='local', age_s=0.0, screen_text='',
-                checked_at=time.strftime('%Y-%m-%d %H:%M:%S'),
-                checked_at_ts=now, expires_at=now + LEASE_SECONDS,
-                authorized_at=started, session=agent_session.current(),
-                revision=1, authorization=authorization())
+        value = dict(granted=False, source='local', code='permission_revoked',
+                     reason='Emergency stop active; resume with policy.resume()',
+                     checked_at=time.strftime('%Y-%m-%d %H:%M:%S'),
+                     checked_at_ts=now, expires_at=now + LEASE_SECONDS,
+                     authorized_at=started, session=agent_session.current(),
+                     revision=1, authorization={})
+    else:
+        value = dict(granted=True, source='local', age_s=0.0, screen_text='',
+                     checked_at=time.strftime('%Y-%m-%d %H:%M:%S'),
+                     checked_at_ts=now, expires_at=now + LEASE_SECONDS,
+                     authorized_at=started, session=agent_session.current(),
+                     revision=1, authorization=authorization())
+    cached.update(signature=signature, value=value)
+    return value
 
 
 def runtime_state() -> str:
-    """ready / user_takeover / stopped / error — what control_status reports."""
+    """ready / user_takeover / stopped / error — what control_status reports.
+
+    Deliberately uses ``control.status()`` rather than
+    ``control.blocking_reason()``: the latter installs the low-level input
+    hooks, and a read-only status query must not start monitoring.
+    """
     if _stop_active(authorized_at()):
         return 'stopped'
     try:
         from computer_mcp import control
-        if control.blocking_reason():
-            return 'user_takeover'
+        state = control.status()
     except Exception:
         return 'error'
+    if not state.get('enabled', True):
+        return 'error'
+    if state.get('owner') == 'user':
+        return 'user_takeover'
     return 'ready'
 
 

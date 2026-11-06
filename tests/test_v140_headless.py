@@ -123,11 +123,11 @@ class StopTests(LocalPolicyCase):
 
 class RuntimeStateTests(LocalPolicyCase):
     def test_ready_when_nothing_is_in_the_way(self):
-        with patch('computer_mcp.control.blocking_reason', return_value=None):
+        with patch('computer_mcp.control.status', return_value=dict(owner='idle', enabled=True)):
             self.assertEqual(policy.runtime_state(), 'ready')
 
     def test_takeover_is_reported(self):
-        with patch('computer_mcp.control.blocking_reason', return_value='user is typing'):
+        with patch('computer_mcp.control.status', return_value=dict(owner='user', enabled=True)):
             self.assertEqual(policy.runtime_state(), 'user_takeover')
 
 

@@ -76,6 +76,17 @@ DSH ──stdio/HTTP──▶ MCP Server ──check_tool──▶ policy.state(
 
 ---
 
+## 三点五、热路径开销
+
+check_tool() 在**每一次注入输入事件前**都会跑一遍，所以 policy.state() 按两个文件的 mtime 缓存（策略记录 + 急停闩），只有它们变化时才重建：
+
+| 实现 | permission.status() |
+|---|---|
+| 每调用都解析 JSON | 325 µs |
+| 按 mtime 缓存（当前） | **24 µs** |
+
+急停仍然实时生效：写入停止闩会改变 mtime，下一次调用立刻变 granted=false（有测试覆盖）。
+
 ## 四、本地策略的判定条件
 
 一次工具调用被允许，当且仅当：
@@ -117,7 +128,7 @@ ICON_CONTROL_POLICY=human
 
 | 项 | 结果 |
 |---|---|
-| 全量回归 | **743 项，0 失败，0 错误，3 跳过**（旧 721 + headless 14 + 健壮性 8） |
+| 全量回归 | **748 项，0 失败，0 错误，3 跳过**（旧 721 + headless 14 + 健壮性 13） |
 | 无桥冒烟（`tools/smoke_headless.py`） | `granted=true source=local scopes=12 apps=['*']`；`check_tool('click')` 放行；`require_launch` 放行；`control_status.policy={mode:local, runtime:ready}` |
 | 人工模式未被破坏 | 同一 HOME 切 `human` 后 `granted=false`，理由仍是 `Missing, expired or unauthenticated bridge state` |
 | 急停仍有效 | 停止闩晚于授权 → `granted=false`、`runtime=stopped`；`policy.resume()` 后恢复 |

@@ -68,6 +68,70 @@ class ResumeTests(PolicyRobustnessCase):
         self.assertTrue(policy.state()['granted'])
 
 
+class HeadlessIsolationTests(PolicyRobustnessCase):
+    def test_status_never_imports_the_consent_stack(self):
+        """The headless path must not even load the approval machinery."""
+        import subprocess
+        import sys
+        code = (
+            'import json,sys\n'
+            'from computer_mcp import agent_session, permission\n'
+            'agent_session.register("isolation")\n'
+            'st = permission.status()\n'
+            "names = ['computer_mcp.consent', 'computer_mcp.consent_ipc',\n"
+            "         'computer_mcp.permission_bridge', 'computer_mcp.native_consent',\n"
+            "         'computer_mcp.native_dialog', 'computer_mcp.native_tray']\n"
+            'loaded = [n for n in names if n in sys.modules]\n'
+            'print(json.dumps({"granted": st.get("granted"), "loaded": loaded}))\n'
+        )
+        import os
+        env = dict(os.environ, ICON_CONTROL_HOME=str(self.home),
+                   ICON_CONTROL_POLICY='local', PYTHONIOENCODING='utf-8')
+        result = subprocess.run([sys.executable, '-c', code], capture_output=True,
+                                text=True, env=env, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr[-400:])
+        report = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertTrue(report['granted'])
+        self.assertEqual(report['loaded'], [], 'headless mode loaded approval modules')
+
+    def test_runtime_state_does_not_install_input_hooks(self):
+        with patch('computer_mcp.control.status', return_value=dict(owner='idle', enabled=True)), \
+                patch('computer_mcp.control.ensure_watcher') as watcher:
+            self.assertEqual(policy.runtime_state(), 'ready')
+        watcher.assert_not_called()
+
+    def test_runtime_state_reports_user_ownership(self):
+        with patch('computer_mcp.control.status', return_value=dict(owner='user', enabled=True)):
+            self.assertEqual(policy.runtime_state(), 'user_takeover')
+
+
+class CacheTests(PolicyRobustnessCase):
+    def test_cached_state_is_invalidated_by_a_new_stop_file(self):
+        import time
+        from computer_mcp import security
+        policy.resume()
+        self.assertTrue(policy.state()['granted'])
+        time.sleep(0.02)
+        security.provision_token()
+        body = dict(stopped_at=time.time())
+        body['signature'] = security.signature(body, security.load_token())
+        (self.home / 'state' / 'emergency-stop.json').write_text(json.dumps(body), encoding='utf-8')
+        time.sleep(0.02)
+        self.assertFalse(policy.state()['granted'], 'cache hid a new emergency stop')
+
+    def test_cached_state_is_invalidated_by_resume(self):
+        import time
+        from computer_mcp import security
+        security.provision_token()
+        body = dict(stopped_at=time.time())
+        body['signature'] = security.signature(body, security.load_token())
+        (self.home / 'state' / 'emergency-stop.json').write_text(json.dumps(body), encoding='utf-8')
+        self.assertFalse(policy.state()['granted'])
+        time.sleep(0.02)
+        policy.resume()
+        self.assertTrue(policy.state()['granted'], 'resume did not clear the cached stop')
+
+
 class ControlStatusTests(PolicyRobustnessCase):
     def test_control_status_exposes_policy_block(self):
         from computer_mcp.input_guard import KeyboardController, MouseController
