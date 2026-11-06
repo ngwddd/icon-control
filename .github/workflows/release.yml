@@ -75,7 +75,10 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $notes = "docs/v1.3/RELEASE-$env:RELEASE_TAG.md"
+          $notes = "docs/v1.4/RELEASE-$env:RELEASE_TAG.md"
+          if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) {
+            $notes = "docs/v1.3/RELEASE-$env:RELEASE_TAG.md"
+          }
           if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) {
             $notes = 'CHANGELOG.md'
           }

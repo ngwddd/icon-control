@@ -1,4 +1,7 @@
-## [1.4.0] - 2026-11-07
+## [1.4.0-rc1] - 2026-11-07
+
+> 发布候选版本（RC）。正式版要等 32 项真机验收在发布提交上签收后再发。
+> 安装即生效：默认本地执行策略，没有授权窗口、没有托盘、没有热键；需要旧流程时设 `ICON_CONTROL_POLICY=human`。
 
 - **架构：默认改为本地执行策略（headless）。** 工具调用不再需要人工授权窗口、授权桥心跳、scope 租约或 30 天信任记录；是否允许执行由「已连接的 MCP 会话 + 执行保护」决定。详见 `docs/v1.4/HEADLESS.md`。
 - 新增 `_patched/policy.py`：`LocalExecutionPolicy`，提供 `state()` / `runtime_state()` / `resume()`；授权时刻记录在 `state/local-policy.json`。

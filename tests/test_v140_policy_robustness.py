@@ -123,6 +123,8 @@ class CacheTests(PolicyRobustnessCase):
         import time
         from computer_mcp import security
         security.provision_token()
+        policy.resume()          # authority must predate the stop
+        time.sleep(0.02)
         body = dict(stopped_at=time.time())
         body['signature'] = security.signature(body, security.load_token())
         (self.home / 'state' / 'emergency-stop.json').write_text(json.dumps(body), encoding='utf-8')
@@ -136,7 +138,17 @@ class ControlStatusTests(PolicyRobustnessCase):
     def test_control_status_exposes_policy_block(self):
         from computer_mcp.input_guard import KeyboardController, MouseController
         from computer_mcp.zones.dispatch import ComputerState, dispatch
-        with patch('computer_mcp.control.blocking_reason', return_value=None):
+        from computer_mcp import control
+
+        original = control.status
+
+        def idle():
+            data = dict(original())
+            data['owner'] = 'idle'
+            return data
+
+        with patch('computer_mcp.control.blocking_reason', return_value=None), \
+                patch('computer_mcp.control.status', side_effect=idle):
             out = dispatch('control_status', {}, computer_state=ComputerState(),
                            mouse_controller=MouseController(),
                            keyboard_controller=KeyboardController())

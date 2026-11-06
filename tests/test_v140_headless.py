@@ -63,8 +63,11 @@ class AuthorityTests(LocalPolicyCase):
         self.assertEqual(len(auth['agent_session']), 48)
 
     def test_scope_check_passes_for_every_tool(self):
-        from computer_mcp import permission, tool_registry
-        denial = permission.check_tool('click', {'x': 1, 'y': 2})
+        from computer_mcp import permission
+        # The takeover guard is a separate, real-time mechanism; pin it idle so
+        # this test measures the permission decision only.
+        with patch('computer_mcp.control.blocking_reason', return_value=None):
+            denial = permission.check_tool('click', {'x': 1, 'y': 2})
         self.assertIsNone(denial, 'local policy must not block an input tool')
 
     def test_request_consent_is_a_no_op_headless(self):
