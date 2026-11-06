@@ -33,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -77,9 +78,22 @@ def _load() -> dict:
 def _save(payload: dict) -> dict:
     target = record_path()
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_suffix('.tmp')
-    temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
-    os.replace(temporary, target)
+    # A fixed temp name collided between concurrent writers on Windows
+    # (os.replace raises WinError 32); use a unique file and retry briefly.
+    for attempt in range(8):
+        handle, name = tempfile.mkstemp(dir=str(target.parent), prefix='policy-', suffix='.tmp')
+        try:
+            with os.fdopen(handle, 'w', encoding='utf-8') as stream:
+                json.dump(payload, stream, ensure_ascii=False)
+            os.replace(name, target)
+            return payload
+        except PermissionError:
+            time.sleep(0.02 * (attempt + 1))
+        finally:
+            try:
+                os.unlink(name)
+            except OSError:
+                pass
     return payload
 
 
@@ -127,11 +141,11 @@ def _stop_active(authorization_at: float) -> bool:
 
 
 def authorization() -> dict:
+    from computer_mcp import capabilities
     now = time.time()
     return dict(agent_session=agent_session.current(),
                 agent_id=subject(),
-                scopes=sorted(__import__('computer_mcp.capabilities',
-                                         fromlist=['SCOPES']).SCOPES),
+                scopes=sorted(capabilities.SCOPES),
                 applications=[WILDCARD],
                 launches=[WILDCARD],
                 read_files=[WILDCARD],
