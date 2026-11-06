@@ -1130,7 +1130,9 @@ def run_macro(
                         process=str(step["process"]) if step.get("process") else None,
                         exe_contains=str(step["exe_contains"]) if step.get("exe_contains") else None,
                         timeout_ms=int(step.get("timeout_ms", 8000)),
-                        force=bool(step.get("force", True)),
+                        # Forced termination is opt-in: a macro must not kill
+                        # processes just because a name matched.
+                        force=bool(step.get("force", False)),
                     )
                     entry["exit"] = res
                     sub = {"ok": bool(res.get("ok"))}

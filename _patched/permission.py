@@ -529,13 +529,19 @@ def check_tool(name: str, arguments: dict | None = None) -> dict | None:
     except Exception:
         needed = None
     request_id = _request_consent(arguments, needed)
+    from computer_mcp import policy as _policy
+    if _policy.is_local():
+        hint = ("桌面助手已急停：运行 python -m computer_mcp.policy resume 恢复，"
+                "或由用户在物理输入停止 10 秒后重试。")
+    else:
+        hint = "桌面助手未授权：按 Ctrl+Alt+Shift+F9（或点托盘图标）打开授权窗口，点「一键授权」后重试。"
     return {
         "request_id": request_id,
         "diagnostic": caller_diagnostic(needed, (arguments or {}).get("hwnd")),
         "success": False,
         "blocked": True,
         "code": st.get('code') or code_for_reason(st.get('reason')),
-        "error": "桌面助手未授权：按 Ctrl+Alt+Shift+F9（或点托盘图标）打开授权窗口，点「一键授权」后重试。",
+        "error": hint,
         "tool": name,
         "permission": st,
         "authority": authority(probe=True),

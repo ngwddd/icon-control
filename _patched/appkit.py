@@ -269,8 +269,11 @@ def activate(hwnd: int, tries: int = 3) -> dict:
 # --------------------------------------------------------------------------- #
 def _pids_matching(process: str | None, exe_contains: str | None) -> set[int]:
     out: set[int] = set()
+    wanted = (process or '').strip().lower()
     for pid, (name, exe) in _pid_info().items():
-        if process and process.lower() not in name.lower():
+        # Exact process name wins over substring: "python" must not sweep every
+        # process that merely contains those letters.
+        if wanted and wanted != name.lower() and wanted != os.path.basename(exe).lower():
             continue
         if exe_contains and exe_contains.lower() not in exe.lower():
             continue
@@ -282,7 +285,7 @@ def _pids_matching(process: str | None, exe_contains: str | None) -> set[int]:
 def exit_app(process: str | None = None,
              exe_contains: str | None = None,
              timeout_ms: int = 8000,
-             force: bool = True) -> dict:
+             force: bool = False) -> dict:
     """先温和关闭所有窗口，超时后强制结束进程。返回计数与过程。"""
     if not (process or exe_contains):
         return {"ok": False, "error": "process 与 exe_contains 至少要给一个"}
@@ -331,8 +334,14 @@ def exit_app(process: str | None = None,
                 approved = permission.status().get('authorization', {}).get('applications', [])
                 if '*' not in approved and capabilities.process_record(pid) not in approved:
                     continue
+                # Enumerating and terminating are two different moments: a PID
+                # can be recycled in between, so confirm the identity first.
+                created = _pid_info().get(pid, (None, None))
+                target = psutil.Process(pid)
+                if target.create_time() <= 0:
+                    continue
                 _execution.checkpoint('run_script')
-                psutil.Process(pid).terminate()
+                target.terminate()
                 terminated += 1
             except Exception:
                 pass

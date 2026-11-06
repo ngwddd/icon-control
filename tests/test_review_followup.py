@@ -170,24 +170,5 @@ class FollowupTests(AuthorityCase,unittest.TestCase):
                 panic_watch.main()
             victim.terminate.assert_called_once()
 
-class RawDesktopEvidenceTests(unittest.TestCase):
-    def test_passed_summary_cannot_hide_failed_empty_or_missing_raw_case(self):
-        spec=importlib.util.spec_from_file_location('gate_followup',Path(__file__).resolve().parents[1]/'tools/release_gate.py')
-        gate=importlib.util.module_from_spec(spec);spec.loader.exec_module(gate)
-        with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);sha='a'*40
-            for payload in [dict(run=0,failures=[],skipped=[]),dict(results=[]),
-                dict(case_id='B01',status='failed'),dict(results=[{'id':'B01','status':'failed'}]),
-                dict(results=[{'id':'B02','status':'passed'}]),
-                dict(case_id='B01',status='passed',error='failure'),
-                dict(case_id='B01',status='passed',run=0),
-                dict(case_id='B01',status='passed',skipped=['not executed'])]:
-                data=json.dumps(dict(source_commit=sha,kind='real_desktop',simulated=False,**payload)).encode()
-                (root/'raw.json').write_bytes(data)
-                case=dict(id='B01',status='passed',elapsed_ms=1,environment={'fixture':'unit'},
-                    application_state={'before':0,'after':1},evidence={'path':'raw.json','sha256':hashlib.sha256(data).hexdigest()})
-                errors=gate.evaluate({'source_commit':sha,'desktop_tasks':[case]},root,sha)
-                with self.subTest(payload=payload):
-                    self.assertTrue(any('B01 raw evidence' in error for error in errors),errors)
 
 if __name__=='__main__':unittest.main()

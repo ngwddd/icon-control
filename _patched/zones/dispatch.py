@@ -621,8 +621,17 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         # caller no longer has to interpret "granted / lease / scope".
         from computer_mcp import policy as _policy
         result['policy'] = dict(mode=_policy.mode(), runtime=_policy.runtime_state())
-        from computer_mcp.permission import caller_diagnostic
-        result["authorization_diagnostic"] = caller_diagnostic(arguments.get("requested_scopes"), arguments.get("hwnd"))
+        if _policy.is_local():
+            # Headless has no consent service; querying it only produces a
+            # misleading "caller_granted: false" next to an executable tool.
+            result["authorization_diagnostic"] = dict(
+                agent_session=_policy.agent_session.current(),
+                caller_granted=result['policy']['runtime'] == 'ready',
+                source='local-policy')
+        else:
+            from computer_mcp.permission import caller_diagnostic
+            result["authorization_diagnostic"] = caller_diagnostic(
+                arguments.get("requested_scopes"), arguments.get("hwnd"))
 
     elif name == "control_claim":
         from computer_mcp import control as _ctl

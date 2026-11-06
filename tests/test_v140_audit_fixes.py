@@ -148,10 +148,90 @@ class ForcedExitTests(AuditCase):
                 patch('computer_mcp.execution.checkpoint'), \
                 patch('computer_mcp.execution.sleep'), \
                 patch('psutil.Process') as proc:
+            proc.return_value.create_time.return_value = 1.0
             result = appkit.exit_app('probe', force=True, timeout_ms=0)
         self.assertTrue(proc.return_value.terminate.called,
                         'forced exit skipped a process the wildcard allows')
         self.assertGreaterEqual(result.get('terminated', 0), 1)
+
+
+class SecondRoundAuditTests(AuditCase):
+    """rc2 audit round two: authority must never be granted as a side effect."""
+
+    def test_enable_does_not_clear_a_stop(self):
+        policy.resume()
+        self.stop()
+        self.assertFalse(policy.state()['granted'])
+        policy.main(['enable'])
+        self.assertFalse(policy.state()['granted'], 'enable cancelled the emergency stop')
+
+    def test_resume_refuses_when_a_new_stop_lands_midway(self):
+        import time
+        policy.resume()
+        real_save = policy._save
+
+        def save_then_new_stop(payload):
+            saved = real_save(payload)
+            body = dict(stopped_at=time.time() + 1)
+            body['signature'] = security.signature(body, security.load_token())
+            (self.home / 'state' / 'emergency-stop.json').write_text(json.dumps(body), encoding='utf-8')
+            return saved
+
+        with patch.object(policy, '_save', side_effect=save_then_new_stop):
+            with self.assertRaises(RuntimeError):
+                policy.resume()
+        policy._FACTS.update(signature=None, value=None)
+        self.assertFalse(policy.state()['granted'], 'the new stop was swallowed')
+
+    def test_non_finite_authorised_time_is_not_authority(self):
+        self.stop()
+        for bad in ('inf', '-inf', 'nan'):
+            (self.home / 'state' / 'local-policy.json').write_text(
+                '{"authorized_at": ' + bad + ', "mode": "local"}', encoding='utf-8')
+            policy._FACTS.update(signature=None, value=None)
+            self.assertFalse(policy.state()['granted'], f'{bad} was accepted as authority')
+
+    def test_future_authorised_time_is_rejected(self):
+        import time
+        (self.home / 'state' / 'local-policy.json').write_text(
+            json.dumps({'authorized_at': time.time() + 86400, 'mode': 'local'}), encoding='utf-8')
+        policy._FACTS.update(signature=None, value=None)
+        self.assertFalse(policy.state()['granted'])
+
+    def test_disable_reports_that_an_env_override_wins(self):
+        with patch.dict(os.environ, {'ICON_CONTROL_POLICY': 'local'}):
+            code = policy.main(['disable'])
+            self.assertEqual(code, 3)
+            self.assertEqual(policy.mode(), 'local')
+
+
+class TakeoverTests(AuditCase):
+    def test_takeover_is_not_yielded_by_a_timestamp_in_headless(self):
+        from computer_mcp import control
+        policy.resume()
+        with patch.object(control, 'ensure_watcher', return_value=True), \
+                patch.object(control, 'status',
+                             return_value=dict(owner='user', enabled=True, idle_s=0.0,
+                                               idle_resume_s=10.0)), \
+                patch('computer_mcp.permission.status',
+                      return_value=dict(granted=True, authorized_at=9e9)):
+            reason = control.blocking_reason()
+        self.assertIsNotNone(reason, 'a timestamp must not steal control back from the user')
+
+
+class ProcessScopeTests(AuditCase):
+    def test_forced_exit_is_opt_in(self):
+        import inspect
+        from computer_mcp import appkit
+        signature = inspect.signature(appkit.exit_app)
+        self.assertIs(signature.parameters['force'].default, False)
+
+    def test_process_match_is_exact(self):
+        from computer_mcp import appkit
+        info = {111: ('python.exe', r'C:\x\python.exe'), 222: ('python3.exe', r'C:\x\python3.exe')}
+        with patch.object(appkit, '_pid_info', return_value=info):
+            self.assertEqual(appkit._pids_matching('python.exe', None), {111})
+            self.assertEqual(appkit._pids_matching('python', None), set())
 
 
 if __name__ == '__main__':

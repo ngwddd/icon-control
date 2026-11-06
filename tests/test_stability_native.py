@@ -1,6 +1,7 @@
 """Native API regressions with fake HWNDs, fake actuators and isolated authority."""
 import hashlib
 import json
+import sys
 import importlib.util
 import tempfile
 import unittest
@@ -135,45 +136,99 @@ class NativeTests(AuthorityCase, unittest.TestCase):
 spec = importlib.util.spec_from_file_location('release_gate',Path(__file__).resolve().parents[1]/'tools'/'release_gate.py')
 gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
 
-class ReleaseGateTests(unittest.TestCase):
-    def test_missing_desktop_acceptance_blocks(self):
-        errors = gate.evaluate({},Path.cwd())
-        self.assertTrue(any('B32' in error for error in errors))
-        self.assertTrue(any('P0' in error for error in errors))
+class ReleaseGateTests(AuthorityCase, unittest.TestCase):
+    """The v1.4 gate checks commit binding, the suite and both transports.
 
-    def test_tampered_evidence_and_path_escape_block(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp); (root/'evidence.txt').write_text('fixture')
-            case = dict(status='passed', elapsed_ms=1, environment='fake unit fixture',
-                        application_state='fake state', evidence={'path':'evidence.txt','sha256':'wrong'})
-            report = dict(p0_review='passed',clean_windows_install='passed',known_false_success_paths=0,
-                          unit_failures=0,unit_errors=0,desktop_tasks=[dict(case,id=f'B{i:02}') for i in range(1,33)])
-            self.assertTrue(any('hash mismatch' in error for error in gate.evaluate(report,root)))
-            report['desktop_tasks'][0]['evidence']={'path':'../outside','sha256':'wrong'}
-            self.assertTrue(any('B01 evidence missing' in error for error in gate.evaluate(report,root)))
+    The old 32-case approval benchmark was removed with the approval flow, so
+    these tests build a minimal .runtime layout instead of desktop evidence.
+    """
 
-    def test_complete_fixture_can_validate_without_claiming_live_acceptance(self):
+    commit = 'a' * 40
+
+    def _layout(self, home: Path, *, commit: str = None, version: str = '1.4.0',
+                tools: int = 90, failures=None, dirty: bool = False,
+                http_status: int = 401, report: bool = True, protocol: bool = True):
+        commit = commit or self.commit
+        (home / '.runtime' / 'protocol').mkdir(parents=True, exist_ok=True)
+        (home / 'VERSION').write_text(version + chr(10), encoding='utf-8')
+        (home / 'pyproject.toml').write_text('version = "' + version + '"' + chr(10), encoding='utf-8')
+        (home / '_patched').mkdir(exist_ok=True)
+        (home / '_patched' / '__init__.py').write_text(
+            '__version__ = "' + version + '"' + chr(10), encoding='utf-8')
+        if report:
+            (home / '.runtime' / 'test-results.json').write_text(json.dumps(dict(
+                source_commit=commit, source_dirty=dirty, scope='full_suite',
+                pattern='test_*.py', run=10, failures=failures or [], errors=[],
+                skipped=[])), encoding='utf-8')
+        if protocol:
+            (home / '.runtime' / 'protocol' / 'protocol-smoke.json').write_text(json.dumps(dict(
+                stdio=dict(tools=tools, server_version=version),
+                http=dict(tools=tools, server_version=version),
+                http_unauthenticated_status=http_status)), encoding='utf-8')
+
+    def _run(self, home: Path, commit: str = None) -> tuple:
+        import io
+        from contextlib import redirect_stdout
+        buffer = io.StringIO()
+        argv = ['release_gate.py', '--expected-commit', commit or self.commit]
+        with patch.object(gate, 'ROOT', home), patch.object(sys, 'argv', argv):
+            with redirect_stdout(buffer):
+                code = gate.main()
+        return code, buffer.getvalue()
+
+    def test_consistent_tree_passes(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp);sha='a'*40
-            data=json.dumps(dict(source_commit=sha,kind='real_desktop',simulated=False,
-                                 results=[dict(id=f'B{i:02}',status='passed',elapsed_ms=1,
-                                     environment='unit fixture',application_state='fixture') for i in range(1,33)],
-                                 note='Validator unit fixture, not release evidence')).encode()
-            (root/'fixture').write_bytes(data)
-            unit=json.dumps(dict(source_commit=sha,source_dirty=False,scope='full_suite',pattern='test_*.py',run=1,failures=[],errors=[],skipped=[])).encode()
-            (root/'unit.json').write_bytes(unit)
-            review=json.dumps(dict(source_commit=sha,reviewer_id='independent-fixture',implementer_id='implementation-fixture',
-                status='passed',open_p0=0,open_p1=0,findings=[])).encode()
-            (root/'review.json').write_bytes(review)
-            cases=[dict(id=f'B{i:02}',status='passed',elapsed_ms=1,environment='unit fixture',
-                        application_state='fixture',evidence={'path':'fixture','sha256':hashlib.sha256(data).hexdigest()}) for i in range(1,33)]
-            report=dict(p0_review='passed',clean_windows_install='passed',known_false_success_paths=0,
-                        source_commit=sha,implementer_id='implementation-fixture',unit_skipped=0,
-                        independent_review=dict(status='passed',source_commit=sha,reviewer_id='independent-fixture',
-                            open_p0=0,open_p1=0,evidence={'path':'review.json','sha256':hashlib.sha256(review).hexdigest()}),
-                        unit_evidence={'path':'unit.json','sha256':hashlib.sha256(unit).hexdigest()},
-                        unit_failures=0,unit_errors=0,desktop_tasks=cases)
-            self.assertEqual(gate.evaluate(report,root,sha),[])
-            self.assertTrue(gate.evaluate(report,root,'b'*40),'Different commit must fail')
-            report['independent_review']['reviewer_id']='implementation-fixture'
-            self.assertTrue(gate.evaluate(report,root,sha),'Self review must fail')
+            home = Path(temp)
+            self._layout(home)
+            code, output = self._run(home)
+        self.assertEqual(code, 0, output)
+        self.assertIn('PASS', output)
+
+    def test_missing_regression_report_blocks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self._layout(home, report=False)
+            code, output = self._run(home)
+        self.assertEqual(code, 1)
+        self.assertIn('regression report missing', output)
+
+    def test_wrong_commit_blocks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self._layout(home)
+            code, output = self._run(home, commit='b' * 40)
+        self.assertEqual(code, 1)
+        self.assertIn('different commit', output)
+
+    def test_dirty_tree_blocks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self._layout(home, dirty=True)
+            code, output = self._run(home)
+        self.assertEqual(code, 1)
+        self.assertIn('dirty tree', output)
+
+    def test_tool_count_mismatch_blocks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self._layout(home, tools=89)
+            code, output = self._run(home)
+        self.assertEqual(code, 1)
+        self.assertIn('expected 90 tools', output)
+
+    def test_http_without_credentials_must_be_401(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self._layout(home, http_status=200)
+            code, output = self._run(home)
+        self.assertEqual(code, 1)
+        self.assertIn('401', output)
+
+    def test_version_mismatch_blocks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self._layout(home)
+            (home / 'pyproject.toml').write_text('version = "9.9.9"' + chr(10), encoding='utf-8')
+            code, output = self._run(home)
+        self.assertEqual(code, 1)
+        self.assertIn('version', output)

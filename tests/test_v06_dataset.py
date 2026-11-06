@@ -146,7 +146,21 @@ class TestTee(unittest.TestCase):
 
         asyncio.run(run())
         raw = next(writer.DATA.glob("*/episodes.jsonl")).read_text(encoding="utf-8")
-        self.assertFalse(redact.is_sensitive(raw), "落盘样本含敏感信息")
+        self.assertNotIn("13812345678", raw, "原始手机号落盘")
+        for line in raw.splitlines():
+            if not line.strip():
+                continue
+            episode = json.loads(line)
+            carried = json.dumps({key: episode.get(key)
+                                  for key in ("args", "result", "target", "labels")},
+                                 ensure_ascii=False)
+            self.assertFalse(redact.is_sensitive(carried),
+                             "args/result/target 落盘仍含敏感信息")
+            hits = episode.get("redactions") or []
+            self.assertTrue(hits, "没有记录脱敏命中")
+            # The whole text field is dropped as private content; the phone
+            # pattern never gets a chance to personalise the sample.
+            self.assertIn("private_content", hits)
 
 
 class TestVerdict(unittest.TestCase):

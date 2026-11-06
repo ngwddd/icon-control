@@ -27,9 +27,13 @@ class CorruptStateTests(PolicyRobustnessCase):
         self.assertTrue(policy.state()['granted'])
         self.assertGreater(policy.authorized_at(), 0)
 
-    def test_record_with_wrong_types_is_tolerated(self):
+    def test_record_with_an_unusable_time_is_not_authority(self):
         (self.home / 'state' / 'local-policy.json').write_text(
             json.dumps({'authorized_at': 'yesterday', 'mode': 7}), encoding='utf-8')
+        # A file that exists but carries no usable timestamp must not be turned
+        # into fresh authority; an explicit resume is the way out.
+        self.assertFalse(policy.state()['granted'])
+        policy.resume()
         self.assertTrue(policy.state()['granted'])
 
     def test_unreadable_stop_file_fails_closed(self):

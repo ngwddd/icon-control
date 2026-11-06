@@ -196,9 +196,13 @@ def blocking_reason() -> str | None:
     if st["owner"] == "user":
         # A human approval that is newer than the last physical input hands
         # control back: the click on the grant dialog is not a takeover.
+        # Only the human-approval policy treats "authority newer than the last
+        # physical input" as a handover. Headless has no approval gesture, so a
+        # timestamp must never silently steal control back from the user.
         try:
-            from computer_mcp import permission as _permission
-            approved = float(_permission.status().get('authorized_at') or 0)
+            from computer_mcp import permission as _permission, policy
+            approved = 0.0 if policy.is_local() else float(
+                _permission.status().get('authorized_at') or 0)
         except Exception:
             approved = 0.0
         if approved > float(STATE.get('last_user') or 0):

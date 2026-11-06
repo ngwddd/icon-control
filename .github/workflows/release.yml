@@ -52,13 +52,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Protocol fixture initialization failed' }
           python tools/protocol_smoke.py --home $env:ICON_CONTROL_HOME
           if ($LASTEXITCODE -ne 0) { throw 'Official SDK round trip failed' }
-      # Formal stability is gated on SHA-bound acceptance evidence. A tag whose
-      # evidence is incomplete may still ship, but only as a pre-release.
+      # v1.4 dropped the approval benchmark together with the approval flow.
+      # What still gates a stable release: the artefact is the tested commit,
+      # the suite is green, and both transports speak the same 90-tool contract.
       - name: Formal release gate
         id: gate
         continue-on-error: true
         shell: pwsh
-        run: python tools/release_gate.py docs/v1.3/acceptance.json --expected-commit $env:GITHUB_SHA
+        run: python tools/release_gate.py --expected-commit $env:GITHUB_SHA
       - name: Upload release evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -104,6 +105,11 @@ jobs:
               --title "Icon Control ${{ github.ref_name }}" `
               --notes-file "$env:RELEASE_NOTES"
           }
+      - name: Refuse a blocked stable tag
+        if: steps.gate.outcome != 'success' && steps.metadata.outputs.candidate != 'true'
+        shell: pwsh
+        run: |
+          Write-Error 'The release gate blocked this stable tag; see the gate step above.'
       - name: Publish pre-release
         if: steps.gate.outcome != 'success' || steps.metadata.outputs.candidate == 'true'
         env:

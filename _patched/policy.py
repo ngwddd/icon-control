@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import tempfile
 import threading
@@ -141,9 +142,14 @@ def _signature():
 
 def _parse_time(record: dict) -> float:
     try:
-        return float(record.get('authorized_at') or 0)
+        value = float(record.get('authorized_at') or 0)
     except (TypeError, ValueError):
         return 0.0
+    if not math.isfinite(value) or value <= 0:
+        return 0.0
+    if value > time.time() + 300:      # clock skew or a hand-edited record
+        return 0.0
+    return value
 
 
 def _facts() -> dict:
@@ -169,7 +175,9 @@ def authorized_at() -> float:
     facts = _facts()
     if facts['authorized_at'] > 0:
         return facts['authorized_at']
-    if facts['stop_present']:
+    if facts['stop_present'] or facts['has_record']:
+        # A record that exists but carries an unusable timestamp is not a fresh
+        # install: treat it as "no authority" and let an explicit resume fix it.
         return 0.0
     now = time.time()
     record = _load()
@@ -187,15 +195,17 @@ def resume() -> dict:
     on "my timestamp is newer than the stop" breaks when both land in the same
     clock tick.
     """
+    before = _file_signature(_stop_path())
+    stop_time = _stop_time()
     now = time.time()
+    when = max(now, (stop_time + 0.001) if stop_time else now)
     record = _load()
-    record.update(mode=record.get('mode') or LOCAL, authorized_at=now, resumed_at=now)
+    record.update(mode=record.get('mode') or LOCAL, authorized_at=when, resumed_at=when)
     record.setdefault('created_at', now)
     saved = _save(record)
-    try:
-        _stop_path().unlink()
-    except OSError:
-        pass
+    if _file_signature(_stop_path()) != before:
+        _FACTS.update(signature=None, value=None)
+        raise RuntimeError('a new emergency stop arrived during resume; run resume again')
     _FACTS.update(signature=None, value=None)
     return saved
 
@@ -236,6 +246,17 @@ def authorization() -> dict:
                 read_files=[WILDCARD],
                 lease_expires_at=now + LEASE_SECONDS,
                 source=LOCAL)
+
+
+def _stop_time() -> float:
+    try:
+        payload = json.loads(_stop_path().read_text(encoding='utf-8'))
+        if not security.authentic(payload):
+            return 0.0
+        value = float(payload.get('stopped_at') or 0)
+        return value if math.isfinite(value) and value > 0 else 0.0
+    except (OSError, ValueError, TypeError):
+        return 0.0
 
 
 def _stopped(started: float) -> bool:
@@ -306,17 +327,22 @@ def main(argv=None) -> int:
         return 0
     if args.command == 'enable':
         record = _load()
-        record.update(mode=LOCAL, authorized_at=time.time())
+        record['mode'] = LOCAL          # never touches awarded authority
         print(json.dumps(_save(record), ensure_ascii=False))
         _FACTS.update(signature=None, value=None)
         return 0
     if args.command == 'disable':
         record = _load()
-        record.update(mode=HUMAN)
+        record['mode'] = HUMAN
         record.setdefault('created_at', time.time())
-        print(json.dumps(_save(record), ensure_ascii=False))
+        _save(record)
         _FACTS.update(signature=None, value=None)
-        return 0
+        effective = mode()
+        payload = dict(record=HUMAN, effective=effective)
+        if effective != HUMAN:
+            payload['warning'] = (MODE_ENV + ' is set and overrides the stored mode')
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0 if effective == HUMAN else 3
     print(json.dumps(status(), ensure_ascii=False, indent=2))
     return 0
 
