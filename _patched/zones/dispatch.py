@@ -49,6 +49,49 @@ def _trim_state(state: dict, full: bool) -> dict:
     return trimmed
 
 
+def _resolve_element(arguments: dict, key: str = "name"):
+    """Resolve a target once, consistently, for every element-aware tool.
+
+    Returns ``(target, hwnd, failure)``. A failure is a ready-to-return payload:
+    ambiguity is an error, not a reason to pick the first candidate, and a
+    reference that no longer resolves is reported as stale rather than guessed.
+    """
+    import win32gui as _gui
+
+    from computer_mcp import snapshots as _snap
+    from computer_mcp import ui_ext as _ui
+
+    if arguments.get("ref"):
+        try:
+            position = _snap.resolve(str(arguments["ref"]), arguments.get("hwnd"))
+        except _snap.StaleReference as exc:
+            return {}, None, dict(ok=False, code="stale_element", error=str(exc))
+        except Exception as exc:                        # noqa: BLE001
+            return {}, None, dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+        target = dict(position)
+        hwnd = target.get("hwnd") or arguments.get("hwnd") or _gui.GetForegroundWindow()
+        return target, hwnd, None
+
+    wanted = arguments.get(key) or arguments.get("name") or arguments.get("query")
+    if not wanted:
+        return {}, None, None                            # free input / caller decides
+    window = arguments.get("hwnd") or _gui.GetForegroundWindow()
+    try:
+        found = _ui.ui_find(name=str(wanted), hwnd=window,
+                            exact=bool(arguments.get("exact", False)), index=0)
+    except Exception as exc:                            # noqa: BLE001
+        return {}, None, dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+    candidates = found.get("candidates") or []
+    exact_hits = [item for item in candidates if str(item.get("name", "")) == str(wanted)]
+    if len(candidates) > 1 and len(exact_hits) != 1:
+        return {}, None, dict(ok=False, code="ambiguous",
+                              error="多个同名控件；请给出 element ref 或 index",
+                              candidates=candidates[:5])
+    target = dict(exact_hits[0] if len(exact_hits) == 1 else (found.get("target") or {}))
+    target.setdefault("hwnd", int(window))
+    return target, int(window), None
+
+
 def dispatch(name: str, arguments: dict, *, computer_state, mouse_controller,
              keyboard_controller) -> dict:
     from computer_mcp.execution import operation
@@ -695,130 +738,85 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
 
     if name in ("element_state", "element_action"):
         from computer_mcp import element_ops as _eo
-        from computer_mcp import snapshots as _snap
-        from computer_mcp import ui_ext as _ui
-        import win32gui as _win32gui
 
-        position = {}
-        ambiguous = None
-        try:
-            if arguments.get("ref"):
-                position = _snap.resolve(str(arguments["ref"]), arguments.get("hwnd"))
-                target = dict(position)
-            else:
-                window = arguments.get("hwnd") or _win32gui.GetForegroundWindow()
-                found = _ui.ui_find(name=str(arguments.get("name", "")),
-                                    hwnd=window,
-                                    exact=bool(arguments.get("exact", False)),
-                                    index=0)
-                candidates = found.get("candidates") or []
-                wanted = str(arguments.get("name", ""))
-                exact_hits = [c for c in candidates if str(c.get("name", "")) == wanted]
-                if len(candidates) > 1 and len(exact_hits) != 1:
-                    # Two "OK" buttons in one dialog: do not guess which one.
-                    ambiguous = dict(ok=False, code="ambiguous",
-                                     error="多个同名控件；请给出 element ref 或 index",
-                                     candidates=candidates[:5])
-                target = dict((exact_hits[0] if len(exact_hits) == 1
-                               else (found.get("target") or {})))
-                target.setdefault("hwnd", int(window))
-        except _snap.StaleReference as exc:
-            result = dict(ok=False, code="stale_element", error=str(exc))
-        except Exception as exc:                        # noqa: BLE001
-            result = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+        target, hwnd, failure = _resolve_element(arguments)
+        path = target.get("path")
+        if failure is not None:
+            result = failure
+        elif not path or not hwnd:
+            result = dict(ok=False, code="no_path",
+                          error="该元素没有可复用的 UIA 路径（OCR/模板命中），请用坐标操作")
+        elif name == "element_state":
+            try:
+                state = _eo.read_state(int(hwnd), str(path))
+                result = dict(ok=True, hwnd=int(hwnd), path=path,
+                              state=_trim_state(state, bool(arguments.get("full"))))
+            except Exception as exc:                    # noqa: BLE001
+                result = dict(ok=False, hwnd=int(hwnd), path=path,
+                              error=f"{type(exc).__name__}: {exc}")
         else:
-            if ambiguous is not None:
-                result = ambiguous
-                path = None
-                hwnd = None
-            else:
-                path = target.get("path")
-                hwnd = (target.get("hwnd") or arguments.get("hwnd")
-                        or position.get("hwnd") or _win32gui.GetForegroundWindow())
-            if ambiguous is not None:
-                pass
-            elif not path or not hwnd:
-                result = dict(ok=False, code="no_path",
-                              error="该元素没有可复用的 UIA 路径（OCR/模板命中），请用坐标操作")
-            elif name == "element_state":
-                try:
-                    state = _eo.read_state(int(hwnd), str(path))
-                    result = dict(ok=True, hwnd=int(hwnd), path=path,
-                                  state=_trim_state(state, bool(arguments.get("full"))))
-                except Exception as exc:                # noqa: BLE001
-                    result = dict(ok=False, hwnd=int(hwnd), path=path,
-                                  error=f"{type(exc).__name__}: {exc}")
-            else:
-                action = str(arguments.get("action", "auto"))
-                try:
-                    before = _eo.read_state(int(hwnd), str(path))
-                except Exception:                       # noqa: BLE001
-                    before = {}
-                try:
-                    outcome = _eo.perform(int(hwnd), str(path), action,
-                                          arguments.get("value"), mouse_controller)
-                except Exception as exc:                # noqa: BLE001
-                    outcome = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
-                outcome.update(hwnd=int(hwnd), path=path, action_requested=action)
-                if outcome.get("ok") and arguments.get("verify", True):
-                    import time as _time
+            action = str(arguments.get("action", "auto"))
+            try:
+                before = _eo.read_state(int(hwnd), str(path))
+            except Exception:                           # noqa: BLE001
+                before = {}
+            try:
+                outcome = _eo.perform(int(hwnd), str(path), action,
+                                      arguments.get("value"), mouse_controller)
+            except Exception as exc:                    # noqa: BLE001
+                outcome = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+            outcome.update(hwnd=int(hwnd), path=path, action_requested=action)
+            if outcome.get("ok") and arguments.get("verify", True):
+                import time as _time
 
-                    def judge(after_state):
-                        if action == "set_value" or outcome.get("action") == "set_value":
-                            expected = arguments.get("value")
-                            if after_state.get("value") is None or expected is None:
-                                return "executed_unverified"
-                            return ("verified_success" if str(after_state["value"]) == str(expected)
-                                    else "no_effect")
-                        if "toggle" in (action, outcome.get("action")):
-                            if before.get("toggle") is None or after_state.get("toggle") is None:
-                                return "executed_unverified"
-                            return ("verified_success"
-                                    if before["toggle"] != after_state["toggle"] else "no_effect")
-                        if "select" in (action, outcome.get("action")):
-                            if after_state.get("selected") is None:
-                                return "executed_unverified"
-                            return "verified_success" if after_state["selected"] else "no_effect"
-                        return "executed_unverified"
+                def judge(after_state):
+                    if action == "set_value" or outcome.get("action") == "set_value":
+                        expected = arguments.get("value")
+                        if after_state.get("value") is None or expected is None:
+                            return "executed_unverified"
+                        return ("verified_success" if str(after_state["value"]) == str(expected)
+                                else "no_effect")
+                    if "toggle" in (action, outcome.get("action")):
+                        if before.get("toggle") is None or after_state.get("toggle") is None:
+                            return "executed_unverified"
+                        return ("verified_success"
+                                if before["toggle"] != after_state["toggle"] else "no_effect")
+                    if "select" in (action, outcome.get("action")):
+                        if after_state.get("selected") is None:
+                            return "executed_unverified"
+                        return "verified_success" if after_state["selected"] else "no_effect"
+                    return "executed_unverified"
 
-                    after = {}
-                    verdict = "no_effect"
-                    for _ in range(8):
-                        try:
-                            after = _eo.read_state(int(hwnd), str(path))
-                        except Exception:               # noqa: BLE001
-                            after = {}
-                        verdict = judge(after)
-                        if verdict != "no_effect":
-                            break
-                        _time.sleep(0.15)
-                    outcome["after"] = after
-                    outcome["verification"] = verdict
-                result = outcome
+                after = {}
+                verdict = "no_effect"
+                for _ in range(8):
+                    try:
+                        after = _eo.read_state(int(hwnd), str(path))
+                    except Exception:                   # noqa: BLE001
+                        after = {}
+                    verdict = judge(after)
+                    if verdict != "no_effect":
+                        break
+                    _time.sleep(0.15)
+                outcome["after"] = after
+                outcome["verification"] = verdict
+            result = outcome
 
     if name == "type_verified":
         import time as _time
         from computer_mcp import element_ops as _eo
-        from computer_mcp import snapshots as _snap
-        from computer_mcp import ui_ext as _ui
+
         text = str(arguments.get("text", ""))
-        hwnd = arguments.get("hwnd")
-        target = {}
-        try:
-            if arguments.get("ref"):
-                target = _snap.resolve(str(arguments["ref"]), hwnd)
-                hwnd = target.get("hwnd") or hwnd
-            elif arguments.get("name"):
-                found = _ui.ui_find(name=str(arguments["name"]), hwnd=hwnd,
-                                    exact=bool(arguments.get("exact", False)), index=0)
-                target = dict(found.get("target") or {})
-                hwnd = hwnd or target.get("hwnd")
-        except _snap.StaleReference as exc:
-            result = dict(ok=False, code="stale_element", error=str(exc))
-        except Exception as exc:                        # noqa: BLE001
-            result = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+        wants_target = bool(arguments.get("ref") or arguments.get("name"))
+        target, hwnd, failure = _resolve_element(arguments)
+        path = target.get("path")
+        if failure is not None:
+            # A named target that cannot be resolved must not receive keystrokes.
+            result = failure
+        elif wants_target and (not path or not hwnd):
+            result = dict(ok=False, code="no_target",
+                          error="指定了目标但没有定位到可输入的控件；未发送任何按键")
         else:
-            path = target.get("path")
             before_value = None
             if path and hwnd:
                 try:
@@ -874,7 +872,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                                         else before_value[:VALUE_PREVIEW] + "…"),
                           verification=verdict, reason=reason,
                           hwnd=int(hwnd) if hwnd else None, path=path)
-            if arguments.get("submit") and verdict == "verified_success":
+            if arguments.get("submit") and result.get("verification") == "verified_success":
                 keyboard_actions.key_press("enter", controller=keyboard_controller)
                 result["submitted"] = True
 
@@ -891,38 +889,47 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         timeout_ms = int(arguments.get("timeout_ms", 3000))
         settle = max(0.0, int(arguments.get("settle_ms", 120)) / 1000.0)
         expectation = arguments.get("expect") or {}
-        hwnd = arguments.get("hwnd")
-        target = {}
-        try:
-            if arguments.get("ref"):
-                target = _snap.resolve(str(arguments["ref"]), hwnd)
-                hwnd = target.get("hwnd") or hwnd
-            else:
-                found = _ui.ui_find(name=str(arguments.get("query", "")), hwnd=hwnd, index=0)
-                target = dict(found.get("target") or {})
-                hwnd = hwnd or target.get("hwnd")
-        except _snap.StaleReference as exc:
-            result = dict(ok=False, status="target_changed", error=str(exc),
+        wants_target = bool(arguments.get("ref") or arguments.get("query"))
+        target, hwnd, failure = _resolve_element(arguments, key="query")
+        path = target.get("path")
+        # "Is this gone?" is answerable even when the reference itself died: skip
+        # the action and re-check the window instead of returning early.
+        observe_only = (failure is not None
+                        and failure.get("code") == "stale_element"
+                        and str(expectation.get("kind")) == "absent")
+        if observe_only:
+            failure = None
+            target = {}
+            path = None
+            hwnd = arguments.get("hwnd")
+        if failure is not None:
+            result = dict(failure, ok=False, status="target_changed",
                           elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
-        except Exception as exc:                        # noqa: BLE001
-            result = dict(ok=False, error=f"{type(exc).__name__}: {exc}",
+        elif wants_target and not path and not observe_only:
+            # Named but unresolved: do not fall back to the focused control.
+            result = dict(ok=False, status="target_changed",
+                          error="指定了目标但没有解析到可执行控件；未执行任何动作",
+                          elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
+        elif not path and action == "type" and not observe_only:
+            result = dict(ok=False, error="type 需要明确的目标控件",
                           elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
         else:
-            path = target.get("path")
             before = {}
             if path and hwnd:
                 try:
                     before = _eo.read_state(int(hwnd), str(path))
                 except Exception:                       # noqa: BLE001
                     before = {}
-            if action == "type":
-                if path and hwnd:
-                    try:
-                        _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
-                    except Exception:                   # noqa: BLE001
-                        pass
-                outcome = keyboard_actions.type_text(text=str(value or ""),
-                                                     controller=keyboard_controller)
+            if observe_only:
+                outcome = dict(ok=True, action="observe", method="none",
+                               note="reference was stale; verified absence only")
+                met = None
+            elif action == "type":
+                try:
+                    _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
+                except Exception:                       # noqa: BLE001
+                    pass
+                keyboard_actions.type_text(text=str(value or ""), controller=keyboard_controller)
                 outcome = dict(ok=True, action="type", method="keyboard")
             elif path and hwnd:
                 try:
@@ -933,56 +940,68 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                 outcome = dict(ok=False, error="没有可复用的 UIA 路径，请改用 click/type 按坐标操作")
             _time.sleep(settle)
             observed = None
+            met = False
             if expectation.get("kind") and outcome.get("ok"):
                 deadline = _time.perf_counter() + max(0.1, timeout_ms / 1000.0)
                 while True:
                     kind = str(expectation.get("kind"))
                     text = expectation.get("text")
-                    if kind == "value" and path and hwnd:
+                    if kind in ("value", "contains") and path and hwnd:
                         try:
                             observed = _eo.read_state(int(hwnd), str(path)).get("value")
                         except Exception:               # noqa: BLE001
                             observed = None
-                        met = observed is not None and str(observed) == str(text)
-                    elif kind == "contains" and path and hwnd:
-                        try:
-                            observed = _eo.read_state(int(hwnd), str(path)).get("value")
-                        except Exception:               # noqa: BLE001
-                            observed = None
-                        met = observed is not None and str(text) in str(observed)
+                        if kind == "value":
+                            met = observed is not None and str(observed) == str(text)
+                        else:
+                            met = observed is not None and str(text) in str(observed)
                     elif kind == "text":
                         probe = _wf.probe(dict(kind="text", query=text))
                         met = bool(probe.get("ok"))
                         observed = probe.get("detail")
                     elif kind == "absent":
                         ref = arguments.get("ref")
-                        if not ref:
-                            # Nothing to watch: a failure to resolve proves nothing.
+                        if not ref and not arguments.get("query"):
                             met = None
                             observed = "no reference supplied"
                         else:
                             try:
-                                _snap.resolve(str(ref), hwnd)
+                                _snap.resolve(str(ref), hwnd) if ref else None
                                 met = False
                                 observed = "still present"
                             except _snap.StaleReference:
-                                met = True
-                                observed = "element gone"
+                                # A dead reference is not proof. Look the target up
+                                # again before claiming it disappeared.
+                                confirmed = False
+                                name = arguments.get("query")
+                                if name:
+                                    try:
+                                        found = _ui.ui_find(name=str(name), hwnd=hwnd, index=0)
+                                        confirmed = not bool(found.get("found"))
+                                    except Exception:   # noqa: BLE001
+                                        confirmed = False
+                                if confirmed:
+                                    met = True
+                                    observed = "element gone (re-checked by name)"
+                                else:
+                                    met = None
+                                    observed = "reference expired; absence unproven"
                             except Exception:           # noqa: BLE001
                                 met = None
                                 observed = "cannot verify"
                     else:
                         met = False
-                    if met or _time.perf_counter() >= deadline:
+                    if met or met is None or _time.perf_counter() >= deadline:
                         break
                     _time.sleep(0.15)
-                if met is None:
-                    status = "executed_unverified"
-                else:
-                    status = ("verified_success" if met else
-                              ("target_changed" if not path else "no_effect"))
-            else:
+            if not expectation.get("kind"):
                 status = "executed_unverified" if outcome.get("ok") else "no_effect"
+            elif met is None:
+                status = "executed_unverified"
+            elif met:
+                status = "verified_success"
+            else:
+                status = "target_changed" if not path else "no_effect"
             result = dict(ok=bool(outcome.get("ok")), status=status, action=action,
                           executed=outcome, observed=observed, before=before,
                           elapsed_ms=round((_time.perf_counter() - started) * 1000, 1),
@@ -1022,14 +1041,16 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             if visible:
                 found = visible
                 break
+            pattern_scrolled = False
             if hits:
                 # The control exists but is outside the viewport: ask it to
                 # scroll itself first (ScrollItem), then verify on the next pass.
                 try:
-                    _eo.perform(int(hwnd), str(hits[0].get("path")), "scroll_into_view")
+                    pattern_scrolled = bool(_eo.perform(
+                        int(hwnd), str(hits[0].get("path")), "scroll_into_view").get("ok"))
                 except Exception:                       # noqa: BLE001
-                    pass
-            if attempt < max_scrolls and mouse_controller is not None:
+                    pattern_scrolled = False
+            if attempt < max_scrolls and not pattern_scrolled and mouse_controller is not None:
                 try:
                     mouse_controller.position = center
                     mouse_controller.scroll(0, -step)

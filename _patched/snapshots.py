@@ -80,7 +80,11 @@ def attach(hwnd, candidates):
             fingerprint = screen_fingerprint(identity)
         except Exception:
             fingerprint = ''
-    ttl = REF_TTL_UIA if resolvable else REF_TTL_VISUAL
+    # Per-node TTL decides validity; the snapshot itself must live as long as
+    # its longest-lived reference, otherwise a short visual hit silently evicts
+    # a 120 second UIA reference from the store.
+    ttl_by_node = [REF_TTL_UIA if node.get('path') else REF_TTL_VISUAL for node in nodes]
+    ttl = max(ttl_by_node) if ttl_by_node else REF_TTL_VISUAL
     now = time.monotonic()
     key = uuid.uuid4().hex
     for index, node in enumerate(nodes):
@@ -93,8 +97,7 @@ def attach(hwnd, candidates):
             _snapshots.pop(next(iter(_snapshots)))
         _snapshots[key] = dict(created=now, ttl=ttl, identity=identity, digest=digest,
                                fingerprint=fingerprint, resolvable=resolvable,
-                               ttl_by_node=[REF_TTL_UIA if node.get('path') else REF_TTL_VISUAL
-                                            for node in nodes],
+                               ttl_by_node=ttl_by_node,
                                nodes=copy.deepcopy(nodes))
     return dict(snapshot_id=key, expires_in_s=ttl, resolvable=resolvable,
                 hwnd=int(hwnd), candidates=nodes)
@@ -128,7 +131,9 @@ def _relocate(node, hwnd):
         raise StaleReference('Element at that path changed identity; observe again')
     if node.get('type') and fresh.get('type') != node['type']:
         raise StaleReference('Element at that path changed type; observe again')
-    known_id = node.get('automation_id') or node.get('element_id')
+    # Only compare like with like: the geometry hash in element_id is not an
+    # AutomationId, and treating it as one rejected perfectly good references.
+    known_id = node.get('automation_id') or ''
     fresh_id = fresh.get('automation_id') or ''
     if known_id and fresh_id and str(known_id) != str(fresh_id):
         # A list that reordered itself can move a different control under the
@@ -171,8 +176,10 @@ def resolve(ref, hwnd=None):
                 raise StaleReference(f'Cannot verify the window: {exc}') from None
         target = dict(node)
     target['hwnd'] = expected[0]
-    target.setdefault('cx', target['x'] + target['w'] // 2)
-    target.setdefault('cy', target['y'] + target['h'] // 2)
+    # The element may have moved: recompute the centre instead of keeping the
+    # one captured when the reference was made.
+    target['cx'] = target['x'] + target['w'] // 2
+    target['cy'] = target['y'] + target['h'] // 2
     left, top, right, bottom = current[4]
     if not left <= target['cx'] < right or not top <= target['cy'] < bottom:
         raise StaleReference('Target outside window')

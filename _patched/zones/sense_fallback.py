@@ -31,7 +31,7 @@ def _norm_cand(raw: dict, source: str, score: float, label: str = "") -> dict:
            "score": round(float(score), 3)}
     # The UIA child-index path is what makes a reference re-resolvable; dropping
     # it here silently demoted every fused candidate to a 5 second visual ref.
-    for key in ("path", "name", "type", "element_id", "hwnd"):
+    for key in ("path", "name", "type", "element_id", "automation_id", "hwnd"):
         if raw.get(key):
             out[key] = raw[key]
     return out
@@ -120,6 +120,14 @@ def find_element(query: str, hwnd=None, region=None, limit: int = 5,
     whether the target is unambiguous.
     """
     t0 = time.perf_counter()
+    if hwnd is None and "uia" in sources:
+        # Resolve the window once so candidates can carry a re-resolvable path
+        # and a snapshot reference even when the caller only passed a query.
+        try:
+            import win32gui
+            hwnd = int(win32gui.GetForegroundWindow()) or None
+        except Exception:                               # noqa: BLE001
+            hwnd = None
     tried, errors, collected = [], [], []
     for src in sources:
         tried.append(src)
