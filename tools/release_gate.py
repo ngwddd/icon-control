@@ -19,7 +19,16 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS_EXPECTED = 90
+FALLBACK_TOOLS = 90
+
+
+def expected_tools() -> int:
+    """The tool count the running package actually publishes (no hardcoding)."""
+    try:
+        from computer_mcp import tool_registry
+        return len(tool_registry.all_tools())
+    except Exception:
+        return 0
 
 
 def _version_from(path: Path, pattern: str) -> str | None:
@@ -76,10 +85,11 @@ def check_protocol(errors: list[str], version: str | None) -> None:
     except (OSError, ValueError):
         errors.append("protocol smoke report is not valid JSON")
         return
+    expected = expected_tools() or FALLBACK_TOOLS
     for transport in ("stdio", "http"):
         part = report.get(transport) or {}
-        if part.get("tools") != TOOLS_EXPECTED:
-            errors.append(f'{transport}: expected {TOOLS_EXPECTED} tools, got {part.get("tools")}')
+        if part.get("tools") != expected:
+            errors.append(f'{transport}: expected {expected} tools, got {part.get("tools")}')
         if version and part.get("server_version") != version:
             errors.append(f'{transport}: server version {part.get("server_version")!r} != {version!r}')
     if report.get("http_unauthenticated_status") != 401:

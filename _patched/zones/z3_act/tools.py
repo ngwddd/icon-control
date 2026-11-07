@@ -262,11 +262,49 @@ SPECS: list[ToolSpec] = [
         read_only=False,
         schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'text': {'type': 'string'}, 'hwnd': {'type': 'integer'}, 'exact': {'type': 'boolean', 'default': False}, 'index': {'type': 'integer', 'default': 0}}, 'required': ['name', 'text']},
     ),
+    ToolSpec(
+        name='element_action',
+        effects=('input', 'text_entry'),
+        zone='Z3',
+        description='按控件自身能力执行动作（invoke / set_value / toggle / select / click），可选回读校验',
+        read_only=False,
+        schema={'type': 'object', 'properties': {
+            'ref': {'type': 'string'},
+            'hwnd': {'type': 'integer'},
+            'name': {'type': 'string'},
+            'exact': {'type': 'boolean', 'default': False},
+            'action': {'type': 'string',
+                       'enum': ['auto', 'invoke', 'set_value', 'toggle', 'select', 'focus', 'click'],
+                       'default': 'auto'},
+            'value': {'type': 'string', 'description': 'set_value 时要写入的文本'},
+            'verify': {'type': 'boolean', 'default': True,
+                       'description': '动作后回读状态，判断是否真的生效'},
+        }},
+    ),
+
+    ToolSpec(
+        name='type_verified',
+        effects=('text_entry', 'input'),
+        zone='Z3',
+        description='输入文本并回读目标控件，判断字符是否真的进去了（丢字/焦点错位会被发现）',
+        read_only=False,
+        schema={'type': 'object', 'properties': {
+            'text': {'type': 'string'},
+            'ref': {'type': 'string', 'description': '目标输入框的 element ref（可选）'},
+            'name': {'type': 'string', 'description': '没给 ref 时按控件名定位输入框'},
+            'hwnd': {'type': 'integer'},
+            'exact': {'type': 'boolean', 'default': False},
+            'submit': {'type': 'boolean', 'default': False, 'description': '校验通过后按回车'},
+            'clear_first': {'type': 'boolean', 'default': False, 'description': '先全选删除再输入'},
+        }, 'required': ['text']},
+    ),
+
 ]
 
 # Additive v1.3 input: legacy name-based callers remain valid.
 for _spec in SPECS:
     if _spec.name == 'ui_click':
-        _spec.schema['properties']['ref'] = {'type':'string','description':'Fresh ui_tree/find_element snapshot reference'}
-        _spec.schema.pop('required',None)
-        _spec.schema['anyOf'] = [{'required':['name']},{'required':['ref']}]
+        _spec.schema['properties']['ref'] = {'type': 'string',
+                                             'description': 'Fresh ui_tree/find_element snapshot reference'}
+        _spec.schema.pop('required', None)
+        _spec.schema['anyOf'] = [{'required': ['name']}, {'required': ['ref']}]

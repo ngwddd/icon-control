@@ -88,16 +88,19 @@ def _element_id(ctype: str, name: str, pos: tuple) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
 
 
-def _walk(ctrl, depth, out, max_nodes, only_named=False):
+def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix=""):
     if len(out) >= max_nodes:
         return
     try:
         children = ctrl.GetChildren()
     except Exception:
         return
-    for c in children:
+    for index, c in enumerate(children):
         if len(out) >= max_nodes:
             return
+        # The child-index chain is what element references re-resolve against:
+        # it survives a moving window, unlike the geometry-based element_id.
+        path = f"{prefix}/{index}" if prefix else str(index)
         try:
             name = (c.Name or "").strip()
             rect = c.BoundingRectangle
@@ -113,6 +116,7 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False):
                         "y": pos[1],
                         "w": pos[2],
                         "h": pos[3],
+                        "path": path,
                         # P0-3：稳定元素 id（类型+名字+几何），后续可按 id 点击，
                         # 避免同名控件点错（"确定" 在对话框里到处都是）
                         "element_id": _element_id(ctype, name, pos),
@@ -121,7 +125,56 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False):
         except Exception:
             continue
         if depth > 0:
-            _walk(c, depth - 1, out, max_nodes, only_named)
+            _walk(c, depth - 1, out, max_nodes, only_named, path)
+
+
+def _control_obj_at_path(hwnd: int, path: str):
+    """The raw UIA object for one control (pattern work needs the object itself)."""
+    if not _UIA_OK:
+        raise RuntimeError("uiautomation not installed in this venv")
+    root = _control_from(hwnd)
+    if root is None:
+        return None
+    node = root
+    for part in [p for p in str(path).split('/') if p]:
+        try:
+            index = int(part)
+        except ValueError:
+            return None
+        children = node.GetChildren()
+        if index < 0 or index >= len(children):
+            return None
+        node = children[index]
+    return node
+
+
+def control_at_path(hwnd: int, path: str) -> dict[str, Any] | None:
+    """Re-read one control by its child-index chain (used to refresh a reference)."""
+    if not _UIA_OK:
+        raise RuntimeError("uiautomation not installed in this venv")
+    root = _control_from(hwnd)
+    if root is None:
+        return None
+    node = root
+    for part in [p for p in str(path).split('/') if p]:
+        try:
+            index = int(part)
+        except ValueError:
+            return None
+        children = node.GetChildren()
+        if index < 0 or index >= len(children):
+            return None
+        node = children[index]
+    rect = node.BoundingRectangle
+    return {
+        "type": node.ControlTypeName,
+        "name": (node.Name or "").strip(),
+        "x": int(rect.left),
+        "y": int(rect.top),
+        "w": int(rect.width()),
+        "h": int(rect.height()),
+        "path": str(path),
+    }
 
 
 def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60, only_named: bool = True) -> dict[str, Any]:

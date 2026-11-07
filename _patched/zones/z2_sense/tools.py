@@ -232,4 +232,34 @@ SPECS: list[ToolSpec] = [
             'required': ['query'],
         },
     ),
+    ToolSpec(
+        name='find_elements_ranked',
+        effects=('screen_read',),
+        zone='Z2',
+        description='多来源融合定位：一次比较 UIA / OCR / 模板候选，返回排序结果、来源、置信度与歧义标记',
+        read_only=True,
+        schema={'type': 'object', 'properties': {
+            'query': {'type': 'string', 'description': '控件名（UIA）或文字（OCR）或模板名'},
+            'hwnd': {'type': 'integer'},
+            'limit': {'type': 'integer', 'default': 5},
+            'sources': {'type': 'array', 'items': {'type': 'string'}},
+            'min_confidence': {'type': 'number', 'default': 0.0},
+            'include_state': {'type': 'boolean', 'default': False,
+                              'description': '为每个 UIA 候选附带 enabled/value/toggle 等状态（略慢）'},
+        }, 'required': ['query']},
+    ),
+    ToolSpec(
+        name='element_state',
+        effects=('screen_read',),
+        zone='Z2',
+        description='读取控件真实状态（启用/可见/聚焦/选中/值/勾选），不用截图猜',
+        read_only=True,
+        schema={'type': 'object', 'properties': {
+            'ref': {'type': 'string', 'description': '来自 find_element/find_elements_ranked/ui_tree 的 element ref'},
+            'hwnd': {'type': 'integer'},
+            'name': {'type': 'string', 'description': '没有 ref 时按控件名定位'},
+            'exact': {'type': 'boolean', 'default': False},
+        }},
+    ),
+
 ]

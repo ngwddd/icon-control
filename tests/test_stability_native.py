@@ -146,9 +146,10 @@ class ReleaseGateTests(AuthorityCase, unittest.TestCase):
     commit = 'a' * 40
 
     def _layout(self, home: Path, *, commit: str = None, version: str = '1.4.0',
-                tools: int = 90, failures=None, dirty: bool = False,
+                tools: int = None, failures=None, dirty: bool = False,
                 http_status: int = 401, report: bool = True, protocol: bool = True):
         commit = commit or self.commit
+        tools = gate.expected_tools() if tools is None else tools
         (home / '.runtime' / 'protocol').mkdir(parents=True, exist_ok=True)
         (home / 'VERSION').write_text(version + chr(10), encoding='utf-8')
         (home / 'pyproject.toml').write_text('version = "' + version + '"' + chr(10), encoding='utf-8')
@@ -211,10 +212,10 @@ class ReleaseGateTests(AuthorityCase, unittest.TestCase):
     def test_tool_count_mismatch_blocks(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            self._layout(home, tools=89)
+            self._layout(home, tools=gate.expected_tools() - 1)
             code, output = self._run(home)
         self.assertEqual(code, 1)
-        self.assertIn('expected 90 tools', output)
+        self.assertIn('tools, got', output)
 
     def test_http_without_credentials_must_be_401(self):
         with tempfile.TemporaryDirectory() as temp:

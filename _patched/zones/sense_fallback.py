@@ -31,13 +31,27 @@ def _norm_cand(raw: dict, source: str, score: float, label: str = "") -> dict:
             "score": round(float(score), 3)}
 
 
+def _uia_confidence(query: str, name: str) -> float:
+    """Name match quality. Calibrated per source: never mixed with OCR ratios."""
+    q, n = query.casefold().strip(), (name or "").casefold().strip()
+    if not n:
+        return 0.0
+    if n == q:
+        return 0.95
+    if n.startswith(q):
+        return 0.85
+    if q in n:
+        return 0.7
+    return 0.5
+
+
 def _try_uia(query: str, hwnd, limit: int) -> list:
     from computer_mcp import ui_ext
 
     out = []
     res = ui_ext.ui_find(name=query, hwnd=hwnd, exact=False, index=0)
     for c in (res.get("candidates") or [])[:limit]:
-        out.append(_norm_cand(c, "uia", 1.0))
+        out.append(_norm_cand(c, "uia", _uia_confidence(query, c.get("name", ""))))
     return out
 
 
@@ -64,40 +78,74 @@ def _try_template(query: str, region, hwnd, limit: int) -> list:
     return [_norm_cand(cand, "template", res.get("score", 0.0), label=query)]
 
 
+CONFIDENT = 0.85          # one candidate at this level ends the search
+AMBIGUITY_MARGIN = 0.1    # two candidates this close are indistinguishable
+
+
+def _run_source(src: str, query: str, hwnd, region, limit: int) -> list:
+    if src == "uia":
+        return _try_uia(query, hwnd, limit)
+    if src == "ocr":
+        return _try_ocr(query, region, hwnd, limit)
+    if src == "template":
+        return _try_template(query, region, hwnd, limit)
+    raise ValueError(f"未知来源: {src}")
+
+
+def _rank(cands: list) -> list:
+    """Sort by confidence, then by area (a big pane is rarely the target)."""
+    return sorted(cands, key=lambda c: (-c["score"], -(c["w"] * c["h"])))
+
+
 def find_element(query: str, hwnd=None, region=None, limit: int = 5,
-                 sources=("uia", "ocr", "template")) -> dict:
-    """按顺序尝试多条来源，返回第一个有结果的。"""
+                 sources=("uia", "ocr", "template"),
+                 min_confidence: float = 0.0,
+                 fuse: bool = True) -> dict:
+    """Locate a target, fusing sources when the first answer is not clear-cut.
+
+    The v1.4.0 behaviour — stop at the first source that returns anything — was
+    both wasteful (it never compared) and unsafe (the first hit may be the wrong
+    of two identical buttons). Now the cheap source runs first; OCR and template
+    are only consulted when UIA is missing or ambiguous, and the result says
+    whether the target is unambiguous.
+    """
     t0 = time.perf_counter()
-    tried, errors = [], []
+    tried, errors, collected = [], [], []
     for src in sources:
         tried.append(src)
         try:
-            if src == "uia":
-                cands = _try_uia(query, hwnd, limit)
-            elif src == "ocr":
-                cands = _try_ocr(query, region, hwnd, limit)
-            elif src == "template":
-                cands = _try_template(query, region, hwnd, limit)
-            else:
-                errors.append(f"{src}: 未知来源")
-                continue
+            collected.extend(_run_source(src, query, hwnd, region, limit))
         except Exception as exc:                        # noqa: BLE001
             errors.append(f"{src}: {type(exc).__name__}: {exc}")
             continue
-        if cands:
-            snapshot = {}
-            if hwnd:
-                try:
-                    from computer_mcp import snapshots
-                    snapshot = snapshots.attach(hwnd,cands[:limit])
-                    cands = snapshot.pop('candidates')
-                except Exception as exc:
-                    errors.append('snapshot: '+str(exc))
-            return {"ok": True, "query": query, "source": src,
-                    **snapshot,
-                    "candidates": cands[:limit], "tried": tried,
-                    "errors": errors,
-                    "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}
-    return {"ok": False, "query": query, "source": None, "candidates": [],
-            "tried": tried, "errors": errors,
+        if not fuse:
+            if collected:
+                break
+            continue
+        ranked = _rank(collected)
+        # Fast path: a single confident hit from the cheapest source is enough.
+        if ranked and ranked[0]["score"] >= CONFIDENT and len(ranked) == 1:
+            break
+    collected = [c for c in collected if c["score"] >= min_confidence]
+    ranked = _rank(collected)
+    ambiguous = False
+    if len(ranked) >= 2 and ranked[0]["score"] - ranked[1]["score"] < AMBIGUITY_MARGIN:
+        same_spot = abs(ranked[0]["cx"] - ranked[1]["cx"]) < 4 and abs(ranked[0]["cy"] - ranked[1]["cy"]) < 4
+        ambiguous = not same_spot
+    snapshot = {}
+    if hwnd and ranked:
+        try:
+            from computer_mcp import snapshots
+            snapshot = snapshots.attach(hwnd, ranked[:limit])
+            ranked = snapshot.pop('candidates')
+        except Exception as exc:                        # noqa: BLE001
+            errors.append('snapshot: ' + str(exc))
+    if not ranked:
+        return {"ok": False, "query": query, "source": None, "candidates": [],
+                "ambiguous": False, "tried": tried, "errors": errors,
+                "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}
+    return {"ok": True, "query": query, "source": ranked[0]["source"],
+            "target": ranked[0], "ambiguous": ambiguous,
+            "confidence": ranked[0]["score"],
+            **snapshot, "candidates": ranked[:limit], "tried": tried, "errors": errors,
             "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}

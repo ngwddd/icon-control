@@ -603,6 +603,154 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                                   limit=int(arguments.get("limit", 5)),
                                   sources=tuple(srcs))
 
+    if name == "find_elements_ranked":
+        from computer_mcp import element_ops as _eo
+        from computer_mcp.zones import sense_fallback as _sf
+        srcs = arguments.get("sources") or ("uia", "ocr", "template")
+        payload = _sf.find_element(str(arguments.get("query", "")),
+                                   hwnd=arguments.get("hwnd"),
+                                   limit=int(arguments.get("limit", 5)),
+                                   sources=tuple(srcs),
+                                   min_confidence=float(arguments.get("min_confidence", 0.0)))
+        if arguments.get("include_state") and payload.get("ok"):
+            target_hwnd = payload.get("hwnd") or arguments.get("hwnd")
+            for candidate in payload.get("candidates", []):
+                if not candidate.get("path") or not target_hwnd:
+                    continue
+                try:
+                    candidate["state"] = _eo.read_state(int(target_hwnd), candidate["path"])
+                except Exception as exc:                # noqa: BLE001
+                    candidate["state_error"] = f"{type(exc).__name__}: {exc}"
+        result = payload
+
+    if name in ("element_state", "element_action"):
+        from computer_mcp import element_ops as _eo
+        from computer_mcp import snapshots as _snap
+        from computer_mcp import ui_ext as _ui
+        position = {}
+        try:
+            if arguments.get("ref"):
+                position = _snap.resolve(str(arguments["ref"]), arguments.get("hwnd"))
+                target = dict(position)
+            else:
+                found = _ui.ui_find(name=str(arguments.get("name", "")),
+                                    hwnd=arguments.get("hwnd"),
+                                    exact=bool(arguments.get("exact", False)),
+                                    index=0)
+                target = dict(found.get("target") or {})
+        except _snap.StaleReference as exc:
+            result = dict(ok=False, code="stale_element", error=str(exc))
+        except Exception as exc:                        # noqa: BLE001
+            result = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+        else:
+            path = target.get("path")
+            hwnd = target.get("hwnd") or arguments.get("hwnd") or position.get("hwnd")
+            if not path or not hwnd:
+                result = dict(ok=False, code="no_path",
+                              error="该元素没有可复用的 UIA 路径（OCR/模板命中），请用坐标操作")
+            elif name == "element_state":
+                try:
+                    result = dict(ok=True, hwnd=int(hwnd), path=path,
+                                  state=_eo.read_state(int(hwnd), str(path)))
+                except Exception as exc:                # noqa: BLE001
+                    result = dict(ok=False, hwnd=int(hwnd), path=path,
+                                  error=f"{type(exc).__name__}: {exc}")
+            else:
+                action = str(arguments.get("action", "auto"))
+                try:
+                    before = _eo.read_state(int(hwnd), str(path))
+                except Exception:                       # noqa: BLE001
+                    before = {}
+                try:
+                    outcome = _eo.perform(int(hwnd), str(path), action,
+                                          arguments.get("value"), mouse_controller)
+                except Exception as exc:                # noqa: BLE001
+                    outcome = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+                outcome.update(hwnd=int(hwnd), path=path, action_requested=action)
+                if outcome.get("ok") and arguments.get("verify", True):
+                    try:
+                        after = _eo.read_state(int(hwnd), str(path))
+                    except Exception:                   # noqa: BLE001
+                        after = {}
+                    outcome["after"] = after
+                    verdict = "executed_unverified"
+                    if action == "set_value" or outcome.get("action") == "set_value":
+                        expected = arguments.get("value")
+                        if after.get("value") is not None and expected is not None:
+                            verdict = ("verified_success" if str(after["value"]) == str(expected)
+                                       else "no_effect")
+                    elif "toggle" in (action, outcome.get("action")):
+                        if before.get("toggle") is not None and after.get("toggle") is not None:
+                            verdict = ("verified_success" if before["toggle"] != after["toggle"]
+                                       else "no_effect")
+                    elif "select" in (action, outcome.get("action")):
+                        if after.get("selected") is not None:
+                            verdict = "verified_success" if after["selected"] else "no_effect"
+                    outcome["verification"] = verdict
+                result = outcome
+
+    if name == "type_verified":
+        import time as _time
+        from computer_mcp import element_ops as _eo
+        from computer_mcp import snapshots as _snap
+        from computer_mcp import ui_ext as _ui
+        text = str(arguments.get("text", ""))
+        hwnd = arguments.get("hwnd")
+        target = {}
+        try:
+            if arguments.get("ref"):
+                target = _snap.resolve(str(arguments["ref"]), hwnd)
+                hwnd = target.get("hwnd") or hwnd
+            elif arguments.get("name"):
+                found = _ui.ui_find(name=str(arguments["name"]), hwnd=hwnd,
+                                    exact=bool(arguments.get("exact", False)), index=0)
+                target = dict(found.get("target") or {})
+                hwnd = hwnd or target.get("hwnd")
+        except _snap.StaleReference as exc:
+            result = dict(ok=False, code="stale_element", error=str(exc))
+        except Exception as exc:                        # noqa: BLE001
+            result = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+        else:
+            path = target.get("path")
+            if path and hwnd:
+                try:
+                    _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
+                except Exception:                       # noqa: BLE001
+                    pass
+            typed = keyboard_actions.type_text(text=text, controller=keyboard_controller)
+            if arguments.get("clear_first"):
+                # Select all then overwrite: the common "replace the field" idiom.
+                keyboard_actions.key_down("ctrl", controller=keyboard_controller)
+                keyboard_actions.key_press("a", controller=keyboard_controller)
+                keyboard_actions.key_up("ctrl", controller=keyboard_controller)
+                typed = keyboard_actions.type_text(text=text, controller=keyboard_controller)
+            after = None
+            if path and hwnd:
+                for _ in range(3):
+                    _time.sleep(0.12)
+                    try:
+                        after = _eo.read_state(int(hwnd), str(path))
+                    except Exception:                   # noqa: BLE001
+                        after = None
+                    if after and after.get("value") is not None:
+                        break
+            value = None if after is None else after.get("value")
+            if value is None:
+                verdict, reason = "executed_unverified", "no_readable_target"
+            else:
+                expected = text.rstrip("\n")
+                got = str(value)
+                if got == expected or got.endswith(expected):
+                    verdict, reason = "verified_success", ""
+                else:
+                    verdict, reason = "no_effect", "value_mismatch"
+            result = dict(ok=True, action="type_verified", text=text, typed=typed,
+                          value=value, verification=verdict, reason=reason,
+                          hwnd=int(hwnd) if hwnd else None, path=path)
+            if arguments.get("submit") and verdict == "verified_success":
+                keyboard_actions.key_press("enter", controller=keyboard_controller)
+                result["submitted"] = True
+
     if name == "wait_for":
         from computer_mcp.zones import wait_for as _wf
         result = _wf.run(kind=str(arguments.get("kind", "change")),
