@@ -66,6 +66,7 @@
   "screenshot",
   "screenshot_window",
   "scroll",
+  "scroll_into_view",
   "sense",
   "servo",
   "set_baseline",

@@ -27,7 +27,7 @@ class ToolRegistrationTests(AuthorityCase, unittest.TestCase):
         self.assertTrue(ranked.read_only and state.read_only)
         self.assertFalse(action.read_only)
         self.assertIn('input', action.effects)
-        self.assertEqual(len(tool_registry.all_tools()), 95)
+        self.assertEqual(len(tool_registry.all_tools()), 96)
 
     def test_action_enum_covers_the_supported_set(self):
         from computer_mcp import tool_registry
@@ -92,11 +92,22 @@ class ElementActionTests(AuthorityCase, unittest.TestCase):
     def test_set_value_that_did_not_stick_is_no_effect(self):
         same = dict(value='old', toggle=None, selected=None, supported={'value': True})
         with patch.object(S, 'resolve', return_value=self.target), \
-                patch('computer_mcp.element_ops.read_state', side_effect=[same, same]), \
+                patch('computer_mcp.element_ops.read_state', return_value=same), \
                 patch('computer_mcp.element_ops.perform',
                       return_value=dict(ok=True, action='set_value', method='uia')):
             result = run('element_action', ref='abc:0', action='set_value', value='new')
         self.assertEqual(result['verification'], 'no_effect')
+
+    def test_set_value_is_polled_until_the_pattern_lands(self):
+        old_value = dict(value='old', toggle=None, selected=None, supported={'value': True})
+        new_value = dict(value='new', toggle=None, selected=None, supported={'value': True})
+        with patch.object(S, 'resolve', return_value=self.target), \
+                patch('computer_mcp.element_ops.read_state',
+                      side_effect=[old_value, old_value, new_value]), \
+                patch('computer_mcp.element_ops.perform',
+                      return_value=dict(ok=True, action='set_value', method='uia')):
+            result = run('element_action', ref='abc:0', action='set_value', value='new')
+        self.assertEqual(result['verification'], 'verified_success')
 
     def test_toggle_flip_is_verified(self):
         before = dict(toggle='off', value=None, selected=None, supported={'toggle': True})
@@ -125,6 +136,39 @@ class ElementActionTests(AuthorityCase, unittest.TestCase):
             result = run('element_action', ref='abc:0', action='invoke')
         self.assertFalse(result['ok'])
         self.assertIn('Invoke', result['error'])
+
+
+class TypeVerifiedTests(AuthorityCase, unittest.TestCase):
+    fixture_authorized = True
+
+    def setUp(self):
+        super().setUp()
+        guard = patch('computer_mcp.control.blocking_reason', return_value=None)
+        guard.start()
+        self.addCleanup(guard.stop)
+        self.target = dict(hwnd=11, path='1/0', x=0, y=0, w=10, h=10)
+
+    def run_type(self, before, after):
+        states = [before, after]
+        with patch.object(S, 'resolve', return_value=self.target), \
+                patch('computer_mcp.element_ops.read_state', side_effect=states), \
+                patch('computer_mcp.element_ops.perform', return_value=dict(ok=True)), \
+                patch('computer_mcp.actions.keyboard.type_text',
+                      return_value=dict(success=True)):
+            return run('type_verified', ref='abc:0', text='插入')
+
+    def test_insertion_into_the_middle_is_verified(self):
+        result = self.run_type(dict(value='前缀后缀'), dict(value='前缀插入后缀'))
+        self.assertEqual(result['verification'], 'verified_success')
+        self.assertEqual(result['reason'], 'inserted')
+
+    def test_typing_the_same_text_twice_still_counts(self):
+        result = self.run_type(dict(value='插入插入'), dict(value='插入插入插入'))
+        self.assertEqual(result['verification'], 'verified_success')
+
+    def test_missing_characters_are_reported(self):
+        result = self.run_type(dict(value='abc'), dict(value='abc'))
+        self.assertEqual(result['verification'], 'no_effect')
 
 
 class RankedTests(AuthorityCase, unittest.TestCase):

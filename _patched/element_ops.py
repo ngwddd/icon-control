@@ -136,6 +136,13 @@ def perform(hwnd: int, path: str, action: str, value: str | None = None,
         _safe(lambda: obj.SetFocus())
         return dict(ok=True, action='focus', method='uia')
 
+    if chosen == 'scroll_into_view':
+        pattern = _pattern(obj, 'ScrollItem')
+        if pattern is None:
+            return dict(ok=False, error='control has no ScrollItem pattern', action=chosen)
+        _safe(lambda: pattern.ScrollIntoView())
+        return dict(ok=True, action='scroll_into_view', method='uia')
+
     bounds = state.get('bounds') or {}
     if not bounds or mouse is None:
         return dict(ok=False, error='no clickable bounds', action=chosen)

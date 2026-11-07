@@ -69,10 +69,11 @@ def attach(hwnd, candidates):
     identity = window_identity(hwnd)
     nodes = copy.deepcopy(candidates[:1000])
     resolvable = bool(nodes) and all(node.get('path') for node in nodes)
-    # Only ask for pixels when the references cannot be re-resolved structurally.
+    # Only ask for pixels when there is something to reference and it cannot be
+    # re-resolved structurally. An empty tree (no UIA at all) needs no capture.
     digest = layout_digest(nodes)
     fingerprint = None
-    if not resolvable:
+    if nodes and not resolvable:
         try:
             fingerprint = screen_fingerprint(identity)
         except Exception:
@@ -100,9 +101,10 @@ def _check_identity(item, hwnd):
     if hwnd is not None and int(hwnd) != expected[0]:
         raise StaleReference('Reference belongs to another window')
     current = window_identity(expected[0])
-    # pid / process creation time / title / dpi must match; the rectangle may move
-    # for a UIA reference because the path re-resolves to fresh coordinates.
-    if current[:4] != expected[:4] or current[5] != expected[5]:
+    # pid / process creation time / dpi must match; the rectangle may move and the
+    # title may change (editing a document adds a "*"), because a UIA reference
+    # re-resolves by path to fresh coordinates.
+    if current[:3] != expected[:3] or current[5] != expected[5]:
         raise StaleReference('Window, process or DPI changed; observe again')
     return expected, current
 

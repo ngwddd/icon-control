@@ -722,24 +722,38 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                     outcome = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
                 outcome.update(hwnd=int(hwnd), path=path, action_requested=action)
                 if outcome.get("ok") and arguments.get("verify", True):
-                    try:
-                        after = _eo.read_state(int(hwnd), str(path))
-                    except Exception:                   # noqa: BLE001
-                        after = {}
+                    import time as _time
+
+                    def judge(after_state):
+                        if action == "set_value" or outcome.get("action") == "set_value":
+                            expected = arguments.get("value")
+                            if after_state.get("value") is None or expected is None:
+                                return "executed_unverified"
+                            return ("verified_success" if str(after_state["value"]) == str(expected)
+                                    else "no_effect")
+                        if "toggle" in (action, outcome.get("action")):
+                            if before.get("toggle") is None or after_state.get("toggle") is None:
+                                return "executed_unverified"
+                            return ("verified_success"
+                                    if before["toggle"] != after_state["toggle"] else "no_effect")
+                        if "select" in (action, outcome.get("action")):
+                            if after_state.get("selected") is None:
+                                return "executed_unverified"
+                            return "verified_success" if after_state["selected"] else "no_effect"
+                        return "executed_unverified"
+
+                    after = {}
+                    verdict = "no_effect"
+                    for _ in range(8):
+                        try:
+                            after = _eo.read_state(int(hwnd), str(path))
+                        except Exception:               # noqa: BLE001
+                            after = {}
+                        verdict = judge(after)
+                        if verdict != "no_effect":
+                            break
+                        _time.sleep(0.15)
                     outcome["after"] = after
-                    verdict = "executed_unverified"
-                    if action == "set_value" or outcome.get("action") == "set_value":
-                        expected = arguments.get("value")
-                        if after.get("value") is not None and expected is not None:
-                            verdict = ("verified_success" if str(after["value"]) == str(expected)
-                                       else "no_effect")
-                    elif "toggle" in (action, outcome.get("action")):
-                        if before.get("toggle") is not None and after.get("toggle") is not None:
-                            verdict = ("verified_success" if before["toggle"] != after["toggle"]
-                                       else "no_effect")
-                    elif "select" in (action, outcome.get("action")):
-                        if after.get("selected") is not None:
-                            verdict = "verified_success" if after["selected"] else "no_effect"
                     outcome["verification"] = verdict
                 result = outcome
 
@@ -766,7 +780,12 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             result = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
         else:
             path = target.get("path")
+            before_value = None
             if path and hwnd:
+                try:
+                    before_value = _eo.read_state(int(hwnd), str(path)).get("value")
+                except Exception:                       # noqa: BLE001
+                    before_value = None
                 try:
                     _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
                 except Exception:                       # noqa: BLE001
@@ -794,12 +813,19 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             else:
                 expected = text.rstrip("\n")
                 got = str(value)
+                before_text = "" if before_value is None else str(before_value)
+                grew = len(got) - len(before_text)
                 if got == expected or got.endswith(expected):
                     verdict, reason = "verified_success", ""
+                elif expected and expected in got and grew >= len(expected):
+                    # The caret was mid-document, or the same text was typed twice:
+                    # the field grew by at least the typed length and contains it.
+                    verdict, reason = "verified_success", "inserted"
                 else:
                     verdict, reason = "no_effect", "value_mismatch"
             result = dict(ok=True, action="type_verified", text=text, typed=typed,
-                          value=value, verification=verdict, reason=reason,
+                          value=value, value_before=before_value,
+                          verification=verdict, reason=reason,
                           hwnd=int(hwnd) if hwnd else None, path=path)
             if arguments.get("submit") and verdict == "verified_success":
                 keyboard_actions.key_press("enter", controller=keyboard_controller)
@@ -907,6 +933,58 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                               "re-observe the window and confirm the state before retrying"))
             if not outcome.get("ok"):
                 result["error"] = outcome.get("error")
+
+    if name == "scroll_into_view":
+        import time as _time
+        import win32gui
+        from computer_mcp import element_ops as _eo
+        from computer_mcp import ui_ext as _ui
+        query = str(arguments.get("query", "")).casefold()
+        hwnd = arguments.get("hwnd") or win32gui.GetForegroundWindow()
+        max_scrolls = max(1, int(arguments.get("max_scrolls", 10)))
+        step = int(arguments.get("step", 3)) or 3
+        settle = max(0.0, int(arguments.get("settle_ms", 120)) / 1000.0)
+        left, top, right, bottom = win32gui.GetWindowRect(int(hwnd))
+        center = ((left + right) // 2, (top + bottom) // 2)
+        attempts = []
+        found = None
+        for attempt in range(max_scrolls + 1):
+            tree = _ui.ui_tree(hwnd=int(hwnd), depth=8, max_nodes=800, only_named=True)
+            hits = [node for node in (tree.get("nodes") or [])
+                    if query and query in str(node.get("name", "")).casefold()]
+            visible = None
+            for node in hits:
+                inside = (node["x"] >= left and node["y"] >= top
+                          and node["x"] + node["w"] <= right
+                          and node["y"] + node["h"] <= bottom)
+                if inside:
+                    visible = node
+                    break
+            attempts.append(dict(attempt=attempt, matches=len(hits), visible=bool(visible)))
+            if visible:
+                found = visible
+                break
+            if hits:
+                # The control exists but is outside the viewport: ask it to
+                # scroll itself first (ScrollItem), then verify on the next pass.
+                try:
+                    _eo.perform(int(hwnd), str(hits[0].get("path")), "scroll_into_view")
+                except Exception:                       # noqa: BLE001
+                    pass
+            if mouse_controller is not None:
+                try:
+                    mouse_controller.position = center
+                    mouse_controller.scroll(0, -step)
+                except Exception:                       # noqa: BLE001
+                    pass
+            _time.sleep(settle)
+        result = dict(ok=bool(found), found=bool(found), query=arguments.get("query"),
+                      hwnd=int(hwnd), scrolls=len([a for a in attempts if a["attempt"] > 0]),
+                      attempts=attempts,
+                      bounds=({k: found[k] for k in ("x", "y", "w", "h")} if found else None),
+                      path=(found or {}).get("path"),
+                      note=("" if found else
+                            "目标在 max_scrolls 次滚动内没有出现；它可能在另一个列表、需要先展开，或者根本不存在"))
 
     if name == "wait_for":
         from computer_mcp.zones import wait_for as _wf

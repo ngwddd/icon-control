@@ -298,7 +298,20 @@ SPECS: list[ToolSpec] = [
             'clear_first': {'type': 'boolean', 'default': False, 'description': '先全选删除再输入'},
         }, 'required': ['text']},
     ),
-
+    ToolSpec(
+        name='scroll_into_view',
+        effects=('input', 'screen_read'),
+        zone='Z3',
+        description='在长列表里滚动直到目标元素可见（先试 UIA ScrollItem，再滚轮），找不到就明确说找不到',
+        read_only=False,
+        schema={'type': 'object', 'properties': {
+            'query': {'type': 'string', 'description': '控件/列表项名字（包含匹配）'},
+            'hwnd': {'type': 'integer'},
+            'max_scrolls': {'type': 'integer', 'default': 10},
+            'step': {'type': 'integer', 'default': 3, 'description': '每次滚轮的格数'},
+            'settle_ms': {'type': 'integer', 'default': 120},
+        }, 'required': ['query']},
+    ),
 ]
 
 # Additive v1.3 input: legacy name-based callers remain valid.

@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-11-07T18:05:44Z",
+ "generated_at": "2026-11-07T18:08:32Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
- "tool_count": 95,
- "dispatch_count": 95,
+ "tool_count": 96,
+ "dispatch_count": 96,
  "tools": [
   {
    "name": "act_until",
@@ -1816,6 +1816,39 @@
    }
   },
   {
+   "name": "scroll_into_view",
+   "description": "在长列表里滚动直到目标元素可见（先试 UIA ScrollItem，再滚轮），找不到就明确说找不到",
+   "block_sha1": "4869677c4d296b7bea7d2009b7959e3315724095",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string",
+      "description": "控件/列表项名字（包含匹配）"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "max_scrolls": {
+      "type": "integer",
+      "default": 10
+     },
+     "step": {
+      "type": "integer",
+      "default": 3,
+      "description": "每次滚轮的格数"
+     },
+     "settle_ms": {
+      "type": "integer",
+      "default": 120
+     }
+    },
+    "required": [
+     "query"
+    ]
+   }
+  },
+  {
    "name": "sense",
    "description": "Return what changed since a frame index plus requested primitives (prompt/bar/openness/color/digits). Reads the daemon buffer; typically under 10 ms and transfers no image.",
    "block_sha1": "bf23f285f67e949799771f0684dbfd06fd5a0463",
@@ -2766,6 +2799,7 @@
   "screenshot",
   "screenshot_window",
   "scroll",
+  "scroll_into_view",
   "sense",
   "servo",
   "set_baseline",

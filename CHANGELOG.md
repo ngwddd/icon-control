@@ -1,3 +1,40 @@
+## [1.4.1] - 2026-11-08
+
+> 功能增强版。授权模型不变（连接即授权 + 急停 + 接管），补的是**定位准不准、输入有没有真的进去、一次调用能干多少事**。
+
+### 新增工具（6 个，90 → 96）
+
+| 工具 | 解决什么 |
+|---|---|
+| `find_elements_ranked` | 多来源融合定位：UIA/OCR/模板一起看，输出排序、置信度、`ambiguous` |
+| `element_state` | 直接读控件的 enabled/offscreen/focus/value/toggle/selected，不用截图猜 |
+| `element_action` | 按控件能力执行 invoke/set_value/toggle/select/click，可选回读校验 |
+| `type_verified` | 输入后回读目标控件，丢字/焦点错位会被判 `no_effect` |
+| `execute_verified` | 定位 → 执行 → 等后置条件 → `verified_success`/`no_effect`/`target_changed` |
+| `scroll_into_view` | 长列表滚到目标可见；先试 UIA ScrollItem，再滚轮，找不到就明说 |
+
+### 现有工具升级
+
+- **元素引用可重新解析**：UIA 候选带子控件索引路径，解析时重走树取**当前**坐标；
+  窗口移动不再让引用失效，附着也不再截图。OCR/模板候选保留原来的短 TTL（它们没有结构可复位）。
+- **`find_element` 不再先命中先返回**：便宜的 UIA 先跑，缺失或有歧义才跑 OCR/模板；
+  两个候选分差 < 0.1 直接标 `ambiguous`。置信度按来源校准，**不相加**。
+- **`screenshot` 支持 `region` / `regions=[...]`**：一次调用截多块，每块一张图。
+- **`ocr_read` 支持 `regions=[...]`**：一次 OCR 多区域，返回每块的文本和错误。
+- **`wait_for` 支持 `any=[...]`**：多个条件任一满足即返回，超时会列出试过哪些。
+- **`ui_tree` 节点带 `path`**，新增 `control_at_path()` 按路径复读控件。
+
+### 工程
+
+- `tools/snapshot_tools.py`：契约快照（`docs/tools-snapshot.json`）由注册表重新生成，
+  不再手改；`--check` 用于 CI 前的漂移检查。
+- 发布门禁的工具数量改为**从注册表读取**，不再写死 90。
+
+### 验证
+
+- 回归：**822 项 / 0 失败 / 0 错误 / 3 跳过**（新增 49 项）
+- 真机：微信定位联系人 → 读控件状态 → 输入草稿 → 校验未发送
+
 ## [1.4.0] - 2026-11-07
 
 > 正式版。授权系统已经移除，急停与接管保留；旧的 32 项授权基准测试随之删除。
