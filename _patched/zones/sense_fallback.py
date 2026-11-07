@@ -26,9 +26,15 @@ def _norm_cand(raw: dict, source: str, score: float, label: str = "") -> dict:
     h = int(raw.get("h", 0) or 0)
     cx = int(raw.get("cx") or (x + w // 2))
     cy = int(raw.get("cy") or (y + h // 2))
-    return {"x": x, "y": y, "w": w, "h": h, "cx": cx, "cy": cy,
-            "source": source, "label": label or raw.get("name") or raw.get("text") or "",
-            "score": round(float(score), 3)}
+    out = {"x": x, "y": y, "w": w, "h": h, "cx": cx, "cy": cy,
+           "source": source, "label": label or raw.get("name") or raw.get("text") or "",
+           "score": round(float(score), 3)}
+    # The UIA child-index path is what makes a reference re-resolvable; dropping
+    # it here silently demoted every fused candidate to a 5 second visual ref.
+    for key in ("path", "name", "type", "element_id", "hwnd"):
+        if raw.get(key):
+            out[key] = raw[key]
+    return out
 
 
 def _uia_confidence(query: str, name: str) -> float:
@@ -93,8 +99,12 @@ def _run_source(src: str, query: str, hwnd, region, limit: int) -> list:
 
 
 def _rank(cands: list) -> list:
-    """Sort by confidence, then by area (a big pane is rarely the target)."""
-    return sorted(cands, key=lambda c: (-c["score"], -(c["w"] * c["h"])))
+    """Sort by confidence, then favour the smaller control on a tie.
+
+    A big pane that happens to carry the label is rarely the thing you meant to
+    click; the button inside it is. (This used to sort by descending area.)
+    """
+    return sorted(cands, key=lambda c: (-c["score"], c["w"] * c["h"]))
 
 
 def find_element(query: str, hwnd=None, region=None, limit: int = 5,

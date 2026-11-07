@@ -108,10 +108,16 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix=""):
             if not only_named or name:
                 pos = (int(rect.left), int(rect.top),
                        int(rect.width()), int(rect.height()))
+                automation_id = ""
+                try:
+                    automation_id = (c.AutomationId or "").strip()
+                except Exception:                       # noqa: BLE001
+                    automation_id = ""
                 out.append(
                     {
                         "type": ctype,
                         "name": name,
+                        "automation_id": automation_id,
                         "x": pos[0],
                         "y": pos[1],
                         "w": pos[2],
@@ -169,6 +175,7 @@ def control_at_path(hwnd: int, path: str) -> dict[str, Any] | None:
     return {
         "type": node.ControlTypeName,
         "name": (node.Name or "").strip(),
+        "automation_id": (getattr(node, "AutomationId", "") or "").strip(),
         "x": int(rect.left),
         "y": int(rect.top),
         "w": int(rect.width()),

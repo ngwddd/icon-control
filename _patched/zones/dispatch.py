@@ -33,6 +33,22 @@ from computer_mcp import ocr_ext
 from computer_mcp import anchor_mem
 
 
+VALUE_PREVIEW = 200
+
+
+def _trim_state(state: dict, full: bool) -> dict:
+    """Keep a document's text out of the transcript unless it was asked for."""
+    value = state.get("value")
+    if full or value is None or not isinstance(value, str) or len(value) <= VALUE_PREVIEW:
+        return state
+    trimmed = dict(state)
+    trimmed["value_length"] = len(value)
+    trimmed["value_preview"] = value[:VALUE_PREVIEW] + "…"
+    trimmed["value"] = None
+    trimmed["value_truncated"] = True
+    return trimmed
+
+
 def dispatch(name: str, arguments: dict, *, computer_state, mouse_controller,
              keyboard_controller) -> dict:
     from computer_mcp.execution import operation
@@ -681,31 +697,54 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         from computer_mcp import element_ops as _eo
         from computer_mcp import snapshots as _snap
         from computer_mcp import ui_ext as _ui
+        import win32gui as _win32gui
+
         position = {}
+        ambiguous = None
         try:
             if arguments.get("ref"):
                 position = _snap.resolve(str(arguments["ref"]), arguments.get("hwnd"))
                 target = dict(position)
             else:
+                window = arguments.get("hwnd") or _win32gui.GetForegroundWindow()
                 found = _ui.ui_find(name=str(arguments.get("name", "")),
-                                    hwnd=arguments.get("hwnd"),
+                                    hwnd=window,
                                     exact=bool(arguments.get("exact", False)),
                                     index=0)
-                target = dict(found.get("target") or {})
+                candidates = found.get("candidates") or []
+                wanted = str(arguments.get("name", ""))
+                exact_hits = [c for c in candidates if str(c.get("name", "")) == wanted]
+                if len(candidates) > 1 and len(exact_hits) != 1:
+                    # Two "OK" buttons in one dialog: do not guess which one.
+                    ambiguous = dict(ok=False, code="ambiguous",
+                                     error="多个同名控件；请给出 element ref 或 index",
+                                     candidates=candidates[:5])
+                target = dict((exact_hits[0] if len(exact_hits) == 1
+                               else (found.get("target") or {})))
+                target.setdefault("hwnd", int(window))
         except _snap.StaleReference as exc:
             result = dict(ok=False, code="stale_element", error=str(exc))
         except Exception as exc:                        # noqa: BLE001
             result = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
         else:
-            path = target.get("path")
-            hwnd = target.get("hwnd") or arguments.get("hwnd") or position.get("hwnd")
-            if not path or not hwnd:
+            if ambiguous is not None:
+                result = ambiguous
+                path = None
+                hwnd = None
+            else:
+                path = target.get("path")
+                hwnd = (target.get("hwnd") or arguments.get("hwnd")
+                        or position.get("hwnd") or _win32gui.GetForegroundWindow())
+            if ambiguous is not None:
+                pass
+            elif not path or not hwnd:
                 result = dict(ok=False, code="no_path",
                               error="该元素没有可复用的 UIA 路径（OCR/模板命中），请用坐标操作")
             elif name == "element_state":
                 try:
+                    state = _eo.read_state(int(hwnd), str(path))
                     result = dict(ok=True, hwnd=int(hwnd), path=path,
-                                  state=_eo.read_state(int(hwnd), str(path)))
+                                  state=_trim_state(state, bool(arguments.get("full"))))
                 except Exception as exc:                # noqa: BLE001
                     result = dict(ok=False, hwnd=int(hwnd), path=path,
                                   error=f"{type(exc).__name__}: {exc}")
@@ -790,13 +829,14 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                     _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
                 except Exception:                       # noqa: BLE001
                     pass
-            typed = keyboard_actions.type_text(text=text, controller=keyboard_controller)
             if arguments.get("clear_first"):
-                # Select all then overwrite: the common "replace the field" idiom.
+                # Replace, don't append: select everything and delete it *before*
+                # typing, otherwise the field receives two inputs.
                 keyboard_actions.key_down("ctrl", controller=keyboard_controller)
                 keyboard_actions.key_press("a", controller=keyboard_controller)
                 keyboard_actions.key_up("ctrl", controller=keyboard_controller)
-                typed = keyboard_actions.type_text(text=text, controller=keyboard_controller)
+                keyboard_actions.key_press("delete", controller=keyboard_controller)
+            typed = keyboard_actions.type_text(text=text, controller=keyboard_controller)
             after = None
             if path and hwnd:
                 for _ in range(3):
@@ -815,7 +855,9 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                 got = str(value)
                 before_text = "" if before_value is None else str(before_value)
                 grew = len(got) - len(before_text)
-                if got == expected or got.endswith(expected):
+                if before_value is not None and got == before_text:
+                    verdict, reason = "no_effect", "no_change"
+                elif got == expected or got.endswith(expected):
                     verdict, reason = "verified_success", ""
                 elif expected and expected in got and grew >= len(expected):
                     # The caret was mid-document, or the same text was typed twice:
@@ -824,7 +866,12 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                 else:
                     verdict, reason = "no_effect", "value_mismatch"
             result = dict(ok=True, action="type_verified", text=text, typed=typed,
-                          value=value, value_before=before_value,
+                          value=(value if not isinstance(value, str) or len(value) <= VALUE_PREVIEW
+                                 else value[:VALUE_PREVIEW] + "…"),
+                          value_length=(len(value) if isinstance(value, str) else None),
+                          value_before=(before_value if not isinstance(before_value, str)
+                                        or len(before_value) <= VALUE_PREVIEW
+                                        else before_value[:VALUE_PREVIEW] + "…"),
                           verification=verdict, reason=reason,
                           hwnd=int(hwnd) if hwnd else None, path=path)
             if arguments.get("submit") and verdict == "verified_success":
@@ -908,21 +955,32 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                         met = bool(probe.get("ok"))
                         observed = probe.get("detail")
                     elif kind == "absent":
-                        met = False
-                        try:
-                            _snap.resolve(str(arguments.get("ref")), hwnd)
-                        except _snap.StaleReference:
-                            met = True
-                        except Exception:               # noqa: BLE001
-                            met = False
-                        observed = "element gone" if met else "still present"
+                        ref = arguments.get("ref")
+                        if not ref:
+                            # Nothing to watch: a failure to resolve proves nothing.
+                            met = None
+                            observed = "no reference supplied"
+                        else:
+                            try:
+                                _snap.resolve(str(ref), hwnd)
+                                met = False
+                                observed = "still present"
+                            except _snap.StaleReference:
+                                met = True
+                                observed = "element gone"
+                            except Exception:           # noqa: BLE001
+                                met = None
+                                observed = "cannot verify"
                     else:
                         met = False
                     if met or _time.perf_counter() >= deadline:
                         break
                     _time.sleep(0.15)
-                status = ("verified_success" if met else
-                          ("target_changed" if not path else "no_effect"))
+                if met is None:
+                    status = "executed_unverified"
+                else:
+                    status = ("verified_success" if met else
+                              ("target_changed" if not path else "no_effect"))
             else:
                 status = "executed_unverified" if outcome.get("ok") else "no_effect"
             result = dict(ok=bool(outcome.get("ok")), status=status, action=action,
@@ -971,13 +1029,13 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                     _eo.perform(int(hwnd), str(hits[0].get("path")), "scroll_into_view")
                 except Exception:                       # noqa: BLE001
                     pass
-            if mouse_controller is not None:
+            if attempt < max_scrolls and mouse_controller is not None:
                 try:
                     mouse_controller.position = center
                     mouse_controller.scroll(0, -step)
                 except Exception:                       # noqa: BLE001
                     pass
-            _time.sleep(settle)
+                _time.sleep(settle)
         result = dict(ok=bool(found), found=bool(found), query=arguments.get("query"),
                       hwnd=int(hwnd), scrolls=len([a for a in attempts if a["attempt"] > 0]),
                       attempts=attempts,
@@ -992,7 +1050,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                          query=arguments.get("query"),
                          element_id=arguments.get("element_id"),
                          timeout_ms=int(arguments.get("timeout_ms", 5000)),
-                         interval_ms=int(arguments.get("interval_ms", 150)))
+                         interval_ms=int(arguments.get("interval_ms", 150)),
+                         any=arguments.get("any"))
 
     if name == "control_status":
         from computer_mcp import control as _ctl

@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-07T18:08:32Z",
+ "generated_at": "2026-11-07T18:36:42Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 96,
@@ -729,7 +729,7 @@
   {
    "name": "element_state",
    "description": "读取控件真实状态（启用/可见/聚焦/选中/值/勾选），不用截图猜",
-   "block_sha1": "2d0e976f428ca17dc73b6187957d2ed4e1586334",
+   "block_sha1": "7f95361b4f306190554d9ff074a7cb81c039cb36",
    "schema": {
     "type": "object",
     "properties": {
@@ -747,6 +747,11 @@
      "exact": {
       "type": "boolean",
       "default": false
+     },
+     "full": {
+      "type": "boolean",
+      "default": false,
+      "description": "返回完整 value（默认只给长度和首 200 字符）"
      }
     }
    }

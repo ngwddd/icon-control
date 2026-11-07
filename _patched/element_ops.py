@@ -102,45 +102,77 @@ def perform(hwnd: int, path: str, action: str, value: str | None = None,
         else:
             chosen = 'click'
 
+    def failed(reason: str, detail: object = None) -> dict:
+        out = dict(ok=False, action=chosen, error=reason)
+        if detail is not None:
+            out['detail'] = f'{type(detail).__name__}: {detail}'
+        return out
+
     if chosen == 'invoke':
         pattern = _pattern(obj, 'Invoke')
         if pattern is None:
-            return dict(ok=False, error='control has no Invoke pattern', action=chosen)
-        _safe(lambda: pattern.Invoke())
+            return failed('control has no Invoke pattern')
+        try:
+            pattern.Invoke()
+        except Exception as exc:                        # noqa: BLE001
+            return failed('Invoke failed', exc)
         return dict(ok=True, action='invoke', method='uia')
 
     if chosen == 'set_value':
         pattern = _pattern(obj, 'Value')
         if pattern is None:
-            return dict(ok=False, error='control has no Value pattern', action=chosen)
+            return failed('control has no Value pattern')
         if value is None:
-            return dict(ok=False, error='set_value needs a value', action=chosen)
-        _safe(lambda: setattr(pattern, 'Value', str(value)))
+            return failed('set_value needs a value')
+        if _safe(lambda: bool(pattern.IsReadOnly)):
+            return failed('control is read-only')
+        try:
+            setter = getattr(pattern, 'SetValue', None)
+            if callable(setter):
+                setter(str(value))
+            else:                       # older bindings expose only the property
+                pattern.Value = str(value)
+        except Exception as exc:                        # noqa: BLE001
+            return failed('SetValue failed', exc)
         return dict(ok=True, action='set_value', method='uia', value=str(value))
 
     if chosen == 'toggle':
         pattern = _pattern(obj, 'Toggle')
         if pattern is None:
-            return dict(ok=False, error='control has no Toggle pattern', action=chosen)
-        _safe(lambda: pattern.Toggle())
+            return failed('control has no Toggle pattern')
+        try:
+            pattern.Toggle()
+        except Exception as exc:                        # noqa: BLE001
+            return failed('Toggle failed', exc)
         return dict(ok=True, action='toggle', method='uia')
 
     if chosen == 'select':
         pattern = _pattern(obj, 'SelectionItem')
         if pattern is None:
-            return dict(ok=False, error='control has no SelectionItem pattern', action=chosen)
-        _safe(lambda: pattern.Select())
+            return failed('control has no SelectionItem pattern')
+        try:
+            pattern.Select()
+        except Exception as exc:                        # noqa: BLE001
+            return failed('Select failed', exc)
         return dict(ok=True, action='select', method='uia')
 
     if chosen == 'focus':
-        _safe(lambda: obj.SetFocus())
+        try:
+            obj.SetFocus()
+        except Exception as exc:                        # noqa: BLE001
+            return failed('SetFocus failed', exc)
         return dict(ok=True, action='focus', method='uia')
 
     if chosen == 'scroll_into_view':
         pattern = _pattern(obj, 'ScrollItem')
         if pattern is None:
-            return dict(ok=False, error='control has no ScrollItem pattern', action=chosen)
-        _safe(lambda: pattern.ScrollIntoView())
+            return dict(ok=False, action=chosen,
+                        error='control has no ScrollItem pattern')
+        try:
+            pattern.ScrollIntoView()
+        except Exception as exc:                        # noqa: BLE001
+            return dict(ok=False, action=chosen, error='ScrollIntoView failed',
+                        detail=f'{type(exc).__name__}: {exc}')
         return dict(ok=True, action='scroll_into_view', method='uia')
 
     bounds = state.get('bounds') or {}

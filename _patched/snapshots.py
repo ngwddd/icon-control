@@ -69,6 +69,8 @@ def attach(hwnd, candidates):
     identity = window_identity(hwnd)
     nodes = copy.deepcopy(candidates[:1000])
     resolvable = bool(nodes) and all(node.get('path') for node in nodes)
+    # A mixed result (UIA + OCR) may hold both kinds; each reference is judged
+    # on its own node below, not on the batch.
     # Only ask for pixels when there is something to reference and it cannot be
     # re-resolved structurally. An empty tree (no UIA at all) needs no capture.
     digest = layout_digest(nodes)
@@ -91,6 +93,8 @@ def attach(hwnd, candidates):
             _snapshots.pop(next(iter(_snapshots)))
         _snapshots[key] = dict(created=now, ttl=ttl, identity=identity, digest=digest,
                                fingerprint=fingerprint, resolvable=resolvable,
+                               ttl_by_node=[REF_TTL_UIA if node.get('path') else REF_TTL_VISUAL
+                                            for node in nodes],
                                nodes=copy.deepcopy(nodes))
     return dict(snapshot_id=key, expires_in_s=ttl, resolvable=resolvable,
                 hwnd=int(hwnd), candidates=nodes)
@@ -124,6 +128,12 @@ def _relocate(node, hwnd):
         raise StaleReference('Element at that path changed identity; observe again')
     if node.get('type') and fresh.get('type') != node['type']:
         raise StaleReference('Element at that path changed type; observe again')
+    known_id = node.get('automation_id') or node.get('element_id')
+    fresh_id = fresh.get('automation_id') or ''
+    if known_id and fresh_id and str(known_id) != str(fresh_id):
+        # A list that reordered itself can move a different control under the
+        # same path; the automation id tells us it is not the one we meant.
+        raise StaleReference('Element at that path is a different control; observe again')
     return fresh
 
 
@@ -135,13 +145,14 @@ def resolve(ref, hwnd=None):
         raise StaleReference('Invalid element reference') from None
     with _lock:
         item = copy.deepcopy(_snapshots.get(key))
-    if not item or time.monotonic() - item['created'] > item['ttl']:
-        raise StaleReference('Element reference expired; observe again')
-    if index < 0 or index >= len(item['nodes']):
+    if index < 0 or not item or index >= len(item['nodes']):
         raise StaleReference('Unknown element reference')
+    ttl = item.get('ttl_by_node', [item['ttl']] * len(item['nodes']))[index]
+    if time.monotonic() - item['created'] > ttl:
+        raise StaleReference('Element reference expired; observe again')
     expected, current = _check_identity(item, hwnd)
     node = item['nodes'][index]
-    if item['resolvable']:
+    if node.get('path'):
         fresh = _relocate(node, expected[0])
         target = dict(node)
         target.update(x=fresh['x'], y=fresh['y'], w=fresh['w'], h=fresh['h'])

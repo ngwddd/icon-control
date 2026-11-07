@@ -261,6 +261,8 @@ SPECS: list[ToolSpec] = [
             'hwnd': {'type': 'integer'},
             'name': {'type': 'string', 'description': '没有 ref 时按控件名定位'},
             'exact': {'type': 'boolean', 'default': False},
+            'full': {'type': 'boolean', 'default': False,
+                     'description': '返回完整 value（默认只给长度和首 200 字符）'},
         }},
     ),
 
