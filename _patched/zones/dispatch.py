@@ -127,12 +127,42 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
     
     # Screenshot actions
     elif name == "screenshot":
-        screenshot_result = screenshot_actions.get_screenshot()
-        if "error" not in screenshot_result:
-            screenshot_data = screenshot_result
-            result = {"success": True, "action": "screenshot"}
+        from computer_mcp.core.screenshot import capture_screenshot as _capture
+
+        raw_regions = arguments.get("regions")
+        single = arguments.get("region")
+        if single and not raw_regions:
+            raw_regions = [single]
+        crops = []
+        if raw_regions:
+            for item in raw_regions:
+                if isinstance(item, dict):
+                    region = dict(x=int(item.get("x", 0)), y=int(item.get("y", 0)),
+                                  w=int(item.get("w", 0)), h=int(item.get("h", 0)))
+                elif isinstance(item, (list, tuple)) and len(item) == 4:
+                    region = dict(x=int(item[0]), y=int(item[1]), w=int(item[2]), h=int(item[3]))
+                else:
+                    crops.append({"error": "region must be {x,y,w,h} or [x,y,w,h]"})
+                    continue
+                shot = _capture(region=region)
+                shot["region"] = region
+                crops.append(shot)
+        if crops:
+            valid = [shot for shot in crops if "error" not in shot]
+            screenshot_data = valid[0] if valid else {"error": "no region could be captured"}
+            result = {"success": bool(valid), "action": "screenshot", "regions": [
+                {"region": shot.get("region"), "width": shot.get("width"),
+                 "height": shot.get("height"), "error": shot.get("error")} for shot in crops]}
+            if len(valid) > 1:
+                # format_response turns these into extra ImageContent blocks.
+                result["_images"] = valid
         else:
-            result = screenshot_result
+            screenshot_result = screenshot_actions.get_screenshot()
+            if "error" not in screenshot_result:
+                screenshot_data = screenshot_result
+                result = {"success": True, "action": "screenshot"}
+            else:
+                result = screenshot_result
     
     # Config actions
     elif name == "set_config":
@@ -562,9 +592,33 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         if all(k in arguments for k in ("x", "y", "w", "h")):
             region = {k: arguments[k] for k in ("x", "y", "w", "h")}
         if name == "ocr_read":
-            result = ocr_ext.ocr_read(region=region,
-                                      max_lines=int(arguments.get("max_lines", 80)),
-                                      hwnd=arguments.get("hwnd"))
+            regions = arguments.get("regions")
+            if regions:
+                blocks = []
+                for item in regions:
+                    if isinstance(item, dict):
+                        box = dict(x=int(item.get("x", 0)), y=int(item.get("y", 0)),
+                                   w=int(item.get("w", 0)), h=int(item.get("h", 0)))
+                    elif isinstance(item, (list, tuple)) and len(item) == 4:
+                        box = dict(x=int(item[0]), y=int(item[1]), w=int(item[2]), h=int(item[3]))
+                    else:
+                        blocks.append({"region": None, "error": "region must be {x,y,w,h} or [x,y,w,h]"})
+                        continue
+                    try:
+                        block = ocr_ext.ocr_read(region=box,
+                                                 max_lines=int(arguments.get("max_lines", 80)),
+                                                 hwnd=arguments.get("hwnd"))
+                    except Exception as exc:            # noqa: BLE001
+                        block = {"error": f"{type(exc).__name__}: {exc}"}
+                    blocks.append({"region": box,
+                                   "lines": block.get("lines") or [],
+                                   "error": block.get("error")})
+                result = {"success": all(not block.get("error") for block in blocks),
+                          "regions": blocks, "count": len(blocks)}
+            else:
+                result = ocr_ext.ocr_read(region=region,
+                                          max_lines=int(arguments.get("max_lines", 80)),
+                                          hwnd=arguments.get("hwnd"))
         elif name == "find_text":
             result = ocr_ext.find_text(
                 query=str(arguments["query"]),

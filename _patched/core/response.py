@@ -59,6 +59,16 @@ def format_response(
         image_content = screenshot_to_image_content(screenshot_data)
         if image_content:
             response.append(image_content)
+
+    # Extra crops from screenshot(regions=[...]) travel as their own images.
+    extras = result.pop("_images", None) or []
+    for shot in extras[1:]:
+        try:
+            extra_content = screenshot_to_image_content(shot)
+        except Exception:                                # noqa: BLE001
+            extra_content = None
+        if extra_content:
+            response.append(extra_content)
     
     # Add TextContent with the result data
     response.append(TextContent(type="text", text=json.dumps(result)))

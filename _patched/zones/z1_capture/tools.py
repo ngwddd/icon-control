@@ -40,9 +40,15 @@ SPECS: list[ToolSpec] = [
         name='screenshot',
         effects=('screen_read',),
         zone='Z1',
-        description='Capture a screenshot of the display and return it as base64-encoded PNG',
+        description='Capture a screenshot of the display (or one/more regions of it) and return it as base64-encoded PNG',
         read_only=True,
-        schema={'type': 'object', 'properties': {}},
+        schema={'type': 'object', 'properties': {
+            'region': {'type': 'object', 'description': '{x,y,w,h}；只截这一块',
+                       'properties': {'x': {'type': 'integer'}, 'y': {'type': 'integer'},
+                                      'w': {'type': 'integer'}, 'h': {'type': 'integer'}}},
+            'regions': {'type': 'array', 'items': {'type': 'object'},
+                        'description': '一次截多块，每块返回一张图（省往返）'},
+        }},
     ),
     ToolSpec(
         name='screenshot_window',

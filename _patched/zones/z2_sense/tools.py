@@ -87,7 +87,7 @@ SPECS: list[ToolSpec] = [
         zone='Z2',
         description='Read text off the screen with the Windows OCR engine and return the recognised lines with boxes. Text only - much cheaper than sending an image when all you need is what the UI says. Pass a region to scan just one window.',
         read_only=True,
-        schema={'type': 'object', 'properties': {'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'max_lines': {'type': 'integer', 'default': 80}, 'hwnd': {'type': 'integer', 'description': 'Raise this window first, then OCR its rectangle'}}},
+        schema={'type': 'object', 'properties': {'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'max_lines': {'type': 'integer', 'default': 80}, 'hwnd': {'type': 'integer', 'description': 'Raise this window first, then OCR its rectangle'}, 'regions': {'type': 'array', 'items': {'type': 'object'}, 'description': '一次 OCR 多块区域（每块 {x,y,w,h}），省往返'}}},
     ),
     ToolSpec(
         name='probe',

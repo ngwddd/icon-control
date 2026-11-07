@@ -1,96 +1,104 @@
 {
- "generated_at": "2026-11-02T04:12:49+0800",
- "source": "C:\\Users\\ggg\\.dsh\\tools\\desktop-mcp\\venv\\Lib\\site-packages\\computer_mcp\\mcp.py",
- "mcp_py_lines": 1830,
- "tool_count": 80,
- "dispatch_count": 80,
+ "generated_at": "2026-11-07T18:05:44Z",
+ "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
+ "mcp_py_lines": 0,
+ "tool_count": 95,
+ "dispatch_count": 95,
  "tools": [
   {
-   "name": "click",
-   "description": "Click. Without coordinates it clicks the current cursor. With frame_id and x/y, x/y are IMAGE coordinates of that screenshot and the server converts them to physical pixels - prefer this. Without frame_id, x/y are physical screen pixels and are converted after rechecking the target process.",
-   "block_sha1": "bffe406a62b6fee0f7c35b0ca5a14a35e8d016c3",
+   "name": "act_until",
+   "description": "Repeat one action until a condition holds (walk until a prompt appears). Shorthand for one until-loop.",
+   "block_sha1": "758543db329149a261d8ec4e6f28998a06d07ca8",
    "schema": {
     "type": "object",
-    "additionalProperties": false,
     "properties": {
-     "frame_id": {
-      "type": "string",
-      "description": "Screenshot frame_id; x/y are then image coordinates of that frame"
+     "action": {
+      "type": "object"
      },
-     "x": {
-      "type": "number"
+     "cond": {
+      "type": "object"
      },
-     "y": {
-      "type": "number"
-     },
-     "button": {
-      "type": "string",
-      "enum": [
-       "left",
-       "middle",
-       "right"
-      ],
-      "description": "Mouse button to click",
-      "default": "left"
+     "max_ms": {
+      "type": "integer"
      }
-    }
+    },
+    "additionalProperties": false
    }
   },
   {
-   "name": "double_click",
-   "description": "Double-click. With frame_id and x/y, x/y are IMAGE coordinates of that screenshot and the server converts them; without coordinates it double-clicks at the current cursor.",
-   "block_sha1": "ee742604855e99ef2384f2e926487fe019a229fe",
+   "name": "anchor_mem",
+   "description": "Learned anchor memory for UI elements: list / learn / verify / forget / stats. Stores normalised position + a 64-bit visual fingerprint + usage counters, so a click can be verified instead of guessed.",
+   "block_sha1": "9674182c6ae3e91c0908f425181dbc42843cd11a",
    "schema": {
     "type": "object",
-    "additionalProperties": false,
     "properties": {
-     "frame_id": {
-      "type": "string",
-      "description": "Screenshot frame_id; x/y are then image coordinates of that frame"
-     },
-     "x": {
-      "type": "number"
-     },
-     "y": {
-      "type": "number"
-     },
-     "button": {
+     "action": {
       "type": "string",
       "enum": [
-       "left",
-       "middle",
-       "right"
-      ],
-      "description": "Mouse button to click",
-      "default": "left"
+       "list",
+       "learn",
+       "verify",
+       "forget",
+       "stats"
+      ]
+     },
+     "app": {
+      "type": "string"
+     },
+     "key": {
+      "type": "string"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "note": {
+      "type": "string"
      }
-    }
+    },
+    "required": [
+     "action"
+    ]
    }
   },
   {
-   "name": "triple_click",
-   "description": "Perform a triple mouse click at the current cursor position",
-   "block_sha1": "3fcebb89d54b996d92f80c1b678778dcc8217521",
+   "name": "batch",
+   "description": "Run a whole gesture sequence in ONE call. Each step: {action:'move'|'click'|'double_click'|'right_click'|'type'|'key'|'sleep'|'wait_change'|'screen_state'|'ui_click', ...}. Use this instead of many separate calls (each separate call costs a model round trip).",
+   "block_sha1": "7d5cd8c958fa1fd115c8741d82d41be3caec64ae",
    "schema": {
     "type": "object",
     "properties": {
-     "button": {
-      "type": "string",
-      "enum": [
-       "left",
-       "middle",
-       "right"
-      ],
-      "description": "Mouse button to click",
-      "default": "left"
+     "steps": {
+      "type": "array",
+      "description": "Ordered steps",
+      "items": {
+       "type": "object",
+       "additionalProperties": true
+      }
+     },
+     "stop_on_error": {
+      "type": "boolean",
+      "default": true
+     },
+     "default_sleep_ms": {
+      "type": "integer",
+      "default": 120
      }
-    }
+    },
+    "required": [
+     "steps"
+    ]
    }
   },
   {
    "name": "button_down",
    "description": "Press and hold a mouse button",
-   "block_sha1": "ff47c6050348ff70e691b2e643bddc23dccb0fb0",
+   "block_sha1": "d28e61969f120828205ebcac5d67b28827da814b",
    "schema": {
     "type": "object",
     "properties": {
@@ -110,7 +118,7 @@
   {
    "name": "button_up",
    "description": "Release a mouse button",
-   "block_sha1": "5d65e7071d32417f262fef5c69969b2056f3d116",
+   "block_sha1": "3e232891bffc6e2995620bb9965aed8ec0ac9ec1",
    "schema": {
     "type": "object",
     "properties": {
@@ -128,9 +136,494 @@
    }
   },
   {
+   "name": "capture_config",
+   "description": "Get or set capture settings: scale (default 0.5 -> 1280x720), quality (75), format (jpeg|png), diff_threshold (0.8 %), mask_bottom (60 px of taskbar ignored by change detection). Call with no args to just read them.",
+   "block_sha1": "2d928cf1f12a7e10de3a22a26904ef9d6a0162a9",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "scale": {
+      "type": "number",
+      "description": "Downscale factor, 1.0 = full resolution"
+     },
+     "quality": {
+      "type": "integer",
+      "description": "JPEG quality 1-95"
+     },
+     "format": {
+      "type": "string",
+      "enum": [
+       "jpeg",
+       "png"
+      ]
+     },
+     "diff_threshold": {
+      "type": "number",
+      "description": "Mean abs diff % that counts as changed"
+     },
+     "mask_bottom": {
+      "type": "integer",
+      "description": "Bottom pixel rows ignored by change detection"
+     }
+    }
+   }
+  },
+  {
+   "name": "capture_daemon",
+   "description": "Start/stop/status of the persistent screen-capture daemon (ring buffer, default scale 0.25, 12 fps active / 3 fps idle). After start, sense/watch/probe read memory instead of grabbing the screen.",
+   "block_sha1": "f02cb6eae175d275463f2344cad4bd53aecdda45",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "action": {
+      "type": "string",
+      "enum": [
+       "start",
+       "status",
+       "stop"
+      ]
+     },
+     "scale": {
+      "type": "number"
+     },
+     "active_fps": {
+      "type": "number"
+     },
+     "idle_fps": {
+      "type": "number"
+     },
+     "monitor": {
+      "type": "integer"
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "capture_template",
+   "description": "Save a screen region as a reusable template (grayscale PNG) under the tool's vision store. Use this for self-drawn UIs where UI Automation is blind: capture the button/icon once, then match_template finds it later. Give a tight region around the visual itself.",
+   "block_sha1": "1b06c7ddfa68d8e78bd5c49f94b5d1febbc5e716",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Template name"
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     },
+     "hwnd": {
+      "type": "integer",
+      "description": "Optional: grab the window bitmap (works when covered)"
+     },
+     "overwrite": {
+      "type": "boolean",
+      "default": true
+     }
+    },
+    "required": [
+     "name",
+     "x",
+     "y",
+     "w",
+     "h"
+    ]
+   }
+  },
+  {
+   "name": "click",
+   "description": "Click. Without coordinates it clicks the current cursor. With frame_id and x/y, x/y are IMAGE coordinates of that screenshot and the server converts them to physical pixels - prefer this. Without frame_id, x/y are physical screen pixels and are converted after rechecking the target process.",
+   "block_sha1": "6d6ad296f1cb043044dd25432c4a62f1783a1b37",
+   "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "frame_id": {
+      "type": "string",
+      "description": "Screenshot frame_id; x/y are then image coordinates of that frame"
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     },
+     "button": {
+      "type": "string",
+      "enum": [
+       "left",
+       "middle",
+       "right"
+      ],
+      "description": "Mouse button to click",
+      "default": "left"
+     }
+    }
+   }
+  },
+  {
+   "name": "click_template",
+   "description": "Find a template and click its centre. No coordinate guessing. Optional offset [dx,dy] nudges the click point.",
+   "block_sha1": "41c8284e328a5b59250cc6ad2e3f7e10bfea1344",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "confidence": {
+      "type": "number",
+      "default": 0.8
+     },
+     "button": {
+      "type": "string",
+      "enum": [
+       "left",
+       "right",
+       "middle"
+      ],
+      "default": "left"
+     },
+     "offset": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "settle_ms": {
+      "type": "integer",
+      "default": 150
+     },
+     "hwnd": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ]
+   }
+  },
+  {
+   "name": "click_text",
+   "description": "Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (WeChat, Electron, custom-rendered UIs).",
+   "block_sha1": "79c7a71e88e9497964880e2a2d0754339e3827a9",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     },
+     "index": {
+      "type": "integer",
+      "default": 0
+     },
+     "settle_ms": {
+      "type": "integer",
+      "default": 250
+     },
+     "hwnd": {
+      "type": "integer",
+      "description": "Raise this window first, then OCR its rectangle"
+     }
+    },
+    "required": [
+     "query"
+    ]
+   }
+  },
+  {
+   "name": "close_window",
+   "description": "Close a window",
+   "block_sha1": "abdbc9d0062b29776b236ad51edbad759c787a0d",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "control_claim",
+   "description": "申请或交还桌面控制权（action=claim|release）。用户物理动鼠标会自动夺回",
+   "block_sha1": "5951baa7ee19aa4cacc7cba5cfee4bcc0674afb7",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "action": {
+      "type": "string",
+      "enum": [
+       "claim",
+       "release"
+      ],
+      "default": "claim"
+     },
+     "reason": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  {
+   "name": "control_status",
+   "description": "Read control ownership and actual-caller authorization_diagnostic. Optional hwnd and requested_scopes report target and missing capabilities; this does not grant permissions.",
+   "block_sha1": "cc0e318a939bdd900ae77fb2b2222d461904af10",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer"
+     },
+     "requested_scopes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "dataset_explore",
+   "description": "随机游走采集弱语义轨迹（只调用只读工具，不点击不输入），样本打 explore 标签",
+   "block_sha1": "0f2d18f058c052bebbe2f3ee1107658bfbd62222",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "steps": {
+      "type": "integer",
+      "default": 12
+     },
+     "interval_ms": {
+      "type": "integer",
+      "default": 400
+     },
+     "seed": {
+      "type": "integer"
+     }
+    }
+   }
+  },
+  {
+   "name": "dataset_export",
+   "description": "把最近 N 天的样本打包成 zip（离线回流/微调用），默认 7 天",
+   "block_sha1": "8cd7311fce2cef49937951b8e1e725658fe36f8a",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "days": {
+      "type": "integer",
+      "default": 7
+     },
+     "tag": {
+      "type": "string",
+      "description": "子目录名，默认 YYYY-W周"
+     }
+    }
+   }
+  },
+  {
+   "name": "dataset_promote",
+   "description": "把某条样本提升为回归用例（写 dataset/cases/，供反复验证）",
+   "block_sha1": "83e80e897d443ed0997d7caa7d464f50c5a81169",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "episode_id": {
+      "type": "string",
+      "description": "样本 id（dataset_query 里能看到）"
+     },
+     "note": {
+      "type": "string",
+      "description": "备注：为什么这条值得回归"
+     }
+    },
+    "required": [
+     "episode_id"
+    ]
+   }
+  },
+  {
+   "name": "dataset_query",
+   "description": "按工具/分区/结果/天数筛训练样本（只读，默认返回最新 20 条）",
+   "block_sha1": "4b03fc7ed5f7bcd635ee25e96b527fb0c5bc279f",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "tool": {
+      "type": "string",
+      "description": "工具名，如 click"
+     },
+     "zone": {
+      "type": "string",
+      "enum": [
+       "Z0",
+       "Z1",
+       "Z2",
+       "Z3",
+       "Z4",
+       "Z5",
+       "Z6"
+      ]
+     },
+     "verdict": {
+      "type": "string",
+      "enum": [
+       "success",
+       "failed",
+       "denied",
+       "error",
+       "unknown"
+      ]
+     },
+     "days": {
+      "type": "integer",
+      "description": "只查最近 N 天"
+     },
+     "limit": {
+      "type": "integer",
+      "default": 20
+     },
+     "group_by": {
+      "type": "string",
+      "enum": [
+       "tool",
+       "zone",
+       "verdict"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "dataset_status",
+   "description": "训练数据分区状态：是否开启、今日/累计样本数、占用体积、最近一条样本",
+   "block_sha1": "737ea9e4b1f517721a83f31e3559e2667c222e94",
+   "schema": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "name": "dataset_triage",
+   "description": "分拣失败样本：同类失败达到阈值就自动生成回归用例（默认 1 天 / 3 次）",
+   "block_sha1": "4b9c40816cb69742f732d8ecdf1f6a833d28c345",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "days": {
+      "type": "integer",
+      "default": 1
+     },
+     "min_count": {
+      "type": "integer",
+      "default": 3
+     },
+     "dry_run": {
+      "type": "boolean",
+      "default": false
+     }
+    }
+   }
+  },
+  {
+   "name": "diff_baseline",
+   "description": "Compare a region against its stored baseline. Returns diff (mean abs difference 0-255) and changed = diff >= threshold.",
+   "block_sha1": "d342d841e979df041833e399907792d2cc558442",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "threshold": {
+      "type": "number",
+      "default": 8.0
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     },
+     "hwnd": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ]
+   }
+  },
+  {
+   "name": "double_click",
+   "description": "Double-click. With frame_id and x/y, x/y are IMAGE coordinates of that screenshot and the server converts them; without coordinates it double-clicks at the current cursor.",
+   "block_sha1": "f05ba295acfd469b0d3ab5edb89fba84ac9de06e",
+   "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "frame_id": {
+      "type": "string",
+      "description": "Screenshot frame_id; x/y are then image coordinates of that frame"
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     },
+     "button": {
+      "type": "string",
+      "enum": [
+       "left",
+       "middle",
+       "right"
+      ],
+      "description": "Mouse button to click",
+      "default": "left"
+     }
+    }
+   }
+  },
+  {
    "name": "drag",
    "description": "Drag from start to end. Each point is {\"x\",\"y\"}; with frame_id both are IMAGE coordinates of that screenshot and the server converts them.",
-   "block_sha1": "768fe5099c96c42a733350442c6ae8bf335c6b26",
+   "block_sha1": "f1d7ad0d9716abb11a5c1479f51d5c1fb8c6e775",
    "schema": {
     "type": "object",
     "additionalProperties": false,
@@ -189,9 +682,674 @@
    }
   },
   {
+   "name": "element_action",
+   "description": "按控件自身能力执行动作（invoke / set_value / toggle / select / click），可选回读校验",
+   "block_sha1": "aa0e7d5bd6f804d7b0a48c518ed9f0ebc590cd3e",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "ref": {
+      "type": "string"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "name": {
+      "type": "string"
+     },
+     "exact": {
+      "type": "boolean",
+      "default": false
+     },
+     "action": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "invoke",
+       "set_value",
+       "toggle",
+       "select",
+       "focus",
+       "click"
+      ],
+      "default": "auto"
+     },
+     "value": {
+      "type": "string",
+      "description": "set_value 时要写入的文本"
+     },
+     "verify": {
+      "type": "boolean",
+      "default": true,
+      "description": "动作后回读状态，判断是否真的生效"
+     }
+    }
+   }
+  },
+  {
+   "name": "element_state",
+   "description": "读取控件真实状态（启用/可见/聚焦/选中/值/勾选），不用截图猜",
+   "block_sha1": "2d0e976f428ca17dc73b6187957d2ed4e1586334",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "ref": {
+      "type": "string",
+      "description": "来自 find_element/find_elements_ranked/ui_tree 的 element ref"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "name": {
+      "type": "string",
+      "description": "没有 ref 时按控件名定位"
+     },
+     "exact": {
+      "type": "boolean",
+      "default": false
+     }
+    }
+   }
+  },
+  {
+   "name": "execute_verified",
+   "description": "一次调用完成：定位 → 执行 → 等到后置条件成立 → 报告是否真的生效",
+   "block_sha1": "580796ac850d476e2eb0ce28776b6804be9055af",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "ref": {
+      "type": "string"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "action": {
+      "type": "string",
+      "enum": [
+       "click",
+       "invoke",
+       "set_value",
+       "toggle",
+       "select",
+       "type"
+      ],
+      "default": "click"
+     },
+     "value": {
+      "type": "string"
+     },
+     "expect": {
+      "type": "object",
+      "description": "后置条件：{kind: value|contains|text|absent, text}",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "enum": [
+         "value",
+         "contains",
+         "text",
+         "absent"
+        ]
+       },
+       "text": {
+        "type": "string"
+       }
+      }
+     },
+     "timeout_ms": {
+      "type": "integer",
+      "default": 3000
+     },
+     "settle_ms": {
+      "type": "integer",
+      "default": 120
+     }
+    },
+    "required": [
+     "action"
+    ]
+   }
+  },
+  {
+   "name": "find_element",
+   "description": "统一寻址：依次尝试 UIA / OCR / 模板，返回元素的屏幕坐标（自绘界面也能用）",
+   "block_sha1": "819201a3834c5bfdf8afe8eea154f6de959bab66",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string",
+      "description": "控件名（UIA）或文字（OCR）或模板名（template）"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "limit": {
+      "type": "integer",
+      "default": 5
+     },
+     "sources": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "默认 [\"uia\",\"ocr\",\"template\"]，可只给一部分"
+     }
+    },
+    "required": [
+     "query"
+    ]
+   }
+  },
+  {
+   "name": "find_elements_ranked",
+   "description": "多来源融合定位：一次比较 UIA / OCR / 模板候选，返回排序结果、来源、置信度与歧义标记",
+   "block_sha1": "ec14e3086a17d8cd494f4f18e2eb85718f2b8e1b",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string",
+      "description": "控件名（UIA）或文字（OCR）或模板名"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "limit": {
+      "type": "integer",
+      "default": 5
+     },
+     "sources": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "min_confidence": {
+      "type": "number",
+      "default": 0.0
+     },
+     "include_state": {
+      "type": "boolean",
+      "default": false,
+      "description": "为每个 UIA 候选附带 enabled/value/toggle 等状态（略慢）"
+     }
+    },
+    "required": [
+     "query"
+    ]
+   }
+  },
+  {
+   "name": "find_text",
+   "description": "OCR the screen (or a region) and find a string, tolerating OCR mistakes: whitespace between CJK glyphs is ignored and a single mis-read character still matches. Returns centre coordinates.",
+   "block_sha1": "6b6232d348b6481c19990a6275e4a09f9f66a683",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     },
+     "min_ratio": {
+      "type": "number",
+      "default": 0.72
+     },
+     "min_lcs_share": {
+      "type": "number",
+      "default": 0.6
+     },
+     "max_lines": {
+      "type": "integer",
+      "default": 120
+     },
+     "hwnd": {
+      "type": "integer",
+      "description": "Raise this window first, then OCR its rectangle"
+     }
+    },
+    "required": [
+     "query"
+    ]
+   }
+  },
+  {
+   "name": "frame_diff",
+   "description": "Compare two buffered frames by index in an optional region: mean abs diff and changed flag.",
+   "block_sha1": "60a045f1a97737072a2a3b0ec6f1582cfbe52d62",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "from_frame": {
+      "type": "integer"
+     },
+     "to_frame": {
+      "type": "integer"
+     },
+     "region": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     }
+    },
+    "required": [
+     "from_frame"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "frame_mark",
+   "description": "Mark a frame index by name, used with frame_diff to verify an action took effect.",
+   "block_sha1": "5ee0a93092620e3b2f550415d2fa566c8bd7542f",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_window_info",
+   "description": "Get detailed information about a window",
+   "block_sha1": "0430654a729b1b23a3b84a9228101dabad850441",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "glyph",
+   "description": "Manage learned digit glyphs for pixel fonts. action=list|learn|clear; learn needs label and box.",
+   "block_sha1": "d3312d7786806b44ab501f1fd804fe05f72a89c6",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "action": {
+      "type": "string",
+      "enum": [
+       "list",
+       "learn",
+       "clear"
+      ]
+     },
+     "label": {
+      "type": "string"
+     },
+     "box": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "thr": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "housekeeping",
+   "description": "Show disk usage of this tool's own folders (_draw / recordings / vision baselines) and optionally prune them. Assets (macros, recipes, templates, _patched) are never touched. action=status (default, read-only) or sweep (with dry_run).",
+   "block_sha1": "3b005c5dd302a22181c8fcd72223ec0c30a05c1d",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "action": {
+      "type": "string",
+      "enum": [
+       "status",
+       "sweep"
+      ]
+     },
+     "dry_run": {
+      "type": "boolean"
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "hover_probe",
+   "description": "Hover a point, wait, measure whether a region changed, then move the cursor away. This detects hover-revealed menus/buttons that never show up in a plain screenshot or a click.",
+   "block_sha1": "ad9c864464e267d06f56a1ed50370b7861925f6d",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "dwell_ms": {
+      "type": "integer",
+      "default": 400
+     },
+     "threshold": {
+      "type": "number",
+      "default": 3.0
+     },
+     "away_x": {
+      "type": "integer"
+     },
+     "away_y": {
+      "type": "integer"
+     },
+     "rx": {
+      "type": "integer"
+     },
+     "ry": {
+      "type": "integer"
+     },
+     "rw": {
+      "type": "integer"
+     },
+     "rh": {
+      "type": "integer"
+     },
+     "hwnd": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "rx",
+     "ry",
+     "rw",
+     "rh"
+    ]
+   }
+  },
+  {
+   "name": "hud",
+   "description": "Auto-locate HUD text rows by color (cyan/yellow/...) and return their screen boxes. Survives window resize/move; optional per-color rows list. Feed the boxes to read_digits or probe.",
+   "block_sha1": "1e821454fb0082eff17cf1c0bb2e1142e31e6382",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "box": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      },
+      "description": "search area in screen coords, default whole screen"
+     },
+     "colors": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      },
+      "description": "[{name, color, tol}]"
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "key_down",
+   "description": "Press and hold a key",
+   "block_sha1": "eed7829be5503459efdc85d488927068f954a700",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "key": {
+      "type": "string",
+      "description": "Key to press (e.g., 'ctrl', 'a', 'space')"
+     }
+    },
+    "required": [
+     "key"
+    ]
+   }
+  },
+  {
+   "name": "key_press",
+   "description": "Press and release a key (convenience method)",
+   "block_sha1": "42eba937be1be4423b9232a135c453b2de4ad5cd",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "key": {
+      "type": "string",
+      "description": "Key to press and release (e.g., 'ctrl', 'a', 'space')"
+     }
+    },
+    "required": [
+     "key"
+    ]
+   }
+  },
+  {
+   "name": "key_up",
+   "description": "Release a key",
+   "block_sha1": "0ef7474c13a36a758f460e053e257fb6a32e23cd",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "key": {
+      "type": "string",
+      "description": "Key to release (e.g., 'ctrl', 'a', 'space')"
+     }
+    },
+    "required": [
+     "key"
+    ]
+   }
+  },
+  {
+   "name": "layout_mem",
+   "description": "Layout calibration memory (generic): save normalized regions once per app, then resolve to pixels at any window size. action=save needs hwnd+regions{name:[x,y,w,h] rel 0..1}; action=resolve returns pixel boxes; list/delete manage profiles.",
+   "block_sha1": "00dcffec76b203023a98bb0a8b275b1b5a7262bc",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "action": {
+      "type": "string",
+      "enum": [
+       "save",
+       "list",
+       "resolve",
+       "delete"
+      ]
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "name": {
+      "type": "string"
+     },
+     "regions": {
+      "type": "object"
+     },
+     "meta": {
+      "type": "object"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "list_virtual_desktops",
+   "description": "List all virtual desktops with their IDs and names",
+   "block_sha1": "b56e5be70835cefc73b547ae5d3e65825e0380ca",
+   "schema": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "name": "list_windows",
+   "description": "List all visible windows with their handles, titles, processes, and bounds",
+   "block_sha1": "58b1299c4be395afa768da1cc7816abd9d862c13",
+   "schema": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "name": "macro_list",
+   "description": "List saved macros (name, description, target window, step count).",
+   "block_sha1": "b1c1b637158e7d041de25c6fe00540d61e006650",
+   "schema": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "name": "macro_run",
+   "description": "Replay a saved macro in ONE call. Coordinates are re-based onto the target window's current position. Use dry_run=true to see resolved absolute coordinates without clicking.",
+   "block_sha1": "dd8dfabe9cc838e4da3524657047e139c821cdbe",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "params": {
+      "type": "object",
+      "description": "Values for ${placeholders}"
+     },
+     "dry_run": {
+      "type": "boolean",
+      "default": false
+     },
+     "default_gap_ms": {
+      "type": "integer",
+      "default": 140
+     }
+    },
+    "required": [
+     "name"
+    ]
+   }
+  },
+  {
+   "name": "macro_save",
+   "description": "Save a macro. Steps use window-relative 'rel':[dx,dy] coordinates and can carry 'expect':{'changed':true,'timeout_ms':1200} to verify the step actually did something.",
+   "block_sha1": "7e0b7e6b5a32efc174ab4f4ac7576d62845e43cf",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "spec": {
+      "type": "object",
+      "description": "{name, description?, window:{title_contains|process}, steps:[...]}",
+      "additionalProperties": true
+     }
+    },
+    "required": [
+     "spec"
+    ]
+   }
+  },
+  {
+   "name": "match_template",
+   "description": "Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. No OCR, no UIA - works on games, Electron and CEF windows.",
+   "block_sha1": "d12f25d170f6fe982a147dc1598a2998b62bd6e5",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "confidence": {
+      "type": "number",
+      "default": 0.8
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ]
+   }
+  },
+  {
+   "name": "maximize_window",
+   "description": "Maximize a window",
+   "block_sha1": "8012dd43a62f9e4a42871db1783da554d1e58d3e",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "minimize_window",
+   "description": "Minimize a window",
+   "block_sha1": "5e358d3316068e44e294d5745dc670520009c1f8",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
    "name": "mouse_move",
    "description": "Move the mouse cursor to the specified coordinates",
-   "block_sha1": "68f010b0aaf5e17fc94fe6feba3fc9e0c1f879f3",
+   "block_sha1": "98234664f1a4e6c1154e73974584866b87106d67",
    "schema": {
     "type": "object",
     "properties": {
@@ -211,86 +1369,578 @@
    }
   },
   {
-   "name": "type",
-   "description": "Type the specified text",
-   "block_sha1": "0b8c7aa65fc1f2a72a0c956a55251b9c2e2b9685",
+   "name": "move_window",
+   "description": "Move and/or resize a window to specified position and size",
+   "block_sha1": "a55bdc16ed9717b9f6ca09efead7fa8c1a217bdc",
    "schema": {
     "type": "object",
     "properties": {
-     "text": {
-      "type": "string",
-      "description": "Text to type"
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     },
+     "x": {
+      "type": "integer",
+      "description": "X coordinate for window position"
+     },
+     "y": {
+      "type": "integer",
+      "description": "Y coordinate for window position"
+     },
+     "width": {
+      "type": "integer",
+      "description": "Window width (optional, preserves current if not specified)"
+     },
+     "height": {
+      "type": "integer",
+      "description": "Window height (optional, preserves current if not specified)"
      }
     },
     "required": [
-     "text"
+     "hwnd",
+     "x",
+     "y"
     ]
    }
   },
   {
-   "name": "key_down",
-   "description": "Press and hold a key",
-   "block_sha1": "d537dd7d979f1f66d235f49d64e15309dd8a5108",
+   "name": "move_window_to_virtual_desktop",
+   "description": "Move a window to a different virtual desktop",
+   "block_sha1": "d18faaa20687aad8f68c695491a02904822c88c5",
    "schema": {
     "type": "object",
     "properties": {
-     "key": {
-      "type": "string",
-      "description": "Key to press (e.g., 'ctrl', 'a', 'space')"
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     },
+     "desktop_id": {
+      "type": "integer",
+      "description": "Target virtual desktop ID"
      }
     },
     "required": [
-     "key"
+     "hwnd",
+     "desktop_id"
     ]
    }
   },
   {
-   "name": "key_up",
-   "description": "Release a key",
-   "block_sha1": "ff10df49b2757db475a913bb8fdb76c364363fbf",
+   "name": "navigate",
+   "description": "M3: run a plan locally at 20+ Hz and come back only on success or stall. plan=[{kind:goto,cell:[c,r]}|{kind:search}|{kind:face,cell}|{kind:wait,ms}|{kind:key,key}]. Returns a short state page, so one call can cover a whole objective.",
+   "block_sha1": "c212f8963cc752a9d7987690fb0c69e8206708fd",
    "schema": {
     "type": "object",
     "properties": {
-     "key": {
-      "type": "string",
-      "description": "Key to release (e.g., 'ctrl', 'a', 'space')"
+     "plan": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "map_region": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "prompt_box": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "max_seconds": {
+      "type": "number"
      }
     },
     "required": [
-     "key"
+     "plan"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "ocr_read",
+   "description": "Read text off the screen with the Windows OCR engine and return the recognised lines with boxes. Text only - much cheaper than sending an image when all you need is what the UI says. Pass a region to scan just one window.",
+   "block_sha1": "6bfc99655e6646780961d3d258655c232008f6b1",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     },
+     "max_lines": {
+      "type": "integer",
+      "default": 80
+     },
+     "hwnd": {
+      "type": "integer",
+      "description": "Raise this window first, then OCR its rectangle"
+     },
+     "regions": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      },
+      "description": "一次 OCR 多块区域（每块 {x,y,w,h}），省往返"
+     }
+    }
+   }
+  },
+  {
+   "name": "probe",
+   "description": "One pixel primitive on the cached frame (1-3 ms): prompt (bright text present), bar (colored bar fill), openness (view open), color (blob), digits (number).",
+   "block_sha1": "e0f22a8e67514dab23de0a35d080af498feff936",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "kind": {
+      "type": "string",
+      "enum": [
+       "prompt",
+       "bar",
+       "openness",
+       "color",
+       "digits"
+      ]
+     },
+     "box": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "color": {
+      "type": "string"
+     },
+     "thr": {
+      "type": "integer"
+     },
+     "tol": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "kind"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "read_digits",
+   "description": "Read a digit string from a region of the cached frame with 5x7 template matching (1-3 ms). Works on pixel fonts that defeat OCR.",
+   "block_sha1": "327f9561c9b3915abe3de5623e66d836edc976cd",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "box": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "thr": {
+      "type": "integer"
+     },
+     "min_conf": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "box"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "record",
+   "description": "Dump the daemon ring buffer (frames + manifest + last trace) to disk for evidence or replay.",
+   "block_sha1": "f70a5e477af3c0b59a67db1fc933159e11685f2a",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "action": {
+      "type": "string",
+      "enum": [
+       "start",
+       "stop"
+      ]
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "resize_window",
+   "description": "Resize a window to specified dimensions",
+   "block_sha1": "e73e763472838eac8fe430a3955519835e1d0d48",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     },
+     "width": {
+      "type": "integer",
+      "description": "Window width"
+     },
+     "height": {
+      "type": "integer",
+      "description": "Window height"
+     }
+    },
+    "required": [
+     "hwnd",
+     "width",
+     "height"
     ]
    }
   },
   {
-   "name": "key_press",
-   "description": "Press and release a key (convenience method)",
-   "block_sha1": "3860f3ff8ad9dedae5e67fbdb957f83b36b7cd02",
+   "name": "restore_window",
+   "description": "Restore a minimized or maximized window to normal state",
+   "block_sha1": "1ef046297bb3039b34ca77945283a18619533595",
    "schema": {
     "type": "object",
     "properties": {
-     "key": {
-      "type": "string",
-      "description": "Key to press and release (e.g., 'ctrl', 'a', 'space')"
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
      }
     },
     "required": [
-     "key"
+     "hwnd"
     ]
+   }
+  },
+  {
+   "name": "run_script",
+   "description": "Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/scroll/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.",
+   "block_sha1": "0c2974df9be890ec72489853a8a775859c8cbdc0",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "ops": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "steps": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "max_seconds": {
+      "type": "number"
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "sample_stable",
+   "description": "Sample a region several times and report whether it is stable (all hashes equal). Use it before trusting a state reading: this is how you avoid judging a UI while an animation is still running.",
+   "block_sha1": "bf0e739a897158f3ae92bf6cf9504786e2cb440a",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "times": {
+      "type": "integer",
+      "default": 2
+     },
+     "gap_ms": {
+      "type": "integer",
+      "default": 200
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     },
+     "hwnd": {
+      "type": "integer"
+     }
+    }
+   }
+  },
+  {
+   "name": "screen_layout",
+   "description": "Generic layout detection for ANY window (no app-specific constants): content box (letterbox-aware), HUD text rows, lattice panels (minimaps/radars/boards) via periodicity, and progress bars with fill ratio. Returns pixel boxes plus normalized rel coords.",
+   "block_sha1": "d9ea58e31cad00e943b5bea874671c61e2677696",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer"
+     },
+     "region": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "screen_state",
+   "description": "Cheap screen check WITHOUT returning an image (~40 ms). Reports whether the screen changed since the last capture, by how much (mean abs diff %), and a short hash. Use this to poll instead of screenshot.",
+   "block_sha1": "b89d337207f97a991363a282f98e6b32cb036015",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "x": {
+      "type": "integer",
+      "description": "Optional region left (default: full screen)"
+     },
+     "y": {
+      "type": "integer",
+      "description": "Optional region top"
+     },
+     "w": {
+      "type": "integer",
+      "description": "Optional region width"
+     },
+     "h": {
+      "type": "integer",
+      "description": "Optional region height"
+     }
+    }
    }
   },
   {
    "name": "screenshot",
-   "description": "Capture a screenshot of the display and return it as base64-encoded PNG",
-   "block_sha1": "ffdb1b41cb1b82acbed723ca193070a3e57e4ea5",
+   "description": "Capture a screenshot of the display (or one/more regions of it) and return it as base64-encoded PNG",
+   "block_sha1": "718716241c66434fb98610422187cadd1d3d16f7",
    "schema": {
     "type": "object",
-    "properties": {}
+    "properties": {
+     "region": {
+      "type": "object",
+      "description": "{x,y,w,h}；只截这一块",
+      "properties": {
+       "x": {
+        "type": "integer"
+       },
+       "y": {
+        "type": "integer"
+       },
+       "w": {
+        "type": "integer"
+       },
+       "h": {
+        "type": "integer"
+       }
+      }
+     },
+     "regions": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      },
+      "description": "一次截多块，每块返回一张图（省往返）"
+     }
+    }
+   }
+  },
+  {
+   "name": "screenshot_window",
+   "description": "Capture screenshot of a specific window",
+   "block_sha1": "53e1d27201deedad16fbc369ebf7e31ba71cd6eb",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "scroll",
+   "description": "Scroll at the current pointer or optional screen x/y. dy>0 up, dy<0 down; dx>0 right. Integer wheel steps limited to [-100,100] per axis. Rechecks target process before injection; content movement remains unverified.",
+   "block_sha1": "2e232a6ff057df9acec368793531718670825815",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "dy": {
+      "type": "integer",
+      "minimum": -100,
+      "maximum": 100
+     },
+     "dx": {
+      "type": "integer",
+      "minimum": -100,
+      "maximum": 100,
+      "default": 0
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "dy"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "sense",
+   "description": "Return what changed since a frame index plus requested primitives (prompt/bar/openness/color/digits). Reads the daemon buffer; typically under 10 ms and transfers no image.",
+   "block_sha1": "bf23f285f67e949799771f0684dbfd06fd5a0463",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "since_frame": {
+      "type": "integer"
+     },
+     "primitives": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "regions": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "servo",
+   "description": "M2: closed-loop servo toward a map cell. op=calibrate (estimate heading by stepping and watching the minimap displacement) | face | approach | forward | turn. Recomputes bearing every step instead of walking blind.",
+   "block_sha1": "d0bfa9e88ba528dbfafdc9b97160d60589f90984",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "op": {
+      "type": "string",
+      "enum": [
+       "calibrate",
+       "face",
+       "approach",
+       "forward",
+       "turn"
+      ]
+     },
+     "cell": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      },
+      "description": "[col, row] map cell"
+     },
+     "map_region": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "prompt_box": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "max_steps": {
+      "type": "integer"
+     },
+     "tol_cells": {
+      "type": "number"
+     },
+     "ms": {
+      "type": "number"
+     },
+     "px": {
+      "type": "integer"
+     },
+     "px_per_deg": {
+      "type": "number"
+     },
+     "tap_ms": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "op"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "set_baseline",
+   "description": "Remember what a screen region normally looks like. diff_baseline later reports how far the current pixels deviate - precise and cheap, and scoped to just that region.",
+   "block_sha1": "b4c7e55461d38a1c3ad36d492e0d9899bf32a37c",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer"
+     },
+     "h": {
+      "type": "integer"
+     },
+     "hwnd": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "x",
+     "y",
+     "w",
+     "h"
+    ]
    }
   },
   {
    "name": "set_config",
    "description": "Configure observation options",
-   "block_sha1": "b5f5f111a43959bcd61ead4ccca40e32aff9eec9",
+   "block_sha1": "c8c047ac526781164710d3c8b8e222b53d5da5ea",
    "schema": {
     "type": "object",
     "properties": {
@@ -356,18 +2006,119 @@
    }
   },
   {
-   "name": "list_windows",
-   "description": "List all visible windows with their handles, titles, processes, and bounds",
-   "block_sha1": "8d4ceb9e84916bd096ab697455e0ef0e0f2026cc",
+   "name": "set_window_topmost",
+   "description": "Set or remove a window's always-on-top property",
+   "block_sha1": "d011b48dee9be0d8842bea448a9dd8516805ba9b",
    "schema": {
     "type": "object",
-    "properties": {}
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     },
+     "topmost": {
+      "type": "boolean",
+      "description": "Whether window should be always on top",
+      "default": true
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "snap_window_bottom",
+   "description": "Snap window to fill bottom half of screen",
+   "block_sha1": "e7f8ad190a208217703a1965685090c5a37d5ff2",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "snap_window_left",
+   "description": "Snap window to fill left half of screen",
+   "block_sha1": "3d137b40349e5419e49ead385feeef244d4634c0",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "snap_window_right",
+   "description": "Snap window to fill right half of screen",
+   "block_sha1": "27267e16551bf518f2d2949b08e04bb3444f680b",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "snap_window_top",
+   "description": "Snap window to fill top half of screen",
+   "block_sha1": "420d76983c9afc3e176648920dbbd3125dcdf9f4",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
+   "name": "snapshot",
+   "description": "Grab one image on demand and return its file path (no base64). Use only when pixels must be inspected.",
+   "block_sha1": "298ee6eb3a821e9674fc2dc23d28365f1052b9e5",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "region": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "scale": {
+      "type": "number"
+     }
+    },
+    "additionalProperties": false
    }
   },
   {
    "name": "switch_to_window",
    "description": "Switch focus to a window by handle or title pattern",
-   "block_sha1": "a4737f41c3501a8b362e7eeeca9731721e8c0883",
+   "block_sha1": "97070f4976b26d7691681d8b55a4239674aee0eb",
    "schema": {
     "type": "object",
     "properties": {
@@ -395,272 +2146,9 @@
    }
   },
   {
-   "name": "move_window",
-   "description": "Move and/or resize a window to specified position and size",
-   "block_sha1": "82372bb75e82408233997bfe03f65482a6aa4e74",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     },
-     "x": {
-      "type": "integer",
-      "description": "X coordinate for window position"
-     },
-     "y": {
-      "type": "integer",
-      "description": "Y coordinate for window position"
-     },
-     "width": {
-      "type": "integer",
-      "description": "Window width (optional, preserves current if not specified)"
-     },
-     "height": {
-      "type": "integer",
-      "description": "Window height (optional, preserves current if not specified)"
-     }
-    },
-    "required": [
-     "hwnd",
-     "x",
-     "y"
-    ]
-   }
-  },
-  {
-   "name": "resize_window",
-   "description": "Resize a window to specified dimensions",
-   "block_sha1": "2e2ffb5a999e65484b2710dd8dc49ddb02f275ad",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     },
-     "width": {
-      "type": "integer",
-      "description": "Window width"
-     },
-     "height": {
-      "type": "integer",
-      "description": "Window height"
-     }
-    },
-    "required": [
-     "hwnd",
-     "width",
-     "height"
-    ]
-   }
-  },
-  {
-   "name": "minimize_window",
-   "description": "Minimize a window",
-   "block_sha1": "4ac2da18c4ba0c1ce4b5b3291afd8c89bca7d044",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "maximize_window",
-   "description": "Maximize a window",
-   "block_sha1": "a5e2fc24c375a680a091d9486be167450dec9eef",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "restore_window",
-   "description": "Restore a minimized or maximized window to normal state",
-   "block_sha1": "6188b8233dcdede9966115b9ccd5a1c2357eb0c0",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "set_window_topmost",
-   "description": "Set or remove a window's always-on-top property",
-   "block_sha1": "4ec81906bf566663dfd2bd4fa037080f90040315",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     },
-     "topmost": {
-      "type": "boolean",
-      "description": "Whether window should be always on top",
-      "default": true
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "get_window_info",
-   "description": "Get detailed information about a window",
-   "block_sha1": "fc0325a51048b617b318b3817255ec49ab052b0e",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "close_window",
-   "description": "Close a window",
-   "block_sha1": "f0049d729cbf8b8e9ccb63030be93d45a7f99a0f",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "snap_window_left",
-   "description": "Snap window to fill left half of screen",
-   "block_sha1": "0ed8ce04bcc1aafeab13fe0e3f2dbab436f1d3a0",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "snap_window_right",
-   "description": "Snap window to fill right half of screen",
-   "block_sha1": "98fcee380f6654b087c078d908b4e29df301da56",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "snap_window_top",
-   "description": "Snap window to fill top half of screen",
-   "block_sha1": "86cb5337976172a010fe1c5a10d8e169242f6cfe",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "snap_window_bottom",
-   "description": "Snap window to fill bottom half of screen",
-   "block_sha1": "82af603cb6c8dd9ea157180ba8f79366f9bb8b1e",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "screenshot_window",
-   "description": "Capture screenshot of a specific window",
-   "block_sha1": "53bd7ac8f63f95eb74e77cf545f4c11c29f32063",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     }
-    },
-    "required": [
-     "hwnd"
-    ]
-   }
-  },
-  {
-   "name": "list_virtual_desktops",
-   "description": "List all virtual desktops with their IDs and names",
-   "block_sha1": "fe418f0b2d4301db17377aa25975c1d9586b8b01",
-   "schema": {
-    "type": "object",
-    "properties": {}
-   }
-  },
-  {
    "name": "switch_virtual_desktop",
    "description": "Switch to a virtual desktop by ID or name",
-   "block_sha1": "554f7aecf569aeef3dc117fee8d7f4ddb7787954",
+   "block_sha1": "2c48b740572839637850a5741efb07a4eb9f93f0",
    "schema": {
     "type": "object",
     "properties": {
@@ -688,332 +2176,9 @@
    }
   },
   {
-   "name": "move_window_to_virtual_desktop",
-   "description": "Move a window to a different virtual desktop",
-   "block_sha1": "d9604ca13122d81097809659df6b8e6e9ddd3524",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle"
-     },
-     "desktop_id": {
-      "type": "integer",
-      "description": "Target virtual desktop ID"
-     }
-    },
-    "required": [
-     "hwnd",
-     "desktop_id"
-    ]
-   }
-  },
-  {
-   "name": "screen_state",
-   "description": "Cheap screen check WITHOUT returning an image (~40 ms). Reports whether the screen changed since the last capture, by how much (mean abs diff %), and a short hash. Use this to poll instead of screenshot.",
-   "block_sha1": "b32b9634059944320c4fbf1a85b88b5ba51f38cb",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "x": {
-      "type": "integer",
-      "description": "Optional region left (default: full screen)"
-     },
-     "y": {
-      "type": "integer",
-      "description": "Optional region top"
-     },
-     "w": {
-      "type": "integer",
-      "description": "Optional region width"
-     },
-     "h": {
-      "type": "integer",
-      "description": "Optional region height"
-     }
-    }
-   }
-  },
-  {
-   "name": "wait_for_change",
-   "description": "Block until the screen changes above the threshold, or until timeout. Cheaper than the model polling screen_state in a loop.",
-   "block_sha1": "e8980e6634f727024e684e74534813279ea0c379",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "timeout_ms": {
-      "type": "integer",
-      "description": "Max time to wait (default 5000)",
-      "default": 5000
-     },
-     "poll_ms": {
-      "type": "integer",
-      "description": "Internal poll interval (default 120)",
-      "default": 120
-     }
-    }
-   }
-  },
-  {
-   "name": "capture_config",
-   "description": "Get or set capture settings: scale (default 0.5 -> 1280x720), quality (75), format (jpeg|png), diff_threshold (0.8 %), mask_bottom (60 px of taskbar ignored by change detection). Call with no args to just read them.",
-   "block_sha1": "9f80543840999ff9db9f25756c7e35f3ea959449",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "scale": {
-      "type": "number",
-      "description": "Downscale factor, 1.0 = full resolution"
-     },
-     "quality": {
-      "type": "integer",
-      "description": "JPEG quality 1-95"
-     },
-     "format": {
-      "type": "string",
-      "enum": [
-       "jpeg",
-       "png"
-      ]
-     },
-     "diff_threshold": {
-      "type": "number",
-      "description": "Mean abs diff % that counts as changed"
-     },
-     "mask_bottom": {
-      "type": "integer",
-      "description": "Bottom pixel rows ignored by change detection"
-     }
-    }
-   }
-  },
-  {
-   "name": "capture_daemon",
-   "description": "Start/stop/status of the persistent screen-capture daemon (ring buffer, default scale 0.25, 12 fps active / 3 fps idle). After start, sense/watch/probe read memory instead of grabbing the screen.",
-   "block_sha1": "e2c5971372b757a9498fdfc519ccf3febf0f1713",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "action": {
-      "type": "string",
-      "enum": [
-       "start",
-       "status",
-       "stop"
-      ]
-     },
-     "scale": {
-      "type": "number"
-     },
-     "active_fps": {
-      "type": "number"
-     },
-     "idle_fps": {
-      "type": "number"
-     },
-     "monitor": {
-      "type": "integer"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "sense",
-   "description": "Return what changed since a frame index plus requested primitives (prompt/bar/openness/color/digits). Reads the daemon buffer; typically under 10 ms and transfers no image.",
-   "block_sha1": "c884642ef2239ffb279c769b5828a45c912f5534",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "since_frame": {
-      "type": "integer"
-     },
-     "primitives": {
-      "type": "array",
-      "items": {
-       "type": "object"
-      }
-     },
-     "regions": {
-      "type": "array",
-      "items": {
-       "type": "object"
-      }
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "watch",
-   "description": "Block until a condition holds (event-driven wait, replaces sleep+re-screenshot polling). Kinds: prompt/bar/openness/color/digits/diff.",
-   "block_sha1": "c0ff7807ebf3c8d03885d0316902ab96c447bc60",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "cond": {
-      "type": "object"
-     },
-     "condition": {
-      "type": "object"
-     },
-     "timeout_ms": {
-      "type": "integer"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "probe",
-   "description": "One pixel primitive on the cached frame (1-3 ms): prompt (bright text present), bar (colored bar fill), openness (view open), color (blob), digits (number).",
-   "block_sha1": "2e1216841b03b8f111a5d99a4a9d16b045710ae8",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "kind": {
-      "type": "string",
-      "enum": [
-       "prompt",
-       "bar",
-       "openness",
-       "color",
-       "digits"
-      ]
-     },
-     "box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "color": {
-      "type": "string"
-     },
-     "thr": {
-      "type": "integer"
-     },
-     "tol": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "kind"
-    ],
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "snapshot",
-   "description": "Grab one image on demand and return its file path (no base64). Use only when pixels must be inspected.",
-   "block_sha1": "829c5c31e892e3f536ed06e58fd7bb2aa800683e",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "region": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "scale": {
-      "type": "number"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "run_script",
-   "description": "Execute a micro-script locally in ONE call (closed loop): ops = key/press/turn/move/click/scroll/sleep/loop/if/until/log. A 40-step navigation loop costs one round trip. Returns a trace.",
-   "block_sha1": "434ba495ee658fb5df086d4352cbce475a7d2475",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "ops": {
-      "type": "array",
-      "items": {
-       "type": "object"
-      }
-     },
-     "steps": {
-      "type": "array",
-      "items": {
-       "type": "object"
-      }
-     },
-     "max_seconds": {
-      "type": "number"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "act_until",
-   "description": "Repeat one action until a condition holds (walk until a prompt appears). Shorthand for one until-loop.",
-   "block_sha1": "7b1240fb083dbba29d5913d5eedd4ba02d2f25a0",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "action": {
-      "type": "object"
-     },
-     "cond": {
-      "type": "object"
-     },
-     "max_ms": {
-      "type": "integer"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "frame_mark",
-   "description": "Mark a frame index by name, used with frame_diff to verify an action took effect.",
-   "block_sha1": "5f1c170425d043f68f7c9b868a701aa7bf984a99",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "frame_diff",
-   "description": "Compare two buffered frames by index in an optional region: mean abs diff and changed flag.",
-   "block_sha1": "fb8f92c460dd5a760f080e9a375e1785544d23a1",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "from_frame": {
-      "type": "integer"
-     },
-     "to_frame": {
-      "type": "integer"
-     },
-     "region": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     }
-    },
-    "required": [
-     "from_frame"
-    ],
-    "additionalProperties": false
-   }
-  },
-  {
    "name": "trace",
    "description": "Return the trace of the last run_script, or the run history.",
-   "block_sha1": "6f242fdcee359c7ec991e25f0726f339d2ea9951",
+   "block_sha1": "23f467fdc61e5bd90dc661d6d0049abd821cd32c",
    "schema": {
     "type": "object",
     "properties": {
@@ -1025,94 +2190,9 @@
    }
   },
   {
-   "name": "glyph",
-   "description": "Manage learned digit glyphs for pixel fonts. action=list|learn|clear; learn needs label and box.",
-   "block_sha1": "8f8216fdf9234cbd30d0db20a8cda1aecb04bb3e",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "action": {
-      "type": "string",
-      "enum": [
-       "list",
-       "learn",
-       "clear"
-      ]
-     },
-     "label": {
-      "type": "string"
-     },
-     "box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "thr": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "action"
-    ],
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "read_digits",
-   "description": "Read a digit string from a region of the cached frame with 5x7 template matching (1-3 ms). Works on pixel fonts that defeat OCR.",
-   "block_sha1": "272a945cecd9c9c2d2cb611ad6b27cfa6d9dc8ef",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "thr": {
-      "type": "integer"
-     },
-     "min_conf": {
-      "type": "number"
-     }
-    },
-    "required": [
-     "box"
-    ],
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "hud",
-   "description": "Auto-locate HUD text rows by color (cyan/yellow/...) and return their screen boxes. Survives window resize/move; optional per-color rows list. Feed the boxes to read_digits or probe.",
-   "block_sha1": "4707bb1d07ad11b0a0652177c5048af052fe3de4",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      },
-      "description": "search area in screen coords, default whole screen"
-     },
-     "colors": {
-      "type": "array",
-      "items": {
-       "type": "object"
-      },
-      "description": "[{name, color, tol}]"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
    "name": "track",
    "description": "列车：三轮回转（入帧 30fps / 处理差分状态机 / 输出摘要+拼图）+ 看门狗。action=start 后列车常驻后台跑，随时用 status 取新鲜摘要（含一张拼图路径）；action=run 阻塞跑到结束；stop 停车；selfcheck 短跑报 fps/内存。track={'name':..,'window':{'process':..},'steps':[{name,expect,action,budget_ms}]}",
-   "block_sha1": "fd8ffc50525a82c567b2e853ad064f63649d8101",
+   "block_sha1": "77bb9ddbe01c59f39f1de6f1b643a91467799091",
    "schema": {
     "type": "object",
     "properties": {
@@ -1155,237 +2235,242 @@
    }
   },
   {
-   "name": "layout_mem",
-   "description": "Layout calibration memory (generic): save normalized regions once per app, then resolve to pixels at any window size. action=save needs hwnd+regions{name:[x,y,w,h] rel 0..1}; action=resolve returns pixel boxes; list/delete manage profiles.",
-   "block_sha1": "efe33d690c2df67b740ce5188e9161e572830708",
+   "name": "triple_click",
+   "description": "Perform a triple mouse click at the current cursor position",
+   "block_sha1": "a67b0a9f3c38d6aae8e21f0c9e91e6c4aa3528b1",
    "schema": {
     "type": "object",
     "properties": {
-     "action": {
+     "button": {
       "type": "string",
       "enum": [
-       "save",
-       "list",
-       "resolve",
-       "delete"
-      ]
+       "left",
+       "middle",
+       "right"
+      ],
+      "description": "Mouse button to click",
+      "default": "left"
+     }
+    }
+   }
+  },
+  {
+   "name": "type",
+   "description": "Type the specified text",
+   "block_sha1": "2891be2e576c4194cfb644c70b2698c15271485f",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string",
+      "description": "Text to type"
+     }
+    },
+    "required": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "type_verified",
+   "description": "输入文本并回读目标控件，判断字符是否真的进去了（丢字/焦点错位会被发现）",
+   "block_sha1": "b0f1829ad3208fa3462006ea2f7d80bd8648b8ea",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string"
+     },
+     "ref": {
+      "type": "string",
+      "description": "目标输入框的 element ref（可选）"
+     },
+     "name": {
+      "type": "string",
+      "description": "没给 ref 时按控件名定位输入框"
      },
      "hwnd": {
       "type": "integer"
      },
+     "exact": {
+      "type": "boolean",
+      "default": false
+     },
+     "submit": {
+      "type": "boolean",
+      "default": false,
+      "description": "校验通过后按回车"
+     },
+     "clear_first": {
+      "type": "boolean",
+      "default": false,
+      "description": "先全选删除再输入"
+     }
+    },
+    "required": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "ui_click",
+   "description": "Move the real cursor to a control found by name and click it. No coordinate guessing.",
+   "block_sha1": "ca99ab121f7ec6978854b0157186b0bca03734fe",
+   "schema": {
+    "type": "object",
+    "properties": {
      "name": {
       "type": "string"
      },
-     "regions": {
-      "type": "object"
+     "hwnd": {
+      "type": "integer"
      },
-     "meta": {
-      "type": "object"
+     "exact": {
+      "type": "boolean",
+      "default": false
+     },
+     "index": {
+      "type": "integer",
+      "default": 0
+     },
+     "button": {
+      "type": "string",
+      "enum": [
+       "left",
+       "right",
+       "middle"
+      ],
+      "default": "left"
+     },
+     "settle_ms": {
+      "type": "integer",
+      "default": 250
      }
     },
     "required": [
-     "action"
-    ],
-    "additionalProperties": false
+     "name"
+    ]
    }
   },
   {
-   "name": "screen_layout",
-   "description": "Generic layout detection for ANY window (no app-specific constants): content box (letterbox-aware), HUD text rows, lattice panels (minimaps/radars/boards) via periodicity, and progress bars with fill ratio. Returns pixel boxes plus normalized rel coords.",
-   "block_sha1": "18b5cfbc653ded5de98aa9100b902741206cf429",
+   "name": "ui_find",
+   "description": "Find controls by accessible name (substring, or exact=true). Returns candidates with their centre coordinates. Cheaper and more reliable than reading a screenshot.",
+   "block_sha1": "669169c323a64aeacbde161d23f43f8d6f46cbf8",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "depth": {
+      "type": "integer",
+      "default": 8
+     },
+     "exact": {
+      "type": "boolean",
+      "default": false
+     },
+     "index": {
+      "type": "integer",
+      "default": 0
+     }
+    },
+    "required": [
+     "name"
+    ]
+   }
+  },
+  {
+   "name": "ui_invoke",
+   "description": "Trigger a control by name through its Invoke pattern, without moving the cursor (fastest, non-intrusive). Falls back with a hint if the control has no Invoke.",
+   "block_sha1": "7acc077882d99bc4edc478496aad76f1acba15c8",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "exact": {
+      "type": "boolean",
+      "default": false
+     },
+     "index": {
+      "type": "integer",
+      "default": 0
+     }
+    },
+    "required": [
+     "name"
+    ]
+   }
+  },
+  {
+   "name": "ui_set_text",
+   "description": "Set a text field's value through its Value pattern, without typing keystrokes.",
+   "block_sha1": "9bd42bb786e5256594a0a0e6999bbe9fb2aa6e9a",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "hwnd": {
+      "type": "integer"
+     },
+     "exact": {
+      "type": "boolean",
+      "default": false
+     },
+     "index": {
+      "type": "integer",
+      "default": 0
+     }
+    },
+    "required": [
+     "name",
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "ui_tree",
+   "description": "Compact UI-Automation control tree for a window (or the focused one). Text only, no screenshot: control type + name + rect. Use it to find what is clickable before clicking.",
+   "block_sha1": "ec9c8d331e6d8b606ba67502c15138ccd58f8b44",
    "schema": {
     "type": "object",
     "properties": {
      "hwnd": {
-      "type": "integer"
+      "type": "integer",
+      "description": "Window handle (default: focused window)"
      },
-     "region": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
+     "depth": {
+      "type": "integer",
+      "default": 3
+     },
+     "max_nodes": {
+      "type": "integer",
+      "default": 60
+     },
+     "only_named": {
+      "type": "boolean",
+      "default": true
      }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "world_state",
-   "description": "M1: compress the screen into structured state — minimap grid (auto-calibrated pitch), player cell, objective markers, prompt flag, battery. Returns a short text page you can read instead of an image. Needs map_region=[x,y,w,h] in screen coords.",
-   "block_sha1": "78a911b8f6ced67656cab9cf97de907e077b32cd",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "map_region": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "prompt_box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "battery_box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "pitch": {
-      "type": "number"
-     },
-     "dark_max": {
-      "type": "integer"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "servo",
-   "description": "M2: closed-loop servo toward a map cell. op=calibrate (estimate heading by stepping and watching the minimap displacement) | face | approach | forward | turn. Recomputes bearing every step instead of walking blind.",
-   "block_sha1": "03221507d1d4a69fdaa9fd511d1ddb8d01e38b58",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "op": {
-      "type": "string",
-      "enum": [
-       "calibrate",
-       "face",
-       "approach",
-       "forward",
-       "turn"
-      ]
-     },
-     "cell": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      },
-      "description": "[col, row] map cell"
-     },
-     "map_region": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "prompt_box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "max_steps": {
-      "type": "integer"
-     },
-     "tol_cells": {
-      "type": "number"
-     },
-     "ms": {
-      "type": "number"
-     },
-     "px": {
-      "type": "integer"
-     },
-     "px_per_deg": {
-      "type": "number"
-     },
-     "tap_ms": {
-      "type": "number"
-     }
-    },
-    "required": [
-     "op"
-    ],
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "navigate",
-   "description": "M3: run a plan locally at 20+ Hz and come back only on success or stall. plan=[{kind:goto,cell:[c,r]}|{kind:search}|{kind:face,cell}|{kind:wait,ms}|{kind:key,key}]. Returns a short state page, so one call can cover a whole objective.",
-   "block_sha1": "154cc54aa67a1c1ebd212b93a7252bfaa5765c3e",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "plan": {
-      "type": "array",
-      "items": {
-       "type": "object"
-      }
-     },
-     "map_region": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "prompt_box": {
-      "type": "array",
-      "items": {
-       "type": "integer"
-      }
-     },
-     "max_seconds": {
-      "type": "number"
-     }
-    },
-    "required": [
-     "plan"
-    ],
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "housekeeping",
-   "description": "Show disk usage of this tool's own folders (_draw / recordings / vision baselines) and optionally prune them. Assets (macros, recipes, templates, _patched) are never touched. action=status (default, read-only) or sweep (with dry_run).",
-   "block_sha1": "bb311f6af0d06531b442b0c4e3dfd62ae1a68390",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "action": {
-      "type": "string",
-      "enum": [
-       "status",
-       "sweep"
-      ]
-     },
-     "dry_run": {
-      "type": "boolean"
-     }
-    },
-    "additionalProperties": false
-   }
-  },
-  {
-   "name": "record",
-   "description": "Dump the daemon ring buffer (frames + manifest + last trace) to disk for evidence or replay.",
-   "block_sha1": "69a93080ba985aa2145ec3319d14baf11a5c0b07",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "action": {
-      "type": "string",
-      "enum": [
-       "start",
-       "stop"
-      ]
-     }
-    },
-    "required": [
-     "action"
-    ],
-    "additionalProperties": false
+    }
    }
   },
   {
    "name": "verify_flow",
    "description": "Run staged verification and return per-stage evidence. Each stage may wait, then run assertions: kind=text|template|baseline|stable|file. Stages stop at the first failure (stop_on_fail) and the report can be written to a JSON file. Verification only - it performs no input actions.",
-   "block_sha1": "cdbabf04facd4e9a7d6575feb91e23b12e290b46",
+   "block_sha1": "e0a48bcc1546026a26f6adc8cb8e4dd104e88d7e",
    "schema": {
     "type": "object",
     "properties": {
@@ -1412,73 +2497,46 @@
    }
   },
   {
-   "name": "capture_template",
-   "description": "Save a screen region as a reusable template (grayscale PNG) under the tool's vision store. Use this for self-drawn UIs where UI Automation is blind: capture the button/icon once, then match_template finds it later. Give a tight region around the visual itself.",
-   "block_sha1": "bc79befb9d7c3e8ac482f0ec51c4a9f0f13e7d3f",
+   "name": "vision_list",
+   "description": "List stored templates and baselines (name, source region, size, creation time), plus live run statistics: calls, failures, retries, failure_rate. Use stats to spot a long automation that silently stopped working.",
+   "block_sha1": "2ff455f86c67bda4746fe2419971395b346420a2",
    "schema": {
     "type": "object",
     "properties": {
-     "name": {
-      "type": "string",
-      "description": "Template name"
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
-      "type": "integer"
-     },
-     "hwnd": {
-      "type": "integer",
-      "description": "Optional: grab the window bitmap (works when covered)"
-     },
-     "overwrite": {
+     "reset_stats": {
       "type": "boolean",
-      "default": true
+      "default": false
+     },
+     "delete": {
+      "type": "string",
+      "description": "Optional template name to delete"
      }
-    },
-    "required": [
-     "name",
-     "x",
-     "y",
-     "w",
-     "h"
-    ]
+    }
    }
   },
   {
-   "name": "match_template",
-   "description": "Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. No OCR, no UIA - works on games, Electron and CEF windows.",
-   "block_sha1": "4040cae2fd01c6886207f7bc449387f9e24ec4a0",
+   "name": "wait_baseline_change",
+   "description": "Block until a region deviates from its baseline by more than threshold, or until timeout.",
+   "block_sha1": "8693d807d6f2e85a65587c54153c8a79f2cda1f4",
    "schema": {
     "type": "object",
     "properties": {
      "name": {
       "type": "string"
      },
-     "confidence": {
+     "threshold": {
       "type": "number",
-      "default": 0.8
+      "default": 8.0
+     },
+     "timeout_ms": {
+      "type": "integer",
+      "default": 5000
+     },
+     "poll_ms": {
+      "type": "integer",
+      "default": 120
      },
      "hwnd": {
-      "type": "integer"
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
       "type": "integer"
      }
     },
@@ -1488,9 +2546,73 @@
    }
   },
   {
+   "name": "wait_for",
+   "description": "统一等待入口：等屏幕变化/文字出现/模板出现/元素出现/窗口聚焦（单次调用内轮询）",
+   "block_sha1": "8e23570b148953ab12c7c8926865567f2b68ecea",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "kind": {
+      "type": "string",
+      "enum": [
+       "change",
+       "text",
+       "template",
+       "element",
+       "focused"
+      ],
+      "default": "change"
+     },
+     "query": {
+      "type": "string",
+      "description": "text 时是要找的文字；template 时是模板名"
+     },
+     "element_id": {
+      "type": "string",
+      "description": "element 时按 ui_tree 的 id 等"
+     },
+     "timeout_ms": {
+      "type": "integer",
+      "default": 5000
+     },
+     "interval_ms": {
+      "type": "integer",
+      "default": 150
+     },
+     "any": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      },
+      "description": "多个条件，任一满足即返回（kind/query/element_id 的数组）"
+     }
+    }
+   }
+  },
+  {
+   "name": "wait_for_change",
+   "description": "Block until the screen changes above the threshold, or until timeout. Cheaper than the model polling screen_state in a loop.",
+   "block_sha1": "b8372cb5fc52067a39ce96fc1447011fc9e604d6",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "timeout_ms": {
+      "type": "integer",
+      "description": "Max time to wait (default 5000)",
+      "default": 5000
+     },
+     "poll_ms": {
+      "type": "integer",
+      "description": "Internal poll interval (default 120)",
+      "default": 120
+     }
+    }
+   }
+  },
+  {
    "name": "wait_template",
    "description": "Block until a template appears (appear=true) or disappears (appear=false), or until timeout. Event driven and cheaper than polling match_template from the model.",
-   "block_sha1": "9383f1b53804e60e9858b416fbb248e7b330942b",
+   "block_sha1": "eaa31d178f81b14335c45473704cca9349421e83",
    "schema": {
     "type": "object",
     "properties": {
@@ -1523,1083 +2645,157 @@
    }
   },
   {
-   "name": "click_template",
-   "description": "Find a template and click its centre. No coordinate guessing. Optional offset [dx,dy] nudges the click point.",
-   "block_sha1": "c376aa08886daf84deb577399e083a3c1c91911f",
+   "name": "watch",
+   "description": "Block until a condition holds (event-driven wait, replaces sleep+re-screenshot polling). Kinds: prompt/bar/openness/color/digits/diff.",
+   "block_sha1": "08bdd63d2c09da4babc65542b9c70832ae7ad0f0",
    "schema": {
     "type": "object",
     "properties": {
-     "name": {
-      "type": "string"
+     "cond": {
+      "type": "object"
      },
-     "confidence": {
-      "type": "number",
-      "default": 0.8
+     "condition": {
+      "type": "object"
      },
-     "button": {
-      "type": "string",
-      "enum": [
-       "left",
-       "right",
-       "middle"
-      ],
-      "default": "left"
-     },
-     "offset": {
+     "timeout_ms": {
+      "type": "integer"
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "world_state",
+   "description": "M1: compress the screen into structured state — minimap grid (auto-calibrated pitch), player cell, objective markers, prompt flag, battery. Returns a short text page you can read instead of an image. Needs map_region=[x,y,w,h] in screen coords.",
+   "block_sha1": "d5c86b9771c36e9dd53dd9aeeca40f8490fd2d49",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "map_region": {
       "type": "array",
       "items": {
        "type": "integer"
       }
      },
-     "settle_ms": {
-      "type": "integer",
-      "default": 150
-     },
-     "hwnd": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "name"
-    ]
-   }
-  },
-  {
-   "name": "set_baseline",
-   "description": "Remember what a screen region normally looks like. diff_baseline later reports how far the current pixels deviate - precise and cheap, and scoped to just that region.",
-   "block_sha1": "6aecc57eb2f04e448c696608746e391ce6714965",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
-      "type": "integer"
-     },
-     "hwnd": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "name",
-     "x",
-     "y",
-     "w",
-     "h"
-    ]
-   }
-  },
-  {
-   "name": "diff_baseline",
-   "description": "Compare a region against its stored baseline. Returns diff (mean abs difference 0-255) and changed = diff >= threshold.",
-   "block_sha1": "2ef667dd7a8764656730d96aa73a34710566e1e5",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "threshold": {
-      "type": "number",
-      "default": 8.0
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
-      "type": "integer"
-     },
-     "hwnd": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "name"
-    ]
-   }
-  },
-  {
-   "name": "wait_baseline_change",
-   "description": "Block until a region deviates from its baseline by more than threshold, or until timeout.",
-   "block_sha1": "b63dd1f9a8ce386091ac6945afc59694eda9c283",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "threshold": {
-      "type": "number",
-      "default": 8.0
-     },
-     "timeout_ms": {
-      "type": "integer",
-      "default": 5000
-     },
-     "poll_ms": {
-      "type": "integer",
-      "default": 120
-     },
-     "hwnd": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "name"
-    ]
-   }
-  },
-  {
-   "name": "sample_stable",
-   "description": "Sample a region several times and report whether it is stable (all hashes equal). Use it before trusting a state reading: this is how you avoid judging a UI while an animation is still running.",
-   "block_sha1": "d16fb45d79cc77e6e058d10a644cabb32ad35815",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "times": {
-      "type": "integer",
-      "default": 2
-     },
-     "gap_ms": {
-      "type": "integer",
-      "default": 200
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
-      "type": "integer"
-     },
-     "hwnd": {
-      "type": "integer"
-     }
-    }
-   }
-  },
-  {
-   "name": "hover_probe",
-   "description": "Hover a point, wait, measure whether a region changed, then move the cursor away. This detects hover-revealed menus/buttons that never show up in a plain screenshot or a click.",
-   "block_sha1": "97a0182e3c0f02f4958441d0fcbc4963d7b2ab00",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "dwell_ms": {
-      "type": "integer",
-      "default": 400
-     },
-     "threshold": {
-      "type": "number",
-      "default": 3.0
-     },
-     "away_x": {
-      "type": "integer"
-     },
-     "away_y": {
-      "type": "integer"
-     },
-     "rx": {
-      "type": "integer"
-     },
-     "ry": {
-      "type": "integer"
-     },
-     "rw": {
-      "type": "integer"
-     },
-     "rh": {
-      "type": "integer"
-     },
-     "hwnd": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "x",
-     "y",
-     "rx",
-     "ry",
-     "rw",
-     "rh"
-    ]
-   }
-  },
-  {
-   "name": "vision_list",
-   "description": "List stored templates and baselines (name, source region, size, creation time), plus live run statistics: calls, failures, retries, failure_rate. Use stats to spot a long automation that silently stopped working.",
-   "block_sha1": "966a4271a092f632d3f1eddd23c5929f4286c194",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "reset_stats": {
-      "type": "boolean",
-      "default": false
-     },
-     "delete": {
-      "type": "string",
-      "description": "Optional template name to delete"
-     }
-    }
-   }
-  },
-  {
-   "name": "batch",
-   "description": "Run a whole gesture sequence in ONE call. Each step: {action:'move'|'click'|'double_click'|'right_click'|'type'|'key'|'sleep'|'wait_change'|'screen_state'|'ui_click', ...}. Use this instead of many separate calls (each separate call costs a model round trip).",
-   "block_sha1": "4bd6592d6bc6e4acb5a54a035e381ce9b64311be",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "steps": {
+     "prompt_box": {
       "type": "array",
-      "description": "Ordered steps",
       "items": {
-       "type": "object",
-       "additionalProperties": true
+       "type": "integer"
       }
      },
-     "stop_on_error": {
-      "type": "boolean",
-      "default": true
+     "battery_box": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
      },
-     "default_sleep_ms": {
-      "type": "integer",
-      "default": 120
-     }
-    },
-    "required": [
-     "steps"
-    ]
-   }
-  },
-  {
-   "name": "ui_tree",
-   "description": "Compact UI-Automation control tree for a window (or the focused one). Text only, no screenshot: control type + name + rect. Use it to find what is clickable before clicking.",
-   "block_sha1": "cb5c9dfa1b0b46601a7abb0757a298a09ac02307",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "hwnd": {
-      "type": "integer",
-      "description": "Window handle (default: focused window)"
-     },
-     "depth": {
-      "type": "integer",
-      "default": 3
-     },
-     "max_nodes": {
-      "type": "integer",
-      "default": 60
-     },
-     "only_named": {
-      "type": "boolean",
-      "default": true
-     }
-    }
-   }
-  },
-  {
-   "name": "ui_find",
-   "description": "Find controls by accessible name (substring, or exact=true). Returns candidates with their centre coordinates. Cheaper and more reliable than reading a screenshot.",
-   "block_sha1": "17447050058d190022adeddfaedfcae834ee48ce",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "hwnd": {
-      "type": "integer"
-     },
-     "depth": {
-      "type": "integer",
-      "default": 8
-     },
-     "exact": {
-      "type": "boolean",
-      "default": false
-     },
-     "index": {
-      "type": "integer",
-      "default": 0
-     }
-    },
-    "required": [
-     "name"
-    ]
-   }
-  },
-  {
-   "name": "ui_click",
-   "description": "Move the real cursor to a control found by name and click it. No coordinate guessing.",
-   "block_sha1": "920d3d1b5a90907ad436710a75558f7d5708a5ab",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "hwnd": {
-      "type": "integer"
-     },
-     "exact": {
-      "type": "boolean",
-      "default": false
-     },
-     "index": {
-      "type": "integer",
-      "default": 0
-     },
-     "button": {
-      "type": "string",
-      "enum": [
-       "left",
-       "right",
-       "middle"
-      ],
-      "default": "left"
-     },
-     "settle_ms": {
-      "type": "integer",
-      "default": 250
-     }
-    },
-    "required": [
-     "name"
-    ]
-   }
-  },
-  {
-   "name": "ui_invoke",
-   "description": "Trigger a control by name through its Invoke pattern, without moving the cursor (fastest, non-intrusive). Falls back with a hint if the control has no Invoke.",
-   "block_sha1": "c40fa114781803692f24e82698d6f38d1e8410bb",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "hwnd": {
-      "type": "integer"
-     },
-     "exact": {
-      "type": "boolean",
-      "default": false
-     },
-     "index": {
-      "type": "integer",
-      "default": 0
-     }
-    },
-    "required": [
-     "name"
-    ]
-   }
-  },
-  {
-   "name": "ui_set_text",
-   "description": "Set a text field's value through its Value pattern, without typing keystrokes.",
-   "block_sha1": "667d8ea01ab5329672bd333af7ffdd7c31bf9bda",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "text": {
-      "type": "string"
-     },
-     "hwnd": {
-      "type": "integer"
-     },
-     "exact": {
-      "type": "boolean",
-      "default": false
-     },
-     "index": {
-      "type": "integer",
-      "default": 0
-     }
-    },
-    "required": [
-     "name",
-     "text"
-    ]
-   }
-  },
-  {
-   "name": "macro_list",
-   "description": "List saved macros (name, description, target window, step count).",
-   "block_sha1": "ce70fc70ae160808f7c0270f32f297e2385e675c",
-   "schema": {
-    "type": "object",
-    "properties": {}
-   }
-  },
-  {
-   "name": "macro_save",
-   "description": "Save a macro. Steps use window-relative 'rel':[dx,dy] coordinates and can carry 'expect':{'changed':true,'timeout_ms':1200} to verify the step actually did something.",
-   "block_sha1": "c57086f41eff1e928d972efc72a2e7e76afad017",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "spec": {
-      "type": "object",
-      "description": "{name, description?, window:{title_contains|process}, steps:[...]}",
-      "additionalProperties": true
-     }
-    },
-    "required": [
-     "spec"
-    ]
-   }
-  },
-  {
-   "name": "macro_run",
-   "description": "Replay a saved macro in ONE call. Coordinates are re-based onto the target window's current position. Use dry_run=true to see resolved absolute coordinates without clicking.",
-   "block_sha1": "808f79797f074d8210389ab504ce1f49bcc472a2",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "params": {
-      "type": "object",
-      "description": "Values for ${placeholders}"
-     },
-     "dry_run": {
-      "type": "boolean",
-      "default": false
-     },
-     "default_gap_ms": {
-      "type": "integer",
-      "default": 140
-     }
-    },
-    "required": [
-     "name"
-    ]
-   }
-  },
-  {
-   "name": "anchor_mem",
-   "description": "Learned anchor memory for UI elements: list / learn / verify / forget / stats. Stores normalised position + a 64-bit visual fingerprint + usage counters, so a click can be verified instead of guessed.",
-   "block_sha1": "1668ea7a459a4449a11ef3ec266804f396ee2a34",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "action": {
-      "type": "string",
-      "enum": [
-       "list",
-       "learn",
-       "verify",
-       "forget",
-       "stats"
-      ]
-     },
-     "app": {
-      "type": "string"
-     },
-     "key": {
-      "type": "string"
-     },
-     "hwnd": {
-      "type": "integer"
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "note": {
-      "type": "string"
-     }
-    },
-    "required": [
-     "action"
-    ]
-   }
-  },
-  {
-   "name": "ocr_read",
-   "description": "Read text off the screen with the Windows OCR engine and return the recognised lines with boxes. Text only - much cheaper than sending an image when all you need is what the UI says. Pass a region to scan just one window.",
-   "block_sha1": "2dcca4eb8e2794f90c29eb118f877b17df37aadb",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
-      "type": "integer"
-     },
-     "max_lines": {
-      "type": "integer",
-      "default": 80
-     },
-     "hwnd": {
-      "type": "integer",
-      "description": "Raise this window first, then OCR its rectangle"
-     }
-    }
-   }
-  },
-  {
-   "name": "find_text",
-   "description": "OCR the screen (or a region) and find a string, tolerating OCR mistakes: whitespace between CJK glyphs is ignored and a single mis-read character still matches. Returns centre coordinates.",
-   "block_sha1": "d6201866ec0a39da217bc9632a9c897f2dcd4b92",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "query": {
-      "type": "string"
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
-      "type": "integer"
-     },
-     "min_ratio": {
-      "type": "number",
-      "default": 0.72
-     },
-     "min_lcs_share": {
-      "type": "number",
-      "default": 0.6
-     },
-     "max_lines": {
-      "type": "integer",
-      "default": 120
-     },
-     "hwnd": {
-      "type": "integer",
-      "description": "Raise this window first, then OCR its rectangle"
-     }
-    },
-    "required": [
-     "query"
-    ]
-   }
-  },
-  {
-   "name": "click_text",
-   "description": "Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (WeChat, Electron, custom-rendered UIs).",
-   "block_sha1": "dca3b251ac8e66d863b7e615fbb28f1bc368e695",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "query": {
-      "type": "string"
-     },
-     "x": {
-      "type": "integer"
-     },
-     "y": {
-      "type": "integer"
-     },
-     "w": {
-      "type": "integer"
-     },
-     "h": {
-      "type": "integer"
-     },
-     "index": {
-      "type": "integer",
-      "default": 0
-     },
-     "settle_ms": {
-      "type": "integer",
-      "default": 250
-     },
-     "hwnd": {
-      "type": "integer",
-      "description": "Raise this window first, then OCR its rectangle"
-     }
-    },
-    "required": [
-     "query"
-    ]
-   }
-  },
-  {
-   "name": "scroll",
-   "description": "Scroll at the current pointer or optional screen x/y. dy>0 up, dy<0 down; dx>0 right. Integer wheel steps limited to [-100,100] per axis. Rechecks target process before injection; content movement remains unverified.",
-   "schema": {
-    "type": "object",
-    "properties": {
-     "dy": {
-      "type": "integer",
-      "minimum": -100,
-      "maximum": 100
-     },
-     "dx": {
-      "type": "integer",
-      "minimum": -100,
-      "maximum": 100,
-      "default": 0
-     },
-     "x": {
+     "pitch": {
       "type": "number"
      },
-     "y": {
-      "type": "number"
+     "dark_max": {
+      "type": "integer"
      }
     },
-    "required": [
-     "dy"
-    ],
     "additionalProperties": false
    }
   }
  ],
  "dispatch": [
-  {
-   "name": "click",
-   "line": 1200,
-   "form": "=="
-  },
-  {
-   "name": "double_click",
-   "line": 1205,
-   "form": "=="
-  },
-  {
-   "name": "triple_click",
-   "line": 1210,
-   "form": "=="
-  },
-  {
-   "name": "button_down",
-   "line": 1215,
-   "form": "=="
-  },
-  {
-   "name": "button_up",
-   "line": 1220,
-   "form": "=="
-  },
-  {
-   "name": "drag",
-   "line": 1225,
-   "form": "=="
-  },
-  {
-   "name": "mouse_move",
-   "line": 1232,
-   "form": "=="
-  },
-  {
-   "name": "type",
-   "line": 1240,
-   "form": "=="
-  },
-  {
-   "name": "key_down",
-   "line": 1245,
-   "form": "=="
-  },
-  {
-   "name": "key_up",
-   "line": 1250,
-   "form": "=="
-  },
-  {
-   "name": "key_press",
-   "line": 1255,
-   "form": "=="
-  },
-  {
-   "name": "screenshot",
-   "line": 1262,
-   "form": "=="
-  },
-  {
-   "name": "set_config",
-   "line": 1271,
-   "form": "=="
-  },
-  {
-   "name": "list_windows",
-   "line": 1281,
-   "form": "=="
-  },
-  {
-   "name": "switch_to_window",
-   "line": 1283,
-   "form": "=="
-  },
-  {
-   "name": "move_window",
-   "line": 1288,
-   "form": "=="
-  },
-  {
-   "name": "resize_window",
-   "line": 1296,
-   "form": "=="
-  },
-  {
-   "name": "minimize_window",
-   "line": 1302,
-   "form": "=="
-  },
-  {
-   "name": "maximize_window",
-   "line": 1304,
-   "form": "=="
-  },
-  {
-   "name": "restore_window",
-   "line": 1306,
-   "form": "=="
-  },
-  {
-   "name": "set_window_topmost",
-   "line": 1308,
-   "form": "=="
-  },
-  {
-   "name": "get_window_info",
-   "line": 1313,
-   "form": "=="
-  },
-  {
-   "name": "close_window",
-   "line": 1315,
-   "form": "=="
-  },
-  {
-   "name": "snap_window_left",
-   "line": 1317,
-   "form": "=="
-  },
-  {
-   "name": "snap_window_right",
-   "line": 1319,
-   "form": "=="
-  },
-  {
-   "name": "snap_window_top",
-   "line": 1321,
-   "form": "=="
-  },
-  {
-   "name": "snap_window_bottom",
-   "line": 1323,
-   "form": "=="
-  },
-  {
-   "name": "screenshot_window",
-   "line": 1325,
-   "form": "=="
-  },
-  {
-   "name": "list_virtual_desktops",
-   "line": 1339,
-   "form": "=="
-  },
-  {
-   "name": "switch_virtual_desktop",
-   "line": 1341,
-   "form": "=="
-  },
-  {
-   "name": "move_window_to_virtual_desktop",
-   "line": 1346,
-   "form": "=="
-  },
-  {
-   "name": "screen_state",
-   "line": 1353,
-   "form": "=="
-  },
-  {
-   "name": "wait_for_change",
-   "line": 1359,
-   "form": "=="
-  },
-  {
-   "name": "capture_config",
-   "line": 1365,
-   "form": "=="
-  },
-  {
-   "name": "capture_daemon",
-   "line": 1376,
-   "form": "=="
-  },
-  {
-   "name": "sense",
-   "line": 1381,
-   "form": "=="
-  },
-  {
-   "name": "watch",
-   "line": 1386,
-   "form": "=="
-  },
-  {
-   "name": "probe",
-   "line": 1391,
-   "form": "=="
-  },
-  {
-   "name": "snapshot",
-   "line": 1396,
-   "form": "=="
-  },
-  {
-   "name": "run_script",
-   "line": 1401,
-   "form": "=="
-  },
-  {
-   "name": "act_until",
-   "line": 1406,
-   "form": "=="
-  },
-  {
-   "name": "frame_mark",
-   "line": 1411,
-   "form": "=="
-  },
-  {
-   "name": "frame_diff",
-   "line": 1416,
-   "form": "=="
-  },
-  {
-   "name": "trace",
-   "line": 1421,
-   "form": "=="
-  },
-  {
-   "name": "glyph",
-   "line": 1426,
-   "form": "=="
-  },
-  {
-   "name": "read_digits",
-   "line": 1431,
-   "form": "=="
-  },
-  {
-   "name": "hud",
-   "line": 1436,
-   "form": "=="
-  },
-  {
-   "name": "track",
-   "line": 1441,
-   "form": "=="
-  },
-  {
-   "name": "layout_mem",
-   "line": 1446,
-   "form": "=="
-  },
-  {
-   "name": "screen_layout",
-   "line": 1451,
-   "form": "=="
-  },
-  {
-   "name": "world_state",
-   "line": 1456,
-   "form": "=="
-  },
-  {
-   "name": "servo",
-   "line": 1461,
-   "form": "=="
-  },
-  {
-   "name": "navigate",
-   "line": 1466,
-   "form": "=="
-  },
-  {
-   "name": "housekeeping",
-   "line": 1471,
-   "form": "=="
-  },
-  {
-   "name": "record",
-   "line": 1476,
-   "form": "=="
-  },
-  {
-   "name": "verify_flow",
-   "line": 1482,
-   "form": "=="
-  },
-  {
-   "name": "capture_template",
-   "line": 1492,
-   "form": "=="
-  },
-  {
-   "name": "match_template",
-   "line": 1501,
-   "form": "=="
-  },
-  {
-   "name": "wait_template",
-   "line": 1510,
-   "form": "=="
-  },
-  {
-   "name": "click_template",
-   "line": 1521,
-   "form": "=="
-  },
-  {
-   "name": "set_baseline",
-   "line": 1532,
-   "form": "=="
-  },
-  {
-   "name": "diff_baseline",
-   "line": 1540,
-   "form": "=="
-  },
-  {
-   "name": "wait_baseline_change",
-   "line": 1549,
-   "form": "=="
-  },
-  {
-   "name": "sample_stable",
-   "line": 1559,
-   "form": "=="
-  },
-  {
-   "name": "hover_probe",
-   "line": 1568,
-   "form": "=="
-  },
-  {
-   "name": "vision_list",
-   "line": 1582,
-   "form": "=="
-  },
-  {
-   "name": "batch",
-   "line": 1592,
-   "form": "=="
-  },
-  {
-   "name": "ui_tree",
-   "line": 1601,
-   "form": "=="
-  },
-  {
-   "name": "ui_find",
-   "line": 1609,
-   "form": "=="
-  },
-  {
-   "name": "ui_click",
-   "line": 1618,
-   "form": "=="
-  },
-  {
-   "name": "ui_invoke",
-   "line": 1629,
-   "form": "=="
-  },
-  {
-   "name": "ui_set_text",
-   "line": 1637,
-   "form": "=="
-  },
-  {
-   "name": "macro_list",
-   "line": 1648,
-   "form": "=="
-  },
-  {
-   "name": "macro_save",
-   "line": 1651,
-   "form": "=="
-  },
-  {
-   "name": "macro_run",
-   "line": 1654,
-   "form": "=="
-  },
-  {
-   "name": "anchor_mem",
-   "line": 1666,
-   "form": "=="
-  },
-  {
-   "name": "ocr_read",
-   "line": 1694,
-   "form": "=="
-  },
-  {
-   "name": "find_text",
-   "line": 1698,
-   "form": "=="
-  },
-  {
-   "name": "ocr_read",
-   "line": 1690,
-   "form": "in"
-  },
-  {
-   "name": "find_text",
-   "line": 1690,
-   "form": "in"
-  },
-  {
-   "name": "click_text",
-   "line": 1690,
-   "form": "in"
-  }
+  "act_until",
+  "anchor_mem",
+  "batch",
+  "button_down",
+  "button_up",
+  "capture_config",
+  "capture_daemon",
+  "capture_template",
+  "click",
+  "click_template",
+  "click_text",
+  "close_window",
+  "control_claim",
+  "control_status",
+  "dataset_explore",
+  "dataset_export",
+  "dataset_promote",
+  "dataset_query",
+  "dataset_status",
+  "dataset_triage",
+  "diff_baseline",
+  "double_click",
+  "drag",
+  "element_action",
+  "element_state",
+  "execute_verified",
+  "find_element",
+  "find_elements_ranked",
+  "find_text",
+  "frame_diff",
+  "frame_mark",
+  "get_window_info",
+  "glyph",
+  "housekeeping",
+  "hover_probe",
+  "hud",
+  "key_down",
+  "key_press",
+  "key_up",
+  "layout_mem",
+  "list_virtual_desktops",
+  "list_windows",
+  "macro_list",
+  "macro_run",
+  "macro_save",
+  "match_template",
+  "maximize_window",
+  "minimize_window",
+  "mouse_move",
+  "move_window",
+  "move_window_to_virtual_desktop",
+  "navigate",
+  "ocr_read",
+  "probe",
+  "read_digits",
+  "record",
+  "resize_window",
+  "restore_window",
+  "run_script",
+  "sample_stable",
+  "screen_layout",
+  "screen_state",
+  "screenshot",
+  "screenshot_window",
+  "scroll",
+  "sense",
+  "servo",
+  "set_baseline",
+  "set_config",
+  "set_window_topmost",
+  "snap_window_bottom",
+  "snap_window_left",
+  "snap_window_right",
+  "snap_window_top",
+  "snapshot",
+  "switch_to_window",
+  "switch_virtual_desktop",
+  "trace",
+  "track",
+  "triple_click",
+  "type",
+  "type_verified",
+  "ui_click",
+  "ui_find",
+  "ui_invoke",
+  "ui_set_text",
+  "ui_tree",
+  "verify_flow",
+  "vision_list",
+  "wait_baseline_change",
+  "wait_for",
+  "wait_for_change",
+  "wait_template",
+  "watch",
+  "world_state"
  ],
  "tools_without_dispatch": [],
  "dispatch_without_tool": [],
