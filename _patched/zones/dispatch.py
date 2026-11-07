@@ -92,6 +92,27 @@ def _resolve_element(arguments: dict, key: str = "name"):
     return target, int(window), None
 
 
+def _ensure_focus(hwnd, path, mouse) -> dict | None:
+    """Put the keyboard focus on the target; refuse rather than type elsewhere."""
+    from computer_mcp import element_ops as _eo
+
+    try:
+        outcome = _eo.perform(int(hwnd), str(path), "focus", None, mouse)
+    except Exception as exc:                            # noqa: BLE001
+        outcome = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+    if outcome.get("ok"):
+        return None
+    try:
+        state = _eo.read_state(int(hwnd), str(path))
+    except Exception:                                   # noqa: BLE001
+        state = {}
+    if state.get("focused"):
+        return None                                     # already where we want to type
+    return dict(ok=False, code="focus_failed", action_executed=False,
+                error="无法把焦点放到目标控件；未发送任何按键",
+                focus_error=outcome.get("error"))
+
+
 def dispatch(name: str, arguments: dict, *, computer_state, mouse_controller,
              keyboard_controller) -> dict:
     from computer_mcp.execution import operation
@@ -765,7 +786,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                                       arguments.get("value"), mouse_controller)
             except Exception as exc:                    # noqa: BLE001
                 outcome = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
-            outcome.update(hwnd=int(hwnd), path=path, action_requested=action)
+            outcome.update(hwnd=int(hwnd), path=path, action_requested=action,
+                           before=_trim_state(before, False) if before else {})
             if outcome.get("ok") and arguments.get("verify", True):
                 import time as _time
 
@@ -798,7 +820,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                     if verdict != "no_effect":
                         break
                     _time.sleep(0.15)
-                outcome["after"] = after
+                outcome["after"] = _trim_state(after, False)
                 outcome["verification"] = verdict
             result = outcome
 
@@ -812,69 +834,71 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         path = target.get("path")
         if failure is not None:
             # A named target that cannot be resolved must not receive keystrokes.
-            result = failure
+            result = dict(failure, action_executed=False)
         elif wants_target and (not path or not hwnd):
-            result = dict(ok=False, code="no_target",
+            result = dict(ok=False, code="no_target", action_executed=False,
                           error="指定了目标但没有定位到可输入的控件；未发送任何按键")
         else:
-            before_value = None
-            if path and hwnd:
-                try:
-                    before_value = _eo.read_state(int(hwnd), str(path)).get("value")
-                except Exception:                       # noqa: BLE001
-                    before_value = None
-                try:
-                    _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
-                except Exception:                       # noqa: BLE001
-                    pass
-            if arguments.get("clear_first"):
-                # Replace, don't append: select everything and delete it *before*
-                # typing, otherwise the field receives two inputs.
-                keyboard_actions.key_down("ctrl", controller=keyboard_controller)
-                keyboard_actions.key_press("a", controller=keyboard_controller)
-                keyboard_actions.key_up("ctrl", controller=keyboard_controller)
-                keyboard_actions.key_press("delete", controller=keyboard_controller)
-            typed = keyboard_actions.type_text(text=text, controller=keyboard_controller)
-            after = None
-            if path and hwnd:
-                for _ in range(3):
-                    _time.sleep(0.12)
-                    try:
-                        after = _eo.read_state(int(hwnd), str(path))
-                    except Exception:                   # noqa: BLE001
-                        after = None
-                    if after and after.get("value") is not None:
-                        break
-            value = None if after is None else after.get("value")
-            if value is None:
-                verdict, reason = "executed_unverified", "no_readable_target"
+            focus_failure = _ensure_focus(hwnd, path, mouse_controller) if (path and hwnd) else None
+            if focus_failure is not None:
+                result = focus_failure
             else:
-                expected = text.rstrip("\n")
-                got = str(value)
-                before_text = "" if before_value is None else str(before_value)
-                grew = len(got) - len(before_text)
-                if before_value is not None and got == before_text:
-                    verdict, reason = "no_effect", "no_change"
-                elif got == expected or got.endswith(expected):
-                    verdict, reason = "verified_success", ""
-                elif expected and expected in got and grew >= len(expected):
-                    # The caret was mid-document, or the same text was typed twice:
-                    # the field grew by at least the typed length and contains it.
-                    verdict, reason = "verified_success", "inserted"
+                before_value = None
+                if path and hwnd:
+                    try:
+                        before_value = _eo.read_state(int(hwnd), str(path)).get("value")
+                    except Exception:                   # noqa: BLE001
+                        before_value = None
+                if arguments.get("clear_first"):
+                    # Replace, don't append: select everything and delete it
+                    # *before* typing, otherwise the field receives two inputs.
+                    keyboard_actions.key_down("ctrl", controller=keyboard_controller)
+                    keyboard_actions.key_press("a", controller=keyboard_controller)
+                    keyboard_actions.key_up("ctrl", controller=keyboard_controller)
+                    keyboard_actions.key_press("delete", controller=keyboard_controller)
+                typed = keyboard_actions.type_text(text=text, controller=keyboard_controller)
+                after = None
+                if path and hwnd:
+                    for _ in range(3):
+                        _time.sleep(0.12)
+                        try:
+                            after = _eo.read_state(int(hwnd), str(path))
+                        except Exception:               # noqa: BLE001
+                            after = None
+                        if after and after.get("value") is not None:
+                            break
+                value = None if after is None else after.get("value")
+                if value is None:
+                    verdict, reason = "executed_unverified", "no_readable_target"
                 else:
-                    verdict, reason = "no_effect", "value_mismatch"
-            result = dict(ok=True, action="type_verified", text=text, typed=typed,
-                          value=(value if not isinstance(value, str) or len(value) <= VALUE_PREVIEW
-                                 else value[:VALUE_PREVIEW] + "…"),
-                          value_length=(len(value) if isinstance(value, str) else None),
-                          value_before=(before_value if not isinstance(before_value, str)
-                                        or len(before_value) <= VALUE_PREVIEW
-                                        else before_value[:VALUE_PREVIEW] + "…"),
-                          verification=verdict, reason=reason,
-                          hwnd=int(hwnd) if hwnd else None, path=path)
-            if arguments.get("submit") and result.get("verification") == "verified_success":
-                keyboard_actions.key_press("enter", controller=keyboard_controller)
-                result["submitted"] = True
+                    expected = text.rstrip("\n")
+                    got = str(value)
+                    before_text = "" if before_value is None else str(before_value)
+                    grew = len(got) - len(before_text)
+                    if before_value is not None and got == before_text:
+                        verdict, reason = "no_effect", "no_change"
+                    elif got == expected or got.endswith(expected):
+                        verdict, reason = "verified_success", ""
+                    elif expected and expected in got and grew >= len(expected):
+                        # Typed into the middle of an existing document, or the
+                        # same text twice: the field still grew by that much.
+                        verdict, reason = "verified_success", "inserted"
+                    else:
+                        verdict, reason = "no_effect", "value_mismatch"
+                result = dict(ok=True, action="type_verified", text=text, typed=typed,
+                              action_executed=True,
+                              value=(value if not isinstance(value, str)
+                                     or len(value) <= VALUE_PREVIEW
+                                     else value[:VALUE_PREVIEW] + "…"),
+                              value_length=(len(value) if isinstance(value, str) else None),
+                              value_before=(before_value if not isinstance(before_value, str)
+                                            or len(before_value) <= VALUE_PREVIEW
+                                            else before_value[:VALUE_PREVIEW] + "…"),
+                              verification=verdict, reason=reason,
+                              hwnd=int(hwnd) if hwnd else None, path=path)
+                if arguments.get("submit") and result.get("verification") == "verified_success":
+                    keyboard_actions.key_press("enter", controller=keyboard_controller)
+                    result["submitted"] = True
 
     if name == "execute_verified":
         import time as _time
@@ -889,29 +913,45 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         timeout_ms = int(arguments.get("timeout_ms", 3000))
         settle = max(0.0, int(arguments.get("settle_ms", 120)) / 1000.0)
         expectation = arguments.get("expect") or {}
+        kind = str(expectation.get("kind") or "")
         wants_target = bool(arguments.get("ref") or arguments.get("query"))
+
+        def lookup_present() -> bool | None:
+            """True/False from a completed scan; None when UIA itself failed."""
+            name = arguments.get("query")
+            if not name:
+                return None
+            try:
+                found = _ui.ui_find(name=str(name), hwnd=hwnd, index=0)
+            except Exception:                           # noqa: BLE001
+                return None
+            if not found.get("ok"):
+                return None                             # an error proves nothing
+            return int(found.get("found") or 0) > 0
+
         target, hwnd, failure = _resolve_element(arguments, key="query")
         path = target.get("path")
-        # "Is this gone?" is answerable even when the reference itself died: skip
-        # the action and re-check the window instead of returning early.
-        observe_only = (failure is not None
-                        and failure.get("code") == "stale_element"
-                        and str(expectation.get("kind")) == "absent")
+        # "Is this gone?" is answerable even when the reference died: skip the
+        # action and check the window instead of returning early.
+        # Nothing to act on (stale reference, or a name lookup that found nothing):
+        # an absence check can still answer the question without clicking.
+        observe_only = (kind == "absent" and
+                        ((failure is not None and failure.get("code") == "stale_element")
+                         or (failure is None and not path)))
         if observe_only:
             failure = None
             target = {}
             path = None
             hwnd = arguments.get("hwnd")
         if failure is not None:
-            result = dict(failure, ok=False, status="target_changed",
+            result = dict(failure, ok=False, status="target_changed", action_executed=False,
                           elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
         elif wants_target and not path and not observe_only:
-            # Named but unresolved: do not fall back to the focused control.
-            result = dict(ok=False, status="target_changed",
+            result = dict(ok=False, status="target_changed", action_executed=False,
                           error="指定了目标但没有解析到可执行控件；未执行任何动作",
                           elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
         elif not path and action == "type" and not observe_only:
-            result = dict(ok=False, error="type 需要明确的目标控件",
+            result = dict(ok=False, error="type 需要明确的目标控件", action_executed=False,
                           elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
         else:
             before = {}
@@ -923,14 +963,14 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             if observe_only:
                 outcome = dict(ok=True, action="observe", method="none",
                                note="reference was stale; verified absence only")
-                met = None
             elif action == "type":
-                try:
-                    _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
-                except Exception:                       # noqa: BLE001
-                    pass
-                keyboard_actions.type_text(text=str(value or ""), controller=keyboard_controller)
-                outcome = dict(ok=True, action="type", method="keyboard")
+                focus_failure = _ensure_focus(hwnd, path, mouse_controller)
+                if focus_failure is not None:
+                    outcome = focus_failure
+                else:
+                    keyboard_actions.type_text(text=str(value or ""),
+                                               controller=keyboard_controller)
+                    outcome = dict(ok=True, action="type", method="keyboard")
             elif path and hwnd:
                 try:
                     outcome = _eo.perform(int(hwnd), str(path), action, value, mouse_controller)
@@ -941,10 +981,9 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             _time.sleep(settle)
             observed = None
             met = False
-            if expectation.get("kind") and outcome.get("ok"):
+            if kind and outcome.get("ok"):
                 deadline = _time.perf_counter() + max(0.1, timeout_ms / 1000.0)
                 while True:
-                    kind = str(expectation.get("kind"))
                     text = expectation.get("text")
                     if kind in ("value", "contains") and path and hwnd:
                         try:
@@ -961,55 +1000,64 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                         observed = probe.get("detail")
                     elif kind == "absent":
                         ref = arguments.get("ref")
-                        if not ref and not arguments.get("query"):
-                            met = None
-                            observed = "no reference supplied"
-                        else:
+                        present = lookup_present()
+                        if ref:
                             try:
-                                _snap.resolve(str(ref), hwnd) if ref else None
+                                _snap.resolve(str(ref), hwnd)
                                 met = False
                                 observed = "still present"
                             except _snap.StaleReference:
-                                # A dead reference is not proof. Look the target up
-                                # again before claiming it disappeared.
-                                confirmed = False
-                                name = arguments.get("query")
-                                if name:
-                                    try:
-                                        found = _ui.ui_find(name=str(name), hwnd=hwnd, index=0)
-                                        confirmed = not bool(found.get("found"))
-                                    except Exception:   # noqa: BLE001
-                                        confirmed = False
-                                if confirmed:
-                                    met = True
-                                    observed = "element gone (re-checked by name)"
-                                else:
+                                if present is None:
                                     met = None
                                     observed = "reference expired; absence unproven"
+                                elif present:
+                                    met = False
+                                    observed = "still present (reference stale)"
+                                else:
+                                    met = True
+                                    observed = "element gone (re-checked)"
                             except Exception:           # noqa: BLE001
                                 met = None
                                 observed = "cannot verify"
+                        elif arguments.get("query"):
+                            if present is None:
+                                met = None
+                                observed = "lookup failed; absence unproven"
+                            else:
+                                met = not present
+                                observed = "element gone" if met else "still present"
+                        else:
+                            met = None
+                            observed = "no reference supplied"
                     else:
                         met = False
                     if met or met is None or _time.perf_counter() >= deadline:
                         break
                     _time.sleep(0.15)
-            if not expectation.get("kind"):
+            if not kind:
                 status = "executed_unverified" if outcome.get("ok") else "no_effect"
             elif met is None:
                 status = "executed_unverified"
+            elif met and observe_only:
+                # The observation is right, but nothing was clicked.
+                status = "verified_absent"
             elif met:
                 status = "verified_success"
             else:
                 status = "target_changed" if not path else "no_effect"
             result = dict(ok=bool(outcome.get("ok")), status=status, action=action,
-                          executed=outcome, observed=observed, before=before,
+                          action_executed=bool(outcome.get("ok")) and not observe_only,
+                          observation_only=observe_only,
+                          executed=outcome, observed=observed,
+                          before=_trim_state(before, False) if before else {},
                           elapsed_ms=round((_time.perf_counter() - started) * 1000, 1),
                           next_recommended_action=(
-                              None if status == "verified_success" else
+                              None if status in ("verified_success", "verified_absent") else
                               "re-observe the window and confirm the state before retrying"))
             if not outcome.get("ok"):
                 result["error"] = outcome.get("error")
+                if outcome.get("code"):
+                    result["code"] = outcome["code"]
 
     if name == "scroll_into_view":
         import time as _time
@@ -1024,6 +1072,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         left, top, right, bottom = win32gui.GetWindowRect(int(hwnd))
         center = ((left + right) // 2, (top + bottom) // 2)
         attempts = []
+        wheel_scrolls = 0
+        uia_scrolls = 0
         found = None
         for attempt in range(max_scrolls + 1):
             tree = _ui.ui_tree(hwnd=int(hwnd), depth=8, max_nodes=800, only_named=True)
@@ -1050,15 +1100,20 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                         int(hwnd), str(hits[0].get("path")), "scroll_into_view").get("ok"))
                 except Exception:                       # noqa: BLE001
                     pattern_scrolled = False
+                if pattern_scrolled:
+                    uia_scrolls += 1
+                    _time.sleep(settle)                 # let the layout settle
             if attempt < max_scrolls and not pattern_scrolled and mouse_controller is not None:
                 try:
                     mouse_controller.position = center
                     mouse_controller.scroll(0, -step)
+                    wheel_scrolls += 1
                 except Exception:                       # noqa: BLE001
                     pass
                 _time.sleep(settle)
         result = dict(ok=bool(found), found=bool(found), query=arguments.get("query"),
-                      hwnd=int(hwnd), scrolls=len([a for a in attempts if a["attempt"] > 0]),
+                      hwnd=int(hwnd), scrolls=wheel_scrolls,
+                      wheel_scrolls=wheel_scrolls, uia_scrolls=uia_scrolls,
                       attempts=attempts,
                       bounds=({k: found[k] for k in ("x", "y", "w", "h")} if found else None),
                       path=(found or {}).get("path"),

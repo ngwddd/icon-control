@@ -129,7 +129,9 @@ class TargetResolutionTests(AuthorityCase, unittest.TestCase):
                 patch('computer_mcp.element_ops.perform', return_value=dict(ok=True)):
             result = call('execute_verified', ref='dead:0', query='已关闭的对话框',
                           action='click', expect=dict(kind='absent'), timeout_ms=80)
-        self.assertEqual(result['status'], 'verified_success')
+        self.assertEqual(result['status'], 'verified_absent')
+        self.assertFalse(result['action_executed'])
+        self.assertTrue(result['observation_only'])
 
 
 class ScrollPatternTests(AuthorityCase, unittest.TestCase):

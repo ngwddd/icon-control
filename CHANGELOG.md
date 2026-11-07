@@ -1,3 +1,31 @@
+## [1.4.1-rc4] - 2026-11-08
+
+> 修 RC3 审计的 D01–D06，并补做真机验证。仍然不新增工具。
+
+### 语义修复
+
+- **UIA 报错不再等于元素消失**（D01）：`absent` 复检要求 `ui_find` 返回 `ok=True` 且 `found==0`；
+  查询本身失败时返回 `executed_unverified`。
+- **只有 query 的 `absent` 现在可用**（D02）：没有 `ref` 时直接按名字查询；
+  以前这条路径永远等到超时。
+- **焦点拿不到就不打字**（D03）：`type_verified` 与 `execute_verified(action="type")` 会先确认焦点；
+  `SetFocus` 失败且控件当前没有焦点时返回 `focus_failed`，键盘调用次数为 0。
+- **跳过动作不再伪装成动作成功**（D04）：`observe_only` 路径返回
+  `status="verified_absent"` + `action_executed=false` + `observation_only=true`。
+- **滚动计数如实**（D05）：分别返回 `wheel_scrolls` 与 `uia_scrolls`，`scrolls` 只统计真实滚轮事件；
+  UIA 滚动成功后加一次短暂等待。
+- **长文本截断覆盖全部返回**（D06）：`element_action` 的 `after`、`execute_verified` 的 `before`
+  现在也经过 `_trim_state()`。
+
+### 真机验证（Windows 11，本版 wheel）
+
+本轮第一次在真实桌面上走完整链路，覆盖：元素状态读取、焦点校验后输入、窗口移动后的引用解析、
+`set_value` 的真实结果、OCR 融合候选。结果见 `docs/v1.4/RELEASE-v1.4.1rc4.md`。
+
+### 验证
+
+- 回归：**857 项 / 0 失败 / 0 错误 / 3 跳过**（新增 9 项，覆盖 D01–D06）
+
 ## [1.4.1-rc3] - 2026-11-08
 
 > 修 RC2 的引用完整性与目标解析问题。仍然不新增工具。
