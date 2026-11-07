@@ -73,4 +73,27 @@ SPECS: list[ToolSpec] = [
         read_only=False,
         schema={'type': 'object', 'properties': {'stages': {'type': 'array', 'description': 'Ordered stages: {name, wait_ms?, assert:[{kind, ...}]}', 'items': {'type': 'object', 'additionalProperties': True}}, 'stop_on_fail': {'type': 'boolean', 'default': True}, 'report_path': {'type': 'string', 'description': 'Optional JSON report path'}}, 'required': ['stages']},
     ),
+    ToolSpec(
+        name='execute_verified',
+        effects=('input', 'text_entry'),
+        zone='Z4',
+        description='一次调用完成：定位 → 执行 → 等到后置条件成立 → 报告是否真的生效',
+        read_only=False,
+        schema={'type': 'object', 'properties': {
+            'query': {'type': 'string'},
+            'ref': {'type': 'string'},
+            'hwnd': {'type': 'integer'},
+            'action': {'type': 'string',
+                       'enum': ['click', 'invoke', 'set_value', 'toggle', 'select', 'type'],
+                       'default': 'click'},
+            'value': {'type': 'string'},
+            'expect': {'type': 'object', 'description': '后置条件：{kind: value|contains|text|absent, text}',
+                       'properties': {'kind': {'type': 'string',
+                                               'enum': ['value', 'contains', 'text', 'absent']},
+                                      'text': {'type': 'string'}}},
+            'timeout_ms': {'type': 'integer', 'default': 3000},
+            'settle_ms': {'type': 'integer', 'default': 120},
+        }, 'required': ['action']},
+    ),
+
 ]

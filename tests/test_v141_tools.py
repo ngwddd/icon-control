@@ -27,7 +27,7 @@ class ToolRegistrationTests(AuthorityCase, unittest.TestCase):
         self.assertTrue(ranked.read_only and state.read_only)
         self.assertFalse(action.read_only)
         self.assertIn('input', action.effects)
-        self.assertEqual(len(tool_registry.all_tools()), 94)
+        self.assertEqual(len(tool_registry.all_tools()), 95)
 
     def test_action_enum_covers_the_supported_set(self):
         from computer_mcp import tool_registry

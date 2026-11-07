@@ -26,6 +26,7 @@
   "drag",
   "element_action",
   "element_state",
+  "execute_verified",
   "find_element",
   "find_elements_ranked",
   "find_text",

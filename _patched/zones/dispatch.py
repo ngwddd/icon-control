@@ -751,6 +751,109 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                 keyboard_actions.key_press("enter", controller=keyboard_controller)
                 result["submitted"] = True
 
+    if name == "execute_verified":
+        import time as _time
+        from computer_mcp import element_ops as _eo
+        from computer_mcp import snapshots as _snap
+        from computer_mcp import ui_ext as _ui
+        from computer_mcp.zones import wait_for as _wf
+
+        started = _time.perf_counter()
+        action = str(arguments.get("action", "click"))
+        value = arguments.get("value")
+        timeout_ms = int(arguments.get("timeout_ms", 3000))
+        settle = max(0.0, int(arguments.get("settle_ms", 120)) / 1000.0)
+        expectation = arguments.get("expect") or {}
+        hwnd = arguments.get("hwnd")
+        target = {}
+        try:
+            if arguments.get("ref"):
+                target = _snap.resolve(str(arguments["ref"]), hwnd)
+                hwnd = target.get("hwnd") or hwnd
+            else:
+                found = _ui.ui_find(name=str(arguments.get("query", "")), hwnd=hwnd, index=0)
+                target = dict(found.get("target") or {})
+                hwnd = hwnd or target.get("hwnd")
+        except _snap.StaleReference as exc:
+            result = dict(ok=False, status="target_changed", error=str(exc),
+                          elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
+        except Exception as exc:                        # noqa: BLE001
+            result = dict(ok=False, error=f"{type(exc).__name__}: {exc}",
+                          elapsed_ms=round((_time.perf_counter() - started) * 1000, 1))
+        else:
+            path = target.get("path")
+            before = {}
+            if path and hwnd:
+                try:
+                    before = _eo.read_state(int(hwnd), str(path))
+                except Exception:                       # noqa: BLE001
+                    before = {}
+            if action == "type":
+                if path and hwnd:
+                    try:
+                        _eo.perform(int(hwnd), str(path), "focus", None, mouse_controller)
+                    except Exception:                   # noqa: BLE001
+                        pass
+                outcome = keyboard_actions.type_text(text=str(value or ""),
+                                                     controller=keyboard_controller)
+                outcome = dict(ok=True, action="type", method="keyboard")
+            elif path and hwnd:
+                try:
+                    outcome = _eo.perform(int(hwnd), str(path), action, value, mouse_controller)
+                except Exception as exc:                # noqa: BLE001
+                    outcome = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+            else:
+                outcome = dict(ok=False, error="没有可复用的 UIA 路径，请改用 click/type 按坐标操作")
+            _time.sleep(settle)
+            observed = None
+            if expectation.get("kind") and outcome.get("ok"):
+                deadline = _time.perf_counter() + max(0.1, timeout_ms / 1000.0)
+                while True:
+                    kind = str(expectation.get("kind"))
+                    text = expectation.get("text")
+                    if kind == "value" and path and hwnd:
+                        try:
+                            observed = _eo.read_state(int(hwnd), str(path)).get("value")
+                        except Exception:               # noqa: BLE001
+                            observed = None
+                        met = observed is not None and str(observed) == str(text)
+                    elif kind == "contains" and path and hwnd:
+                        try:
+                            observed = _eo.read_state(int(hwnd), str(path)).get("value")
+                        except Exception:               # noqa: BLE001
+                            observed = None
+                        met = observed is not None and str(text) in str(observed)
+                    elif kind == "text":
+                        probe = _wf.probe(dict(kind="text", query=text))
+                        met = bool(probe.get("ok"))
+                        observed = probe.get("detail")
+                    elif kind == "absent":
+                        met = False
+                        try:
+                            _snap.resolve(str(arguments.get("ref")), hwnd)
+                        except _snap.StaleReference:
+                            met = True
+                        except Exception:               # noqa: BLE001
+                            met = False
+                        observed = "element gone" if met else "still present"
+                    else:
+                        met = False
+                    if met or _time.perf_counter() >= deadline:
+                        break
+                    _time.sleep(0.15)
+                status = ("verified_success" if met else
+                          ("target_changed" if not path else "no_effect"))
+            else:
+                status = "executed_unverified" if outcome.get("ok") else "no_effect"
+            result = dict(ok=bool(outcome.get("ok")), status=status, action=action,
+                          executed=outcome, observed=observed, before=before,
+                          elapsed_ms=round((_time.perf_counter() - started) * 1000, 1),
+                          next_recommended_action=(
+                              None if status == "verified_success" else
+                              "re-observe the window and confirm the state before retrying"))
+            if not outcome.get("ok"):
+                result["error"] = outcome.get("error")
+
     if name == "wait_for":
         from computer_mcp.zones import wait_for as _wf
         result = _wf.run(kind=str(arguments.get("kind", "change")),

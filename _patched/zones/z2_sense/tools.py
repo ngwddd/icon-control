@@ -210,6 +210,8 @@ SPECS: list[ToolSpec] = [
                 'element_id': {'type': 'string', 'description': 'element 时按 ui_tree 的 id 等'},
                 'timeout_ms': {'type': 'integer', 'default': 5000},
                 'interval_ms': {'type': 'integer', 'default': 150},
+                'any': {'type': 'array', 'items': {'type': 'object'},
+                        'description': '多个条件，任一满足即返回（kind/query/element_id 的数组）'},
             },
         },
     ),
