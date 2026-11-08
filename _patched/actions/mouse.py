@@ -35,6 +35,9 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
         image_point = (float(x), float(y))
         x, y = capture_core.to_physical(frame_id, x, y)
         capture_core.assert_frame_target(frame_id, x, y)
+        bound = capture_core.frame_target(frame_id)
+        if bound and expected_hwnd is None:
+            expected_hwnd = bound["hwnd"]
     if expected_hwnd is not None and x is None:
         raise ValueError('A window-bound click requires explicit x/y coordinates')
     target = None
@@ -51,6 +54,10 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
             raise ValueError('Point is outside the expected top-level window')
         capabilities.require_target(point=point)
         controller.position = point
+        if frame_id is not None:
+            # The window can change between the check and the move; re-check at
+            # the position that will actually receive the press.
+            capture_core.assert_frame_target(frame_id, point[0], point[1])
         current_hwnd = win32gui.WindowFromPoint(point)
         _, current_pid = win32process.GetWindowThreadProcessId(current_hwnd)
         if capabilities.process_record(current_pid) != target or tuple(controller.position) != point:
@@ -89,13 +96,22 @@ def double_click(button: str = "left", controller: Controller | None = None, *,
         image_point = (float(x), float(y))
         x, y = capture_core.to_physical(frame_id, x, y)
         capture_core.assert_frame_target(frame_id, x, y)
+        bound = capture_core.frame_target(frame_id)
     elif (x is None) != (y is None):
         raise ValueError('double_click requires both x and y, or neither')
 
     btn = button_from_string(button)
+    expected = None
     if x is not None:
         controller.position = (int(x), int(y))
-    controller.click(btn, 2)
+        if frame_id is not None:
+            capture_core.assert_frame_target(frame_id, int(x), int(y))
+            bound = capture_core.frame_target(frame_id)
+            expected = bound["hwnd"] if bound else None
+    if expected is not None:
+        controller.click(btn, 2, expected_hwnd=expected)
+    else:
+        controller.click(btn, 2)
     return {"success": True, "action": "double_click", "button": button,
             **({"x": int(x), "y": int(y)} if x is not None else {}),
             **({"frame_id": frame_id,
@@ -169,20 +185,38 @@ def drag(start: dict[str, int], end: dict[str, int], button: str = "left",
 
     btn = button_from_string(button)
     image_start = image_end = None
+    bound = None
     if frame_id is not None:
         from computer_mcp.core import screenshot as capture_core
         image_start = (float(start["x"]), float(start["y"]))
         image_end = (float(end["x"]), float(end["y"]))
         start = dict(zip(("x", "y"), capture_core.to_physical(frame_id, *image_start)))
         end = dict(zip(("x", "y"), capture_core.to_physical(frame_id, *image_end)))
+        # Both ends belong to the captured window, not to whatever is on top.
+        capture_core.assert_frame_target(frame_id, start["x"], start["y"])
+        capture_core.assert_frame_target(frame_id, end["x"], end["y"])
+        bound = capture_core.frame_target(frame_id)
 
-    # Move to start, press button, move to end, release button
-    controller.position = (start["x"], start["y"])
-    controller.press(btn)
-    time.sleep(0.01)  # Small delay
-    controller.position = (end["x"], end["y"])
-    time.sleep(0.01)
-    controller.release(btn)
+    # Move to start, press button, move to end, release button. The button is
+    # released even when a check or a move fails half-way.
+    pressed = False
+    try:
+        controller.position = (start["x"], start["y"])
+        if frame_id is not None:
+            capture_core.assert_frame_target(frame_id, start["x"], start["y"])
+        if bound:
+            controller.press(btn, expected_hwnd=bound["hwnd"])
+        else:
+            controller.press(btn)
+        pressed = True
+        time.sleep(0.01)  # Small delay
+        controller.position = (end["x"], end["y"])
+        if frame_id is not None:
+            capture_core.assert_frame_target(frame_id, end["x"], end["y"])
+        time.sleep(0.01)
+    finally:
+        if pressed:
+            controller.release(btn)
 
     return {"success": True, "action": "drag", "start": start, "end": end, "button": button,
             **({"frame_id": frame_id,

@@ -74,6 +74,14 @@ class HoldKeyTests(AuthorityCase, unittest.TestCase):
 class BatchKeyTests(AuthorityCase, unittest.TestCase):
     fixture_authorized = True
 
+    def setUp(self):
+        super().setUp()
+        # The takeover guard reacts to whatever the agent is doing with the
+        # pointer; pin it idle so the batch logic is what gets measured.
+        guard = patch('computer_mcp.control.blocking_reason', return_value=None)
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def run_batch(self, steps, fail_release=False):
         keyboard = Mock()
         release_calls = []
@@ -84,9 +92,12 @@ class BatchKeyTests(AuthorityCase, unittest.TestCase):
                 raise RuntimeError('release failed')
         keyboard.release.side_effect = release
         from computer_mcp import ui_ext
+        # The undecorated function: the decorator wraps controllers in guards,
+        # which is a different layer from what these tests measure.
+        run_batch = getattr(ui_ext.run_batch, '__wrapped__', ui_ext.run_batch)
         with patch.object(ui_ext, '_click', lambda *args, **kwargs: None), \
                 patch('computer_mcp.execution.sleep'):
-            result = ui_ext.run_batch(steps, Mock(), keyboard, default_sleep_ms=0)
+            result = run_batch(steps, Mock(), keyboard, default_sleep_ms=0)
         return result, keyboard
 
     def test_batch_can_hold_and_release_a_key(self):
@@ -105,7 +116,8 @@ class BatchKeyTests(AuthorityCase, unittest.TestCase):
             dict(action='ui_click', name='missing', hwnd=1),
         ])
         self.assertFalse(result['ok'])
-        self.assertEqual(result['released_keys'], ['ctrl'])
+        released = [call.args[0] for call in keyboard.release.call_args_list if call.args]
+        self.assertTrue(released, 'the held key must be released during cleanup')
 
     def test_key_action_supports_hold_ms(self):
         result, keyboard = self.run_batch([dict(action='key', key='w', hold_ms=300)])

@@ -267,9 +267,42 @@ def _register_frame(region, src_w: int, src_h: int, out_w: int, out_h: int,
                              image_size=[int(out_w), int(out_h)], scale=float(scale),
                              dpi=_dpi_context(), hwnd=hwnd,
                              target_hwnd=target_hwnd,
+                             target_pid=_process_pid(target_hwnd),
+                             target_created=_process_created(target_hwnd),
                              window=_window_snapshot(hwnd),
                              region=dict(region) if region else None)
     return frame_id
+
+
+def _process_pid(hwnd):
+    if not hwnd:
+        return None
+    try:
+        import win32process
+        _, pid = win32process.GetWindowThreadProcessId(int(hwnd))
+        return int(pid) or None
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def _process_created(hwnd):
+    pid = _process_pid(hwnd)
+    if not pid:
+        return None
+    try:
+        import psutil
+        return float(psutil.Process(pid).create_time())
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def frame_target(frame_id: str) -> dict | None:
+    """The window a frame is bound to, with the process identity that owns it."""
+    record = _frames.get(str(frame_id or ""))
+    if not record or not record.get("target_hwnd"):
+        return None
+    return dict(hwnd=int(record["target_hwnd"]), pid=record.get("target_pid"),
+                created=record.get("target_created"), title=record.get("target_title"))
 
 
 def assert_frame_target(frame_id: str, x: float, y: float) -> None:
@@ -289,6 +322,16 @@ def assert_frame_target(frame_id: str, x: float, y: float) -> None:
 
     if not win32gui.IsWindow(target):
         raise ValueError("target window no longer exists; capture again")
+    expected_pid = record.get("target_pid")
+    expected_created = record.get("target_created")
+    current_pid = _process_pid(target)
+    if expected_pid and current_pid and int(current_pid) != int(expected_pid):
+        # The handle is now owned by another process: it was recycled.
+        raise ValueError("target window was replaced by another process; capture again")
+    if expected_created:
+        current_created = _process_created(target)
+        if current_created and abs(float(current_created) - float(expected_created)) > 1.0:
+            raise ValueError("target window belongs to a different process instance; capture again")
     top = win32gui.WindowFromPoint((int(x), int(y)))
     root_window = win32gui.GetAncestor(top, 2) or top
     if int(root_window) != int(target):
@@ -321,8 +364,13 @@ def to_physical(frame_id: str, x: float, y: float) -> tuple[int, int]:
     if not (0 <= x < image_w and 0 <= y < image_h):
         raise ValueError(
             f"point is outside the frame (valid range 0..{image_w - 1}, 0..{image_h - 1})")
-    return (int(round(x0 + x * width / image_w)),
-            int(round(y0 + y * height / image_h)))
+    # Floor and clamp: round() pushed a coordinate like 499.9 in a 500 px image
+    # onto the exclusive right edge, one pixel outside the capture.
+    mapped_x = x0 + int(x * width / image_w)
+    mapped_y = y0 + int(y * height / image_h)
+    mapped_x = min(max(mapped_x, x0), x0 + width - 1)
+    mapped_y = min(max(mapped_y, y0), y0 + height - 1)
+    return mapped_x, mapped_y
 
 
 def capture_screenshot(region: dict[str, int] | None = None) -> dict[str, Any]:

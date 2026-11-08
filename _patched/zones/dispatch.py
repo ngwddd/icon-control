@@ -214,6 +214,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             held = min(requested, MAX_HOLD_MS)
             modifiers, base = split_chord(str(arguments["key"]))
             pressed = []
+            release_failed = []
             try:
                 for modifier in modifiers:
                     keyboard_actions.key_down(key=modifier, controller=keyboard_controller)
@@ -227,12 +228,21 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                 for key in reversed(pressed):
                     try:
                         keyboard_actions.key_up(key=key, controller=keyboard_controller)
-                    except Exception:                   # noqa: BLE001
-                        pass
-            result = dict(action="key_press", key=str(arguments["key"]),
-                          held_ms=held, requested_ms=requested,
-                          capped=held < requested, chord=bool(modifiers),
-                          released=True)
+                    except Exception as exc:            # noqa: BLE001
+                        release_failed.append({"key": key,
+                                               "error": f"{type(exc).__name__}: {exc}"})
+                        # One retry: a stuck modifier is worse than a slow call.
+                        try:
+                            keyboard_actions.key_up(key=key, controller=keyboard_controller)
+                            release_failed.pop()
+                        except Exception:               # noqa: BLE001
+                            pass
+            released = not release_failed
+            result = dict(success=released, action="key_press",
+                          key=str(arguments["key"]), held_ms=held,
+                          requested_ms=requested, capped=held < requested,
+                          chord=bool(modifiers), released=released,
+                          release_failed=release_failed)
         else:
             result = keyboard_actions.key_press(
                 key=arguments["key"],

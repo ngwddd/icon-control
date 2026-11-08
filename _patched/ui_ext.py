@@ -499,6 +499,7 @@ def run_batch(
         action = str(step.get("action", "")).strip().lower()
         t0 = time.perf_counter()
         entry: dict[str, Any] = {"i": i, "action": action}
+        state_unknown: list = []
         try:
             if action == "move":
                 mouse.position = (int(step["x"]), int(step["y"]))
@@ -528,19 +529,29 @@ def run_batch(
                     hold_ms = int(step.get("hold_ms", 0) or 0)
                     if hold_ms > 0:
                         # Some targets sample key state on a timer; a ~5 ms tap
-                        # can fall entirely between two samples.
+                        # can fall entirely between two samples. Same cap as the
+                        # top-level tool, and the same cooperative wait.
+                        hold_ms = min(hold_ms, 10_000)
+                        entry["held_ms"] = hold_ms
                         _execution.sleep(hold_ms / 1000.0)
                     keyboard.release(resolve_key(base))
                     if base in held_keys:
                         held_keys.remove(base)
+                    state_unknown = []
                 finally:
                     for modifier in reversed(modifiers):
                         try:
                             keyboard.release(resolve_key(modifier))
                             if modifier in held_keys:
                                 held_keys.remove(modifier)
-                        except Exception:               # noqa: BLE001
-                            pass
+                        except Exception as exc:        # noqa: BLE001
+                            state_unknown.append({"key": modifier,
+                                                  "error": f"{type(exc).__name__}: {exc}"})
+                    if state_unknown:
+                        # A modifier that did not come up changes what the next
+                        # step means (ctrl+a becomes ctrl+A), so nothing else may
+                        # run until the keyboard state is known again.
+                        entry["keyboard_state_unknown"] = state_unknown
                 entry["ok"] = True
                 if modifiers:
                     entry["chord"] = True
@@ -602,6 +613,10 @@ def run_batch(
         entry["ms"] = round((time.perf_counter() - t0) * 1000, 1)
         log.append(entry)
 
+        if state_unknown:
+            entry["ok"] = False
+            failures += 1
+            break                       # keyboard state is unknown: never continue
         if not entry.get("ok") and stop_on_error:
             break
         if action not in ("sleep", "wait_change") and int(step.get("gap_ms", default_sleep_ms)) > 0:
