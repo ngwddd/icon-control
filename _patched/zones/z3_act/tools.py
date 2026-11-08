@@ -98,9 +98,13 @@ SPECS: list[ToolSpec] = [
         name='key_press',
         effects=('input','text_entry',),
         zone='Z3',
-        description='Press and release a key (convenience method)',
+        description='Press and release a key; hold_ms keeps it down first (for targets that sample key state on a timer)',
         read_only=False,
-        schema={'type': 'object', 'properties': {'key': {'type': 'string', 'description': "Key to press and release (e.g., 'ctrl', 'a', 'space')"}}, 'required': ['key']},
+        schema={'type': 'object', 'properties': {
+            'key': {'type': 'string', 'description': "Key to press and release (e.g., 'ctrl', 'a', 'space')"},
+            'hold_ms': {'type': 'number', 'default': 0,
+                        'description': '按住多少毫秒再松开；默认 0 表示瞬时点按'}},
+            'required': ['key']},
     ),
     ToolSpec(
         name='key_up',

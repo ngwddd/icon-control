@@ -151,7 +151,63 @@ def release(reason: str = "agent released") -> dict:
     return status()
 
 
-def status() -> dict:
+def _focus_snapshot() -> dict:
+    """Who owns the keyboard right now — the first question after a dead click."""
+    import ctypes
+    from ctypes import wintypes
+
+    class GUITHREADINFO(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.DWORD), ("flags", wintypes.DWORD),
+                    ("hwndActive", wintypes.HWND), ("hwndFocus", wintypes.HWND),
+                    ("hwndCapture", wintypes.HWND), ("hwndMenuOwner", wintypes.HWND),
+                    ("hwndMoveSize", wintypes.HWND), ("hwndCaret", wintypes.HWND),
+                    ("rcCaret", wintypes.RECT)]
+
+    info = dict(foreground_hwnd=None, foreground_title="", focus_hwnd=None,
+                focus_class="", focus_process="", focus_pid=None, focus_source="")
+    try:
+        import psutil
+        import win32gui
+        import win32process
+
+        foreground = win32gui.GetForegroundWindow()
+        info["foreground_hwnd"] = int(foreground) or None
+        if foreground:
+            info["foreground_title"] = win32gui.GetWindowText(foreground)
+        thread_id, _ = win32process.GetWindowThreadProcessId(foreground)
+        gui = GUITHREADINFO(cbSize=ctypes.sizeof(GUITHREADINFO))
+        focus = None
+        if ctypes.windll.user32.GetGUIThreadInfo(thread_id, ctypes.byref(gui)):
+            focus = int(gui.hwndFocus or 0) or None
+            info["focus_source"] = "GetGUIThreadInfo"
+        if focus is None:
+            try:
+                from computer_mcp import ui_ext
+                control = ui_ext._control_from(foreground) if ui_ext._UIA_OK else None
+                focused = control.GetFocusedControl() if control is not None else None
+                focus = int(getattr(focused, "NativeWindowHandle", 0) or 0) or None
+                if focus:
+                    info["focus_source"] = "UIA"
+            except Exception:                           # noqa: BLE001
+                pass
+        if focus is None:
+            focus = int(foreground) or None
+            info["focus_source"] = "foreground"
+        info["focus_hwnd"] = focus
+        if focus:
+            info["focus_class"] = win32gui.GetClassName(focus)
+            _, pid = win32process.GetWindowThreadProcessId(focus)
+            info["focus_pid"] = pid
+            try:
+                info["focus_process"] = psutil.Process(pid).name()
+            except Exception:                           # noqa: BLE001
+                info["focus_process"] = ""
+    except Exception:                                   # noqa: BLE001
+        info["focus_source"] = "unavailable"
+    return info
+
+
+def status(include_focus: bool = False) -> dict:
     now = _now()
     with _lock:
         motion_now=time.monotonic()
@@ -170,7 +226,7 @@ def status() -> dict:
             owner = STATE['owner']
             idle_s = now - max(STATE["since"], STATE["last_user"])
             reason = STATE["reason"]
-    return {
+    payload = {
         "ok": True,
         "owner": owner,
         "takeover": owner == "user",
@@ -186,6 +242,11 @@ def status() -> dict:
         'mouse_move_pending_s': round(pending_s,3),
         'mouse_move_gap_reset_s': MOUSE_MOVE_GAP_S,
     }
+    if include_focus:
+        # Only the diagnostic tool asks for this: the gate calls status() before
+        # every injected event and must not pay for a focus probe.
+        payload.update(_focus_snapshot())
+    return payload
 
 
 def blocking_reason() -> str | None:

@@ -36,6 +36,65 @@ if IS_WINDOWS:
         except Exception:
             return False
 
+    def _bounds_of(hwnd):
+        """Screen rectangle with fallbacks for windows that report 0x0.
+
+        Cloaked UWP windows, SmartScreen prompts and some custom dialogs return
+        an empty GetWindowRect; DWM's extended frame bounds and the client rect
+        are both better than reporting nothing.
+        """
+        import win32gui
+
+        try:
+            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+            if right - left > 0 and bottom - top > 0:
+                return dict(x=left, y=top, width=right - left, height=bottom - top), "window"
+        except Exception:                               # noqa: BLE001
+            pass
+        try:
+            class RECT(ctypes.Structure):
+                _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                            ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+            rect = RECT()
+            if ctypes.windll.dwmapi.DwmGetWindowAttribute(
+                    wintypes.HWND(hwnd), DWMWA_EXTENDED_FRAME_BOUNDS,
+                    ctypes.byref(rect), ctypes.sizeof(rect)) == 0:
+                width, height = rect.right - rect.left, rect.bottom - rect.top
+                if width > 0 and height > 0:
+                    return dict(x=rect.left, y=rect.top, width=width, height=height), "dwm"
+        except Exception:                               # noqa: BLE001
+            pass
+        try:
+            left, top, right, bottom = win32gui.GetClientRect(hwnd)
+            origin_x, origin_y = win32gui.ClientToScreen(hwnd, (left, top))
+            if right - left > 0 and bottom - top > 0:
+                return (dict(x=origin_x, y=origin_y,
+                             width=right - left, height=bottom - top), "client")
+        except Exception:                               # noqa: BLE001
+            pass
+        return dict(x=0, y=0, width=0, height=0), "unknown"
+
+    def _client_rect(hwnd):
+        try:
+            import win32gui
+            left, top, right, bottom = win32gui.GetClientRect(hwnd)
+            origin_x, origin_y = win32gui.ClientToScreen(hwnd, (left, top))
+            return dict(x=origin_x, y=origin_y, width=right - left, height=bottom - top)
+        except Exception:                               # noqa: BLE001
+            return None
+
+    def _dpi_of(hwnd):
+        """Per-window DPI and the scale factor a caller needs for coordinates."""
+        try:
+            function = ctypes.windll.user32.GetDpiForWindow
+            function.argtypes = [wintypes.HWND]
+            function.restype = wintypes.UINT
+            dpi = int(function(hwnd)) or 96
+            return dict(dpi=dpi, scale=round(dpi / 96.0, 3))
+        except Exception:                               # noqa: BLE001
+            return None
+
     def _get_window_data(hwnd: int) -> dict[str, Any] | None:
         """Get window data for a given handle."""
         try:
@@ -57,13 +116,9 @@ if IS_WINDOWS:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 process_name = "Unknown"
             
-            rect = win32gui.GetWindowRect(hwnd)
-            bounds = {
-                "x": rect[0],
-                "y": rect[1],
-                "width": rect[2] - rect[0],
-                "height": rect[3] - rect[1]
-            }
+            bounds, bounds_source = _bounds_of(hwnd)
+            client = _client_rect(hwnd)
+            dpi_info = _dpi_of(hwnd)
             
             # Determine window state
             placement = win32gui.GetWindowPlacement(hwnd)
@@ -80,6 +135,9 @@ if IS_WINDOWS:
                 "process": process_name,
                 "pid": pid,
                 "bounds": bounds,
+                "bounds_source": bounds_source,
+                "client": client,
+                "dpi": dpi_info,
                 "state": state
             }
         except Exception:
@@ -550,7 +608,13 @@ if IS_WINDOWS:
                 return {"success": False, "error": "Window capture unavailable; focus was not changed"}
             buffer = BytesIO()
             image.save(buffer, format='PNG')
+            from computer_mcp.core.screenshot import _register_frame
+            bounds, _source = _bounds_of(hwnd)
+            frame_id = _register_frame(
+                dict(x=bounds["x"], y=bounds["y"], w=bounds["width"], h=bounds["height"]),
+                image.width, image.height, image.width, image.height, 1.0, hwnd=hwnd)
             return {"success": True, "action": "screenshot_window", "hwnd": hwnd,
+                    "frame_id": frame_id, "bounds": bounds,
                     "format": "base64_png", "data": base64.b64encode(buffer.getvalue()).decode('ascii'),
                     "width": image.width, "height": image.height}
         except Exception as exc:

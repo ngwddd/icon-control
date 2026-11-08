@@ -489,6 +489,8 @@ def run_batch(
     t_all = time.perf_counter()
     log: list[dict[str, Any]] = []
     failures = 0
+    # Keys held by the batch are released even when a later step fails.
+    held_keys: list[str] = []
 
     for i, raw in enumerate(steps[: max(1, int(max_steps))]):
         from computer_mcp.execution import check
@@ -519,21 +521,39 @@ def run_batch(
                 modifiers, base = split_chord(str(step.get("key", "enter")))
                 for modifier in modifiers:
                     keyboard.press(resolve_key(modifier))
+                    held_keys.append(modifier)
                 try:
                     keyboard.press(resolve_key(base))
+                    hold_ms = int(step.get("hold_ms", 0) or 0)
+                    if hold_ms > 0:
+                        # Some targets sample key state on a timer; a ~5 ms tap
+                        # can fall entirely between two samples.
+                        _execution.sleep(hold_ms / 1000.0)
                     keyboard.release(resolve_key(base))
                 finally:
                     for modifier in reversed(modifiers):
                         keyboard.release(resolve_key(modifier))
+                        if modifier in held_keys:
+                            held_keys.remove(modifier)
                 entry["ok"] = True
                 if modifiers:
                     entry["chord"] = True
+                if int(step.get("hold_ms", 0) or 0) > 0:
+                    entry["held_ms"] = int(step.get("hold_ms", 0))
             elif action in ("key_down", "key_up"):
-                # Holding a key across batch steps leaves modifiers stuck when a
-                # later step fails; the top-level tools exist for that.
-                raise ValueError(
-                    f"batch does not support {action}; use the top-level {action} tool "
-                    f"or a single key_press chord")
+                key = str(step.get("key", ""))
+                if not key:
+                    raise ValueError(f"{action} needs a key")
+                if action == "key_down":
+                    keyboard.press(resolve_key(key))
+                    if key not in held_keys:
+                        held_keys.append(key)
+                    entry["ok"] = True
+                else:
+                    keyboard.release(resolve_key(key))
+                    if key in held_keys:
+                        held_keys.remove(key)
+                    entry["ok"] = True
             elif action == "sleep":
                 ms = int(step.get("ms", default_sleep_ms))
                 _execution.sleep(ms / 1000.0)
@@ -581,11 +601,19 @@ def run_batch(
         if action not in ("sleep", "wait_change") and int(step.get("gap_ms", default_sleep_ms)) > 0:
             _execution.sleep(int(step.get("gap_ms", default_sleep_ms)) / 1000.0)
 
+    released = []
+    for key in list(held_keys):
+        try:
+            keyboard.release(resolve_key(key))
+            released.append(key)
+        except Exception:                               # noqa: BLE001
+            pass
     return {
         "ok": failures == 0,
         "steps_run": len(log),
         "failed": failures,
         "total_ms": round((time.perf_counter() - t_all) * 1000, 1),
+        "released_keys": released,
         "log": log,
     }
 

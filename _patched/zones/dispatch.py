@@ -200,10 +200,23 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             controller=keyboard_controller
         )
     elif name == "key_press":
-        result = keyboard_actions.key_press(
-            key=arguments["key"],
-            controller=keyboard_controller
-        )
+        hold_ms = arguments.get("hold_ms")
+        if hold_ms:
+            # A tap can be shorter than the target's sampling period; holding
+            # the key is the primitive that makes "press W to walk" work.
+            import time as _time
+            result = keyboard_actions.key_down(key=arguments["key"],
+                                               controller=keyboard_controller)
+            _time.sleep(max(0.0, float(hold_ms)) / 1000.0)
+            released = keyboard_actions.key_up(key=arguments["key"],
+                                               controller=keyboard_controller)
+            result = dict(result, action="key_press", held_ms=float(hold_ms),
+                          released=bool(released.get("success", True)))
+        else:
+            result = keyboard_actions.key_press(
+                key=arguments["key"],
+                controller=keyboard_controller
+            )
     
     # Screenshot actions
     elif name == "screenshot":
@@ -230,7 +243,9 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         if crops:
             valid = [shot for shot in crops if "error" not in shot]
             screenshot_data = valid[0] if valid else {"error": "no region could be captured"}
-            result = {"success": bool(valid), "action": "screenshot", "regions": [
+            result = {"success": bool(valid), "action": "screenshot",
+                      "frame_id": (valid[0].get("frame_id") if valid else None),
+                      "regions": [
                 {"region": shot.get("region"), "width": shot.get("width"),
                  "height": shot.get("height"), "error": shot.get("error")} for shot in crops]}
             if len(valid) > 1:
@@ -240,7 +255,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             screenshot_result = screenshot_actions.get_screenshot()
             if "error" not in screenshot_result:
                 screenshot_data = screenshot_result
-                result = {"success": True, "action": "screenshot"}
+                result = {"success": True, "action": "screenshot",
+                          "frame_id": screenshot_result.get("frame_id")}
             else:
                 result = screenshot_result
     
@@ -306,9 +322,13 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                 "format": screenshot_result.get("format", "base64_png"),
                 "data": screenshot_result.get("data"),
                 "width": screenshot_result.get("width"),
-                "height": screenshot_result.get("height")
+                "height": screenshot_result.get("height"),
+                "frame_id": screenshot_result.get("frame_id"),
             }
-            result = {"success": screenshot_result.get("success"), "action": "screenshot_window", "hwnd": arguments["hwnd"]}
+            result = {"success": screenshot_result.get("success"), "action": "screenshot_window",
+                      "hwnd": arguments["hwnd"],
+                      "frame_id": screenshot_result.get("frame_id"),
+                      "bounds": screenshot_result.get("bounds")}
         else:
             result = screenshot_result
     
@@ -1131,7 +1151,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
 
     if name == "control_status":
         from computer_mcp import control as _ctl
-        result = _ctl.status()
+        result = _ctl.status(include_focus=True)
         from computer_mcp.runtime_contract import describe
         result['runtime_contract'] = describe()
         # v1.4.0: report which execution policy is in force and what it thinks

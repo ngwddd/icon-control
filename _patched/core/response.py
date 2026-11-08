@@ -38,8 +38,15 @@ def format_response(
         screenshot_metadata = {
             "format": screenshot_data.get("format", "base64_png"),
             "width": screenshot_data.get("width"),
-            "height": screenshot_data.get("height")
+            "height": screenshot_data.get("height"),
         }
+        if screenshot_data.get("frame_id"):
+            # Pass this back so click/click_text can take image coordinates
+            # instead of making the caller rescale by hand.
+            screenshot_metadata["frame_id"] = screenshot_data["frame_id"]
+        if screenshot_data.get("source_width"):
+            screenshot_metadata["source_width"] = screenshot_data.get("source_width")
+            screenshot_metadata["source_height"] = screenshot_data.get("source_height")
     
     # Add screenshot metadata to result if present
     if screenshot_metadata:

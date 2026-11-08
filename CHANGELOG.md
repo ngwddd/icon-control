@@ -1,3 +1,33 @@
+## [1.4.2-rc1] - 2026-11-08
+
+> 通用能力补齐：按住键、frame_id 直连、焦点诊断、窗口边界兜底。不新增工具。
+
+### 从真实使用里来的四个缺口
+
+一份"用了一下午 + 21 张截图"的实测报告指出：真正卡住工作的不是功能不够，而是四个通用原语缺失。
+
+- **`key_press` 支持 `hold_ms`**：以前只有瞬时点按（~5ms）。对按固定周期采样按键状态的目标（游戏、部分自绘控件），
+  5ms 会整段落在两次采样之间，看起来"按键完全无效"。现在可以按住指定毫秒再松开。
+- **`batch` 支持 `key_down` / `key_up`**：以前直接报错，只能一步步拆成顶层调用。现在可以在一段序列里按住修饰键、
+  中间插入点击，且**序列失败时自动释放**（返回值里有 `released_keys`）。
+- **截图返回 `frame_id`**：`click` 的文档一直写着"优先用 frame_id + 图片坐标"，但 `screenshot` /
+  `screenshot_window` 从没返回过 frame_id，调用方只能自己乘缩放比。现在两张截图都带 `frame_id`，
+  `click` / `click_text` 可以直接吃；响应文本里还附了 `source_width/height`。
+- **`control_status` 报焦点**：新增 `foreground_hwnd` / `foreground_title` / `focus_hwnd` /
+  `focus_class` / `focus_process` / `focus_pid` / `focus_source`。所有"点了没反应"的第一现场不用再写
+  `GetGUIThreadInfo`。
+
+### 窗口信息
+
+- **0×0 边界兜底**：`list_windows` / `get_window_info` 以前对 SmartScreen 这类窗口返回 `width:0,height:0`。
+  现在依次尝试 `GetWindowRect` → DWM 扩展边框 → 客户区矩形，并在 `bounds_source` 里注明来源。
+- **新增 `client` 与 `dpi`**：窗口客户区矩形 + 每窗口 DPI 与缩放比，坐标换算不用再猜。
+
+### 验证
+
+- 回归：**870 项 / 0 失败 / 0 错误 / 3 跳过**（新增 13 项）
+- 真机：截图 → frame_id → 按图片坐标点击；按住 W 300ms；`control_status` 焦点归属
+
 ## [1.4.1-rc4] - 2026-11-08
 
 > 修 RC3 审计的 D01–D06，并补做真机验证。仍然不新增工具。

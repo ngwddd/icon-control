@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-07T18:56:33Z",
+ "generated_at": "2026-11-08T14:01:07Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 96,
@@ -1142,14 +1142,19 @@
   },
   {
    "name": "key_press",
-   "description": "Press and release a key (convenience method)",
-   "block_sha1": "42eba937be1be4423b9232a135c453b2de4ad5cd",
+   "description": "Press and release a key; hold_ms keeps it down first (for targets that sample key state on a timer)",
+   "block_sha1": "8724590a178f6e6a623b6bc27ffc0ee7e061c9c8",
    "schema": {
     "type": "object",
     "properties": {
      "key": {
       "type": "string",
       "description": "Key to press and release (e.g., 'ctrl', 'a', 'space')"
+     },
+     "hold_ms": {
+      "type": "number",
+      "default": 0,
+      "description": "按住多少毫秒再松开；默认 0 表示瞬时点按"
      }
     },
     "required": [

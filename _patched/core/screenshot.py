@@ -250,7 +250,7 @@ def _foreground_hwnd() -> int | None:
 
 
 def _register_frame(region, src_w: int, src_h: int, out_w: int, out_h: int,
-                    scale: float) -> str:
+                    scale: float, hwnd: int | None = None) -> str:
     now = time.time()
     for key, value in list(_frames.items()):
         if now - float(value["captured_at"]) > FRAME_TTL_S:
@@ -259,7 +259,7 @@ def _register_frame(region, src_w: int, src_h: int, out_w: int, out_h: int,
         oldest = min(_frames, key=lambda key: _frames[key]["captured_at"])
         _frames.pop(oldest, None)
     x0, y0 = _origin(region)
-    hwnd = _foreground_hwnd()
+    hwnd = hwnd or _foreground_hwnd()
     frame_id = "f_" + secrets.token_hex(4)
     _frames[frame_id] = dict(frame_id=frame_id, captured_at=now,
                              source_rect=[x0, y0, int(src_w), int(src_h)],

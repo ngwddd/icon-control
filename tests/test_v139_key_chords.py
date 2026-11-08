@@ -101,17 +101,20 @@ class BatchValidationTests(AuthorityCase, unittest.TestCase):
             return ui_ext.run_batch(steps, mouse=object(),
                                     keyboard=controller or FakeController())
 
-    def test_key_down_step_is_rejected_with_a_clear_message(self):
-        result = self._run([{"action": "key_down", "key": "ctrl"}])
-        self.assertFalse(result['ok'])
-        self.assertEqual(result['failed'], 1)
-        self.assertIn('key_down', result['log'][0]['error'])
-        self.assertIn('top-level', result['log'][0]['error'])
+    def test_key_down_is_held_and_released_at_the_end(self):
+        # v1.4.2: a batch may hold a key; it is released when the batch ends.
+        controller = FakeController()
+        result = self._run([{"action": "key_down", "key": "ctrl"}], controller)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['released_keys'], ['ctrl'])
+        self.assertTrue(controller.events)
 
-    def test_key_up_step_is_rejected(self):
-        result = self._run([{"action": "key_up", "key": "ctrl"}])
-        self.assertFalse(result['ok'])
-        self.assertIn('key_up', result['log'][0]['error'])
+    def test_key_down_then_key_up_balances(self):
+        controller = FakeController()
+        result = self._run([{"action": "key_down", "key": "shift"},
+                            {"action": "key_up", "key": "shift"}], controller)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['released_keys'], [])
 
     def test_chord_key_step_runs(self):
         controller = FakeController()

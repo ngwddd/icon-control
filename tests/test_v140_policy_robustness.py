@@ -146,8 +146,8 @@ class ControlStatusTests(PolicyRobustnessCase):
 
         original = control.status
 
-        def idle():
-            data = dict(original())
+        def idle(*args, **kwargs):
+            data = dict(original(*args, **kwargs))
             data['owner'] = 'idle'
             return data
 
