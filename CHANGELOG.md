@@ -1,3 +1,32 @@
+## [1.4.2] - 2026-11-08
+
+> 正式版。补齐四个通用桌面原语，并把「操作发给了谁」和「按键有没有收回来」变成可验证的事实。
+
+### 新增能力（仍是 96 个工具）
+
+- **按住键**：`key_press(hold_ms=...)`，协作式等待（急停/接管可中断），上限 10 秒并标注 `capped`；
+  支持组合键（`ctrl+w` 长按会按修饰键 → 基础键的顺序按下与松开）。
+- **`batch` 支持 `key_down` / `key_up`**：序列结束或失败时自动释放，返回值列出 `released_keys`；
+  修饰键释放失败会标记 `keyboard_state_unknown` 并**立即中止整批**（即使 `stop_on_error=false`）。
+- **截图坐标直连**：`screenshot` / `screenshot_window` 返回 `frame_id`，`click` / `double_click` / `drag`
+  直接吃图片坐标，调用方不用再乘缩放比。
+- **焦点诊断**：`control_status` 返回 `foreground_hwnd` / `foreground_title` / `focus_hwnd` /
+  `focus_class` / `focus_process` / `focus_pid` / `focus_source`。
+
+### 安全与正确性
+
+- **窗口绑定**：窗口截图的 frame 记住目标窗口（含 pid 与进程创建时间）；被遮挡、移动或句柄被回收时，
+  点击/双击/拖拽在注入前拒绝（`target_occluded`），拖拽在异常路径也会释放鼠标键。
+- **半开坐标**：`to_physical()` 使用 `[0, width)` 并 floor + 夹取，浮点边界不会落到区域外。
+- **窗口信息**：`list_windows` / `get_window_info` 增加 `client` 与 `dpi`，0×0 的弹窗按
+  `GetWindowRect` → DWM 扩展边框 → 客户区依次回退，并标注 `bounds_source`。
+
+### 验证
+
+- 回归：**889 项 / 0 失败 / 0 错误 / 3 跳过**
+- 真机（Windows 11）：frame 坐标换算、长按释放、遮挡拒绝（鼠标坐标前后不变）；
+  另用本版完成朋友圈第 4/5 条读取、视频号首条读取与「不感兴趣」。
+
 ## [1.4.2-rc2] - 2026-11-08
 
 > 修 RC1 审计的 E01–E06。仍然不新增工具。
