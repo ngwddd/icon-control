@@ -31,12 +31,36 @@ class HoldKeyTests(AuthorityCase, unittest.TestCase):
                    side_effect=lambda key, controller=None: events.append(('down', key)) or dict(success=True)), \
                 patch('computer_mcp.actions.keyboard.key_up',
                       side_effect=lambda key, controller=None: events.append(('up', key)) or dict(success=True)), \
-                patch('time.sleep') as sleep:
+                patch('computer_mcp.execution.sleep') as sleep:
             result = call('key_press', key='w', hold_ms=250)
         self.assertEqual(events, [('down', 'w'), ('up', 'w')])
         sleep.assert_called_once()
         self.assertAlmostEqual(sleep.call_args[0][0], 0.25, places=3)
         self.assertEqual(result.get('held_ms'), 250)
+        self.assertFalse(result.get('capped'))
+
+    def test_hold_is_capped_and_reported(self):
+        events = []
+        with patch('computer_mcp.actions.keyboard.key_down',
+                   side_effect=lambda key, controller=None: events.append(('down', key)) or dict(success=True)), \
+                patch('computer_mcp.actions.keyboard.key_up',
+                      side_effect=lambda key, controller=None: events.append(('up', key)) or dict(success=True)), \
+                patch('computer_mcp.execution.sleep') as sleep:
+            result = call('key_press', key='w', hold_ms=60000)
+        self.assertTrue(result.get('capped'))
+        self.assertEqual(result.get('held_ms'), 10000.0)
+        self.assertAlmostEqual(sleep.call_args[0][0], 10.0, places=3)
+
+    def test_hold_accepts_a_chord(self):
+        events = []
+        with patch('computer_mcp.actions.keyboard.key_down',
+                   side_effect=lambda key, controller=None: events.append(('down', key)) or dict(success=True)), \
+                patch('computer_mcp.actions.keyboard.key_up',
+                      side_effect=lambda key, controller=None: events.append(('up', key)) or dict(success=True)), \
+                patch('computer_mcp.execution.sleep'):
+            result = call('key_press', key='ctrl+w', hold_ms=120)
+        self.assertEqual(events, [('down', 'ctrl'), ('down', 'w'), ('up', 'w'), ('up', 'ctrl')])
+        self.assertTrue(result.get('chord'))
 
     def test_tap_without_hold_stays_a_tap(self):
         with patch('computer_mcp.actions.keyboard.key_press',

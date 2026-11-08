@@ -54,8 +54,11 @@ class FrameRegistryTests(unittest.TestCase):
     def test_image_coordinates_map_to_physical_pixels(self):
         frame_id = self._frame()
         self.assertEqual(capture.to_physical(frame_id, 0, 0), (100, 50))
-        self.assertEqual(capture.to_physical(frame_id, 200, 100), (500, 250))
+        # Half-open: image_width/height are one past the last pixel.
+        self.assertEqual(capture.to_physical(frame_id, 199, 99), (498, 248))
         self.assertEqual(capture.to_physical(frame_id, 100, 50), (300, 150))
+        with self.assertRaises(ValueError):
+            capture.to_physical(frame_id, 200, 99)
 
     def test_full_screen_frame_uses_the_monitor_origin(self):
         with patch.object(capture, '_sct', return_value=types.SimpleNamespace(
@@ -63,7 +66,7 @@ class FrameRegistryTests(unittest.TestCase):
             frame_id = self._frame(region=None, src_w=1920, src_h=1080,
                                    out_w=960, out_h=540)
         self.assertEqual(capture.to_physical(frame_id, 0, 0), (-1920, 0))
-        self.assertEqual(capture.to_physical(frame_id, 960, 540), (0, 1080))
+        self.assertEqual(capture.to_physical(frame_id, 959, 539), (-2, 1078))
 
     def test_unknown_frame_is_rejected(self):
         with self.assertRaises(ValueError):

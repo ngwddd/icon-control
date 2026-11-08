@@ -612,7 +612,8 @@ if IS_WINDOWS:
             bounds, _source = _bounds_of(hwnd)
             frame_id = _register_frame(
                 dict(x=bounds["x"], y=bounds["y"], w=bounds["width"], h=bounds["height"]),
-                image.width, image.height, image.width, image.height, 1.0, hwnd=hwnd)
+                image.width, image.height, image.width, image.height, 1.0,
+                hwnd=hwnd, target_hwnd=hwnd)
             return {"success": True, "action": "screenshot_window", "hwnd": hwnd,
                     "frame_id": frame_id, "bounds": bounds,
                     "format": "base64_png", "data": base64.b64encode(buffer.getvalue()).decode('ascii'),

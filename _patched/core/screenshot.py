@@ -250,7 +250,8 @@ def _foreground_hwnd() -> int | None:
 
 
 def _register_frame(region, src_w: int, src_h: int, out_w: int, out_h: int,
-                    scale: float, hwnd: int | None = None) -> str:
+                    scale: float, hwnd: int | None = None,
+                    target_hwnd: int | None = None) -> str:
     now = time.time()
     for key, value in list(_frames.items()):
         if now - float(value["captured_at"]) > FRAME_TTL_S:
@@ -265,9 +266,35 @@ def _register_frame(region, src_w: int, src_h: int, out_w: int, out_h: int,
                              source_rect=[x0, y0, int(src_w), int(src_h)],
                              image_size=[int(out_w), int(out_h)], scale=float(scale),
                              dpi=_dpi_context(), hwnd=hwnd,
+                             target_hwnd=target_hwnd,
                              window=_window_snapshot(hwnd),
                              region=dict(region) if region else None)
     return frame_id
+
+
+def assert_frame_target(frame_id: str, x: float, y: float) -> None:
+    """Refuse a click when the captured window is no longer the one on top.
+
+    A window screenshot is taken with PrintWindow, which also succeeds while the
+    window is covered. Clicking those coordinates would hit whatever is on top
+    instead, so the frame remembers its target and we verify it before input.
+    """
+    record = _frames.get(str(frame_id or ""))
+    if not record:
+        return                      # to_physical already rejected unknown frames
+    target = record.get("target_hwnd")
+    if not target:
+        return
+    import win32gui
+
+    if not win32gui.IsWindow(target):
+        raise ValueError("target window no longer exists; capture again")
+    top = win32gui.WindowFromPoint((int(x), int(y)))
+    root_window = win32gui.GetAncestor(top, 2) or top
+    if int(root_window) != int(target):
+        raise ValueError(
+            "target_occluded: the captured window is covered at that point; "
+            "raise it (switch_to_window) or capture again")
 
 
 def get_frame(frame_id: str) -> dict[str, Any]:
@@ -289,8 +316,11 @@ def to_physical(frame_id: str, x: float, y: float) -> tuple[int, int]:
     if not image_w or not image_h:
         raise ValueError("frame has no image size")
     x, y = float(x), float(y)
-    if not (0 <= x <= image_w and 0 <= y <= image_h):
-        raise ValueError("point is outside the frame")
+    # Half-open: image_width is the first coordinate *past* the last pixel.
+    # Accepting it mapped the right/bottom edge one pixel outside the capture.
+    if not (0 <= x < image_w and 0 <= y < image_h):
+        raise ValueError(
+            f"point is outside the frame (valid range 0..{image_w - 1}, 0..{image_h - 1})")
     return (int(round(x0 + x * width / image_w)),
             int(round(y0 + y * height / image_h)))
 

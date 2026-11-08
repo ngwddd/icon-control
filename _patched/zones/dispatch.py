@@ -35,6 +35,9 @@ from computer_mcp import anchor_mem
 
 VALUE_PREVIEW = 200
 
+# A held key is capped so a caller typo cannot pin the keyboard down.
+MAX_HOLD_MS = 10_000.0
+
 
 def _trim_state(state: dict, full: bool) -> dict:
     """Keep a document's text out of the transcript unless it was asked for."""
@@ -204,14 +207,32 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         if hold_ms:
             # A tap can be shorter than the target's sampling period; holding
             # the key is the primitive that makes "press W to walk" work.
-            import time as _time
-            result = keyboard_actions.key_down(key=arguments["key"],
-                                               controller=keyboard_controller)
-            _time.sleep(max(0.0, float(hold_ms)) / 1000.0)
-            released = keyboard_actions.key_up(key=arguments["key"],
-                                               controller=keyboard_controller)
-            result = dict(result, action="key_press", held_ms=float(hold_ms),
-                          released=bool(released.get("success", True)))
+            from computer_mcp import execution as _execution
+            from computer_mcp.core.utils import split_chord
+
+            requested = max(0.0, float(hold_ms))
+            held = min(requested, MAX_HOLD_MS)
+            modifiers, base = split_chord(str(arguments["key"]))
+            pressed = []
+            try:
+                for modifier in modifiers:
+                    keyboard_actions.key_down(key=modifier, controller=keyboard_controller)
+                    pressed.append(modifier)
+                keyboard_actions.key_down(key=base, controller=keyboard_controller)
+                pressed.append(base)
+                # Cooperative: a stop or takeover interrupts the hold instead of
+                # leaving the key down for its full duration.
+                _execution.sleep(held / 1000.0)
+            finally:
+                for key in reversed(pressed):
+                    try:
+                        keyboard_actions.key_up(key=key, controller=keyboard_controller)
+                    except Exception:                   # noqa: BLE001
+                        pass
+            result = dict(action="key_press", key=str(arguments["key"]),
+                          held_ms=held, requested_ms=requested,
+                          capped=held < requested, chord=bool(modifiers),
+                          released=True)
         else:
             result = keyboard_actions.key_press(
                 key=arguments["key"],
@@ -246,8 +267,14 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             result = {"success": bool(valid), "action": "screenshot",
                       "frame_id": (valid[0].get("frame_id") if valid else None),
                       "regions": [
-                {"region": shot.get("region"), "width": shot.get("width"),
-                 "height": shot.get("height"), "error": shot.get("error")} for shot in crops]}
+                {"index": index,
+                 "region": shot.get("region"),
+                 "frame_id": shot.get("frame_id"),
+                 "width": shot.get("width"),
+                 "height": shot.get("height"),
+                 "source_rect": shot.get("source_rect"),
+                 "image_size": shot.get("image_size"),
+                 "error": shot.get("error")} for index, shot in enumerate(crops)]}
             if len(valid) > 1:
                 # format_response turns these into extra ImageContent blocks.
                 result["_images"] = valid

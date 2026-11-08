@@ -524,17 +524,23 @@ def run_batch(
                     held_keys.append(modifier)
                 try:
                     keyboard.press(resolve_key(base))
+                    held_keys.append(base)
                     hold_ms = int(step.get("hold_ms", 0) or 0)
                     if hold_ms > 0:
                         # Some targets sample key state on a timer; a ~5 ms tap
                         # can fall entirely between two samples.
                         _execution.sleep(hold_ms / 1000.0)
                     keyboard.release(resolve_key(base))
+                    if base in held_keys:
+                        held_keys.remove(base)
                 finally:
                     for modifier in reversed(modifiers):
-                        keyboard.release(resolve_key(modifier))
-                        if modifier in held_keys:
-                            held_keys.remove(modifier)
+                        try:
+                            keyboard.release(resolve_key(modifier))
+                            if modifier in held_keys:
+                                held_keys.remove(modifier)
+                        except Exception:               # noqa: BLE001
+                            pass
                 entry["ok"] = True
                 if modifiers:
                     entry["chord"] = True
@@ -602,18 +608,23 @@ def run_batch(
             _execution.sleep(int(step.get("gap_ms", default_sleep_ms)) / 1000.0)
 
     released = []
+    release_failed = []
     for key in list(held_keys):
         try:
             keyboard.release(resolve_key(key))
             released.append(key)
-        except Exception:                               # noqa: BLE001
-            pass
+            held_keys.remove(key)
+        except Exception as exc:                        # noqa: BLE001
+            release_failed.append({"key": key, "error": f"{type(exc).__name__}: {exc}"})
+    if release_failed:
+        failures += 1
     return {
         "ok": failures == 0,
         "steps_run": len(log),
         "failed": failures,
         "total_ms": round((time.perf_counter() - t_all) * 1000, 1),
         "released_keys": released,
+        "release_failed": release_failed,
         "log": log,
     }
 

@@ -34,6 +34,7 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
         from computer_mcp.core import screenshot as capture_core
         image_point = (float(x), float(y))
         x, y = capture_core.to_physical(frame_id, x, y)
+        capture_core.assert_frame_target(frame_id, x, y)
     if expected_hwnd is not None and x is None:
         raise ValueError('A window-bound click requires explicit x/y coordinates')
     target = None
@@ -87,6 +88,7 @@ def double_click(button: str = "left", controller: Controller | None = None, *,
         from computer_mcp.core import screenshot as capture_core
         image_point = (float(x), float(y))
         x, y = capture_core.to_physical(frame_id, x, y)
+        capture_core.assert_frame_target(frame_id, x, y)
     elif (x is None) != (y is None):
         raise ValueError('double_click requires both x and y, or neither')
 
