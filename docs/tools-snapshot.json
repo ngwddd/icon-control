@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-14T06:02:47Z",
+ "generated_at": "2026-11-14T06:27:43Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 96,
@@ -759,7 +759,7 @@
   {
    "name": "execute_verified",
    "description": "一次调用完成：定位 → 执行 → 等到后置条件成立 → 报告是否真的生效",
-   "block_sha1": "580796ac850d476e2eb0ce28776b6804be9055af",
+   "block_sha1": "657674162ecd9cfee7d395441698220c6e92e862",
    "schema": {
     "type": "object",
     "properties": {
@@ -812,6 +812,11 @@
      "settle_ms": {
       "type": "integer",
       "default": 120
+     },
+     "scan_max_nodes": {
+      "type": "integer",
+      "default": 400,
+      "description": "检查\"不存在\"时最多读多少个控件；被截断的扫描不能证明不存在"
      }
     },
     "required": [

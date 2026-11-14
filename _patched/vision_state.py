@@ -218,9 +218,18 @@ def _screen_rect(hwnd: int | None) -> dict:
         if hwnd:
             left, top, right, bottom = win32gui.GetWindowRect(int(hwnd))
             return {"x": left, "y": top, "w": right - left, "h": bottom - top}
-        width = win32api.GetSystemMetrics(0)
-        height = win32api.GetSystemMetrics(1)
-        return {"x": 0, "y": 0, "w": width, "h": height}
+        # The virtual desktop, not the primary monitor: a secondary screen placed
+        # left of or above the primary has negative coordinates, and clipping to
+        # 0..width would reject perfectly valid regions there.
+        left = win32api.GetSystemMetrics(76)      # SM_XVIRTUALSCREEN
+        top = win32api.GetSystemMetrics(77)       # SM_YVIRTUALSCREEN
+        width = win32api.GetSystemMetrics(78)     # SM_CXVIRTUALSCREEN
+        height = win32api.GetSystemMetrics(79)    # SM_CYVIRTUALSCREEN
+        if width <= 0 or height <= 0:             # headless / no monitor
+            width = win32api.GetSystemMetrics(0)
+            height = win32api.GetSystemMetrics(1)
+            left = top = 0
+        return {"x": left, "y": top, "w": width, "h": height}
     except Exception:                                   # noqa: BLE001
         return {"x": 0, "y": 0, "w": 0, "h": 0}
 

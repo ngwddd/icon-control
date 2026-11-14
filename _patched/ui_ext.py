@@ -110,9 +110,17 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix="",
         return
     if stop_at is not None and len(out) >= stop_at:
         return
+    # Enumerate siblings one at a time instead of materialising GetChildren():
+    # with a budget, the remaining siblings of a wide parent must never be
+    # created at all (a 900-item list would otherwise be built to read 50).
     try:
-        children = ctrl.GetChildren()
+        if hasattr(ctrl, "GetFirstChildControl") and hasattr(ctrl, "GetNextSiblingControl"):
+            children = _iter_children(ctrl, budget)
+        else:
+            children = iter(ctrl.GetChildren())
     except Exception:
+        if budget is not None:
+            budget["errors"] = budget.get("errors", 0) + 1
         return
     for index, c in enumerate(children):
         if budget is not None:
@@ -160,10 +168,36 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix="",
                         }
                     )
         except Exception:
+            if budget is not None:
+                budget["errors"] = budget.get("errors", 0) + 1
             continue
         if depth > 0:
             _walk(c, depth - 1, out, max_nodes, only_named, path,
                   want_id=want_id, stop_at=stop_at, accept=accept, budget=budget)
+
+
+def _iter_children(control, budget=None):
+    """Yield children lazily; stop as soon as the visitor's budget is spent.
+
+    ``GetChildren()`` walks every sibling before returning, so a caller that only
+    needs the first fifty of a nine-hundred item list paid for all of them.
+    """
+    try:
+        child = control.GetFirstChildControl()
+    except Exception:                                   # noqa: BLE001
+        if budget is not None:
+            budget["errors"] = budget.get("errors", 0) + 1
+        return
+    while child is not None:
+        if budget is not None and budget.get("left", 0) <= 0:
+            return
+        yield child
+        try:
+            child = child.GetNextSiblingControl()
+        except Exception:                               # noqa: BLE001
+            if budget is not None:
+                budget["errors"] = budget.get("errors", 0) + 1
+            return
 
 
 def _control_obj_at_path(hwnd: int, path: str):
@@ -234,6 +268,12 @@ def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60,
     out: list[dict[str, Any]] = []
     _walk(root, max(0, int(depth)), out, max(1, int(max_nodes)),
           bool(only_named), want_id=bool(with_ids))
+    if not with_ids:
+        # Without the AutomationId a reference cannot be told apart from a
+        # rebuilt control with the same name, type and path: keep the tree for
+        # observation, but say the identity is unverified.
+        for node in out:
+            node["identity"] = False
     snapshot = {}
     try:
         import win32gui
@@ -245,6 +285,7 @@ def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60,
         snapshot = {'snapshot_error': str(exc)}
     return {
         **snapshot,
+        "identity_verified": bool(with_ids),
         "ok": True,
         "hwnd": hwnd,
         "process": proc,
@@ -314,7 +355,7 @@ def ui_find(
 
     safe_index = max(0, int(index))
     limit = max(1, int(max_hits), safe_index + 1)
-    budget = {"left": max(1, int(max_nodes))}
+    budget = {"left": max(1, int(max_nodes)), "errors": 0}
     hits: list[dict[str, Any]] = []
     # The library's own FindFirst wrapper (Control(SubName=...)) polls with a 10 s
     # timeout and stalls even when the control exists, so the walk stays the only
@@ -327,6 +368,9 @@ def ui_find(
     truncated = hit_limit_reached or node_limit_reached
     truncated_reason = ("max_hits" if hit_limit_reached
                         else "max_nodes" if node_limit_reached else None)
+    scan_errors = int(budget.get("errors", 0) or 0)
+    # A complete, error-free scan is what makes found==0 mean "it is not there".
+    scan_complete = (not truncated) and scan_errors == 0
     for node in hits:
         node["cx"] = node["x"] + node["w"] // 2
         node["cy"] = node["y"] + node["h"] // 2
@@ -336,6 +380,8 @@ def ui_find(
         "truncated": truncated,
         "truncated_reason": truncated_reason,
         "visited": visited,
+        "scan_complete": scan_complete,
+        "scan_errors": scan_errors,
         "index": safe_index,
         "target": hits[safe_index] if safe_index < len(hits) else None,
         "candidates": hits[:10],

@@ -1,3 +1,45 @@
+## [1.4.3-rc3] - 2026-11-14
+
+> 修 RC2 复审的 1 条必修 + 3 条建议。工具数仍是 96。
+
+### P1：「确认不存在」不再建立在半截扫描上
+
+RC2 给 `ui_find` 加了访问预算，但 `execute_verified` 的 `lookup_present()` 只看 `found`。
+于是 `found=0, truncated=true`（只读了前 400 个控件）会被当成"目标不存在"，
+`expect={"kind":"absent"}` 可能返回 **`verified_absent`**——而目标明明还在界面上。
+
+现在判定抽成 `_presence_from_scan()`，三态：
+
+| 扫描结果 | 判定 |
+|---|---|
+| `found > 0` | 存在（即使被截断） |
+| `found = 0` 且 `scan_complete=true` | **不存在** |
+| `found = 0` 且被截断 / 读取出错 / 结果异常 | **未知** → 不返回 `verified_absent` |
+
+`ui_find` 新增 `scan_complete` 与 `scan_errors`：只有"跑完且没有读失败的子树"才算完整扫描。
+
+### P2：宽父节点不再提前枚举全部兄弟
+
+`_walk()` 以前先 `GetChildren()`（900 个子项会全部建出来）再取前 50 个。现在改为
+`GetFirstChildControl()` / `GetNextSiblingControl()` 逐个子节点读取，预算耗尽立即停止。
+`visited` 现在真的接近底层读取量，而不是"读了 900 个只算了 50 个"。
+
+### P2：多显示器不再被当成"窗口外"
+
+`_screen_rect(None)` 改用虚拟桌面边界（`SM_XVIRTUALSCREEN` 等）而不是主屏宽高。
+副屏在主屏左侧（负坐标）时，合法区域不会再被误判成"与窗口没有交集"。
+
+### P2：`with_ids=false` 的引用标为"身份未验证"
+
+`ui_tree(with_ids=false)` 返回的节点带 `identity: false`，`snapshots.attach()` 因此
+把它们当作**观察级**引用（不做结构性身份校验），窗口返回
+`identity_verified: false`。避免"少了 id 的引用"在重排后被错误复用。
+
+### 验证
+
+- 回归：**928 项 / 0 失败 / 0 错误 / 3 跳过**（rc2 是 916）
+- 新增 12 项：存在性三态 6 项、懒枚举 3 项、虚拟桌面 1 项、引用身份 2 项
+
 ## [1.4.3-rc2] - 2026-11-14
 
 > 修 RC1 审计的 5 条。全部是"改动范围内的缺陷"，不加新工具。

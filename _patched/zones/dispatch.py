@@ -116,6 +116,27 @@ def _ensure_focus(hwnd, path, mouse) -> dict | None:
                 focus_error=outcome.get("error"))
 
 
+def _presence_from_scan(found: dict) -> bool | None:
+    """Does a ui_find result prove the target is there — or prove it is not?
+
+    ``ui_find`` has a visit budget now: ``found=0, truncated=true`` means "not among
+    the controls I read", not "not on screen". Only a complete, error-free scan may
+    answer False; anything less is unknown, and callers must not turn unknown into
+    verified_absent.
+    """
+    if not isinstance(found, dict) or not found.get("ok"):
+        return None
+    if int(found.get("found") or 0) > 0:
+        return True
+    complete = found.get("scan_complete")
+    if complete is None:
+        # Older result shape: fall back to the truncation / error flags.
+        complete = (not found.get("truncated")
+                    and not int(found.get("scan_errors") or 0))
+    # No hits and the scan finished: that is proof of absence, not presence.
+    return False if complete else None
+
+
 def dispatch(name: str, arguments: dict, *, computer_state, mouse_controller,
              keyboard_controller) -> dict:
     from computer_mcp.execution import operation
@@ -983,17 +1004,16 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         wants_target = bool(arguments.get("ref") or arguments.get("query"))
 
         def lookup_present() -> bool | None:
-            """True/False from a completed scan; None when UIA itself failed."""
+            """True/False only from a complete scan; None when nothing is proven."""
             name = arguments.get("query")
             if not name:
                 return None
             try:
-                found = _ui.ui_find(name=str(name), hwnd=hwnd, index=0)
+                found = _ui.ui_find(name=str(name), hwnd=hwnd, index=0,
+                                    max_nodes=int(arguments.get("scan_max_nodes", 400)))
             except Exception:                           # noqa: BLE001
                 return None
-            if not found.get("ok"):
-                return None                             # an error proves nothing
-            return int(found.get("found") or 0) > 0
+            return _presence_from_scan(found)
 
         target, hwnd, failure = _resolve_element(arguments, key="query")
         path = target.get("path")

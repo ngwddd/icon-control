@@ -93,6 +93,8 @@ SPECS: list[ToolSpec] = [
                                       'text': {'type': 'string'}}},
             'timeout_ms': {'type': 'integer', 'default': 3000},
             'settle_ms': {'type': 'integer', 'default': 120},
+            'scan_max_nodes': {'type': 'integer', 'default': 400,
+                               'description': '检查"不存在"时最多读多少个控件；被截断的扫描不能证明不存在'},
         }, 'required': ['action']},
     ),
 

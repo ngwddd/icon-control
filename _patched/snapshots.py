@@ -68,7 +68,13 @@ def layout_digest(nodes) -> str:
 def attach(hwnd, candidates):
     identity = window_identity(hwnd)
     nodes = copy.deepcopy(candidates[:1000])
-    resolvable = bool(nodes) and all(node.get('path') for node in nodes)
+    # A node explicitly marked identity=False (ui_tree(with_ids=false)) may have a
+    # path, but nothing distinguishes it from a rebuilt control with the same name,
+    # type and path. Such references must not pass a later identity check, so they
+    # are treated as observation-only: visual TTL, no structural re-resolution.
+    resolvable = (bool(nodes)
+                  and all(node.get('path') for node in nodes)
+                  and not any(node.get('identity') is False for node in nodes))
     # A mixed result (UIA + OCR) may hold both kinds; each reference is judged
     # on its own node below, not on the batch.
     # Only ask for pixels when there is something to reference and it cannot be
