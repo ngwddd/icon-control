@@ -67,7 +67,15 @@ def _try_ocr(query: str, region, hwnd, limit: int) -> list:
     out = []
     res = ocr_ext.find_text(query=query, region=region, hwnd=hwnd)
     for c in (res.get("hits") or res.get("matches") or [])[:limit]:
-        out.append(_norm_cand(c, "ocr", c.get("ratio", 1.0)))
+        ratio = c.get("ratio")
+        if ratio is None:
+            # A missing ratio is not a perfect match: use a neutral score and say
+            # so, instead of letting the candidate outrank a real UIA hit.
+            candidate = _norm_cand(c, "ocr", 0.5)
+            candidate["ratio_missing"] = True
+            out.append(candidate)
+        else:
+            out.append(_norm_cand(c, "ocr", ratio))
     return out
 
 

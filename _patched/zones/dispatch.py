@@ -639,6 +639,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             depth=int(arguments.get("depth", 3)),
             max_nodes=int(arguments.get("max_nodes", 60)),
             only_named=bool(arguments.get("only_named", True)),
+            with_ids=bool(arguments.get("with_ids", True)),
         )
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "ui_find":
@@ -648,6 +649,10 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             depth=int(arguments.get("depth", 8)),
             exact=bool(arguments.get("exact", False)),
             index=int(arguments.get("index", 0)),
+            control_type=arguments.get("control_type"),
+            automation_id=arguments.get("automation_id"),
+            enabled=arguments.get("enabled"),
+            max_hits=int(arguments.get("max_hits", 10)),
         )
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "ui_click":

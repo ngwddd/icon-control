@@ -84,7 +84,7 @@
     "name": "capture_daemon",
     "zone": "Z1",
     "effects": [
-      "file_write"
+      "screen_read"
     ],
     "requires_authority": true,
     "read_actions": [
@@ -289,7 +289,57 @@
     "parameter_effects": []
   },
   {
+    "name": "element_action",
+    "zone": "Z3",
+    "effects": [
+      "input",
+      "text_entry"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
+    "name": "element_state",
+    "zone": "Z2",
+    "effects": [
+      "screen_read"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
+    "name": "execute_verified",
+    "zone": "Z4",
+    "effects": [
+      "input",
+      "text_entry"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
     "name": "find_element",
+    "zone": "Z2",
+    "effects": [
+      "screen_read"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
+    "name": "find_elements_ranked",
     "zone": "Z2",
     "effects": [
       "screen_read"
@@ -495,10 +545,7 @@
     "zone": "Z4",
     "effects": [
       "compose",
-      "input",
-      "clipboard_write",
-      "process",
-      "file_write"
+      "input"
     ],
     "requires_authority": true,
     "read_actions": [],
@@ -682,8 +729,7 @@
     "effects": [
       "compose",
       "input",
-      "clipboard_write",
-      "process"
+      "screen_read"
     ],
     "requires_authority": true,
     "read_actions": [],
@@ -743,6 +789,31 @@
     "name": "screenshot_window",
     "zone": "Z1",
     "effects": [
+      "screen_read"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
+    "name": "scroll",
+    "zone": "Z3",
+    "effects": [
+      "input"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
+    "name": "scroll_into_view",
+    "zone": "Z3",
+    "effects": [
+      "input",
       "screen_read"
     ],
     "requires_authority": true,
@@ -915,9 +986,7 @@
     "effects": [
       "compose",
       "input",
-      "clipboard_write",
-      "window",
-      "file_write"
+      "screen_read"
     ],
     "requires_authority": true,
     "read_actions": [],
@@ -942,8 +1011,20 @@
     "zone": "Z3",
     "effects": [
       "input",
+      "text_entry"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
+    "name": "type_verified",
+    "zone": "Z3",
+    "effects": [
       "text_entry",
-      "clipboard_write"
+      "input"
     ],
     "requires_authority": true,
     "read_actions": [],
@@ -1016,6 +1097,8 @@
     "name": "verify_flow",
     "zone": "Z4",
     "effects": [
+      "screen_read",
+      "file_read",
       "file_write"
     ],
     "requires_authority": true,

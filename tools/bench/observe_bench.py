@@ -184,7 +184,12 @@ def main() -> int:
 
     hwnd = args.hwnd
     if hwnd is None:
-        picked = _auto_hwnd()
+        from common import ensure_windows
+
+        prepared = ensure_windows()
+        if prepared.get("explorer"):
+            hwnd = prepared["explorer"]
+        picked = {"hwnd": hwnd, "title": "", "count": 0} if hwnd else _auto_hwnd()
         hwnd = picked["hwnd"]
         print(f"auto-picked hwnd={hwnd} title={picked['title']!r} nodes~{picked['count']}")
     if not hwnd:

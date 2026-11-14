@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-08T14:01:07Z",
+ "generated_at": "2026-11-14T05:36:26Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 96,
@@ -2397,8 +2397,8 @@
   },
   {
    "name": "ui_find",
-   "description": "Find controls by accessible name (substring, or exact=true). Returns candidates with their centre coordinates. Cheaper and more reliable than reading a screenshot.",
-   "block_sha1": "669169c323a64aeacbde161d23f43f8d6f46cbf8",
+   "description": "Find controls by accessible name (substring, or exact=true), optionally narrowed by control_type / automation_id / enabled. Matching happens during the walk and stops after max_hits, so a lookup usually reads far less of the tree than ui_tree does; truncated=true means found is a lower bound. Returns candidates with their centre coordinates.",
+   "block_sha1": "11e4c61fd267c0c96d4f74b7d5592b9f03c2725b",
    "schema": {
     "type": "object",
     "properties": {
@@ -2419,6 +2419,23 @@
      "index": {
       "type": "integer",
       "default": 0
+     },
+     "control_type": {
+      "type": "string",
+      "description": "Narrow by control type, e.g. ButtonControl"
+     },
+     "automation_id": {
+      "type": "string",
+      "description": "Narrow by automation id (substring)"
+     },
+     "enabled": {
+      "type": "boolean",
+      "description": "Only enabled (true) or disabled (false) controls"
+     },
+     "max_hits": {
+      "type": "integer",
+      "default": 10,
+      "description": "Stop after this many matches; lower is faster"
      }
     },
     "required": [
@@ -2486,8 +2503,8 @@
   },
   {
    "name": "ui_tree",
-   "description": "Compact UI-Automation control tree for a window (or the focused one). Text only, no screenshot: control type + name + rect. Use it to find what is clickable before clicking.",
-   "block_sha1": "ec9c8d331e6d8b606ba67502c15138ccd58f8b44",
+   "description": "Compact UI-Automation control tree for a window (or the focused one). Text only, no screenshot: control type + name + rect. Use it to find what is clickable before clicking. with_ids=false skips the AutomationId read (one cross-process call per control) when you only need layout.",
+   "block_sha1": "96b7c6986137cdb8a20e21173db85b9bd671f92a",
    "schema": {
     "type": "object",
     "properties": {
@@ -2506,6 +2523,11 @@
      "only_named": {
       "type": "boolean",
       "default": true
+     },
+     "with_ids": {
+      "type": "boolean",
+      "default": true,
+      "description": "Read AutomationId for every node; false is faster"
      }
     }
    }

@@ -186,6 +186,10 @@ def main() -> int:
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
+    from common import ensure_windows
+
+    prepared = ensure_windows()
+    print(f"targets: {prepared}")
     instrument()
     results = []
     for name, function in TASKS:
@@ -228,6 +232,7 @@ def main() -> int:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
     import win32api
     report = {"label": args.label, "version": computer_mcp.__version__,
+              "targets": prepared,
               "screen": [win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)],
               "package": computer_mcp.__file__, "tasks": results,
               "when": time.strftime("%Y-%m-%dT%H:%M:%S")}

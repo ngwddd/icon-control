@@ -4,25 +4,6 @@
 每项 effects 显式声明；read_actions/read_when_absent 的参数规则见 tool-permissions.json。
 ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝。
 
-## 作用域（12 项）
-
-`screen_read` `input` `input_observe` `text_entry` `window_close`
-`clipboard_read` `clipboard_write` `file_read` `file_write` `file_delete` `config_write` `process`
-
-## 宏动作的剪贴板权限（v1.3.1）
-
-宏动作不经过工具级 effects，按动作单独检查（`_patched/macro_ext.py::_MACRO_SCOPES`）：
-
-| 宏动作 | 需要的作用域 | 说明 |
-|---|---|---|
-| `clipboard_get` / `assert_clipboard` | `clipboard_read` | 只返回长度与是否匹配，**日志与错误不回显剪贴板内容** |
-| `clipboard_set` | `clipboard_write` | 覆盖系统剪贴板，属于全局副作用 |
-| `paste`（带 `text`） | `text_entry` + `clipboard_write` | 内部临时写入；粘贴完成后若剪贴板未被其他程序改写，会恢复原内容 |
-| `paste`（不带 `text`） | `text_entry` | 只发送 Ctrl+V，不写入剪贴板 |
-
-一键授权的常用模式（`quick_grant.COMMON`）是 `screen_read` / `input` / `text_entry`，
-**不含**剪贴板读写；需要读写剪贴板的用户必须在控制中心单独勾选。
-
 | 工具 | 分区 | 声明副作用 | 需要用户授权 |
 |---|---|---|---|
 | act_until | Z4 | compose | 是 |
@@ -31,7 +12,7 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | button_down | Z3 | input | 是 |
 | button_up | Z3 | input | 是 |
 | capture_config | Z1 | config_write | 是 |
-| capture_daemon | Z1 | file_write | 是 |
+| capture_daemon | Z1 | screen_read | 是 |
 | capture_template | Z5 | file_write | 是 |
 | click | Z3 | input | 是 |
 | click_template | Z3 | input | 是 |
@@ -48,7 +29,11 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | diff_baseline | Z2 | screen_read | 是 |
 | double_click | Z3 | input | 是 |
 | drag | Z3 | input | 是 |
+| element_action | Z3 | input, text_entry | 是 |
+| element_state | Z2 | screen_read | 是 |
+| execute_verified | Z4 | input, text_entry | 是 |
 | find_element | Z2 | screen_read | 是 |
+| find_elements_ranked | Z2 | screen_read | 是 |
 | find_text | Z2 | screen_read | 是 |
 | frame_diff | Z2 | screen_read | 是 |
 | frame_mark | Z2 | config_write | 是 |
@@ -64,7 +49,7 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | list_virtual_desktops | Z2 | screen_read | 是 |
 | list_windows | Z2 | screen_read | 是 |
 | macro_list | Z5 | observe | 否 |
-| macro_run | Z4 | compose, input, clipboard_write, process, file_write | 是 |
+| macro_run | Z4 | compose, input | 是 |
 | macro_save | Z5 | file_write | 是 |
 | match_template | Z2 | screen_read | 是 |
 | maximize_window | Z3 | window | 是 |
@@ -79,12 +64,14 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | record | Z1 | screen_read, file_write, file_delete | 是 |
 | resize_window | Z3 | window | 是 |
 | restore_window | Z3 | window | 是 |
-| run_script | Z4 | compose, input, clipboard_write, process | 是 |
+| run_script | Z4 | compose, input, screen_read | 是 |
 | sample_stable | Z2 | screen_read | 是 |
 | screen_layout | Z2 | screen_read | 是 |
 | screen_state | Z2 | screen_read | 是 |
 | screenshot | Z1 | screen_read | 是 |
 | screenshot_window | Z1 | screen_read | 是 |
+| scroll | Z3 | input | 是 |
+| scroll_into_view | Z3 | input, screen_read | 是 |
 | sense | Z2 | screen_read | 是 |
 | servo | Z4 | compose | 是 |
 | set_baseline | Z5 | file_write | 是 |
@@ -98,15 +85,16 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | switch_to_window | Z3 | window | 是 |
 | switch_virtual_desktop | Z3 | window | 是 |
 | trace | Z4 | screen_read | 是 |
-| track | Z1 | compose, input, clipboard_write, window, file_write | 是 |
+| track | Z1 | compose, input, screen_read | 是 |
 | triple_click | Z3 | input | 是 |
-| type | Z3 | input, text_entry, clipboard_write | 是 |
+| type | Z3 | input, text_entry | 是 |
+| type_verified | Z3 | text_entry, input | 是 |
 | ui_click | Z3 | input | 是 |
 | ui_find | Z2 | screen_read | 是 |
 | ui_invoke | Z3 | input | 是 |
 | ui_set_text | Z3 | input, text_entry | 是 |
 | ui_tree | Z2 | screen_read | 是 |
-| verify_flow | Z4 | file_write | 是 |
+| verify_flow | Z4 | screen_read, file_read, file_write | 是 |
 | vision_list | Z5 | file_delete, config_write | 是 |
 | wait_baseline_change | Z2 | screen_read | 是 |
 | wait_for | Z2 | screen_read | 是 |

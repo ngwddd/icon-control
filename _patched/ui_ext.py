@@ -88,15 +88,23 @@ def _element_id(ctype: str, name: str, pos: tuple) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
 
 
-def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix=""):
-    if len(out) >= max_nodes:
+def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix="",
+          *, want_id=True, stop_at=None, accept=None):
+    """Collect controls depth-first.
+
+    ``accept`` filters during the walk, so a caller looking for one control does
+    not pay for a full tree. ``stop_at`` stops as soon as that many controls were
+    collected. ``want_id=False`` skips the AutomationId read when the caller does
+    not need identity (it is one cross-process call per control).
+    """
+    if len(out) >= max_nodes or (stop_at is not None and len(out) >= stop_at):
         return
     try:
         children = ctrl.GetChildren()
     except Exception:
         return
     for index, c in enumerate(children):
-        if len(out) >= max_nodes:
+        if len(out) >= max_nodes or (stop_at is not None and len(out) >= stop_at):
             return
         # The child-index chain is what element references re-resolve against:
         # it survives a moving window, unlike the geometry-based element_id.
@@ -108,30 +116,35 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix=""):
             if not only_named or name:
                 pos = (int(rect.left), int(rect.top),
                        int(rect.width()), int(rect.height()))
-                automation_id = ""
-                try:
-                    automation_id = (c.AutomationId or "").strip()
-                except Exception:                       # noqa: BLE001
+                if accept is not None and not accept(c, ctype, name, pos):
+                    pass
+                else:
                     automation_id = ""
-                out.append(
-                    {
-                        "type": ctype,
-                        "name": name,
-                        "automation_id": automation_id,
-                        "x": pos[0],
-                        "y": pos[1],
-                        "w": pos[2],
-                        "h": pos[3],
-                        "path": path,
-                        # P0-3：稳定元素 id（类型+名字+几何），后续可按 id 点击，
-                        # 避免同名控件点错（"确定" 在对话框里到处都是）
-                        "element_id": _element_id(ctype, name, pos),
-                    }
-                )
+                    if want_id:
+                        try:
+                            automation_id = (c.AutomationId or "").strip()
+                        except Exception:               # noqa: BLE001
+                            automation_id = ""
+                    out.append(
+                        {
+                            "type": ctype,
+                            "name": name,
+                            "automation_id": automation_id,
+                            "x": pos[0],
+                            "y": pos[1],
+                            "w": pos[2],
+                            "h": pos[3],
+                            "path": path,
+                            # P0-3：稳定元素 id（类型+名字+几何），后续可按 id 点击，
+                            # 避免同名控件点错（"确定" 在对话框里到处都是）
+                            "element_id": _element_id(ctype, name, pos),
+                        }
+                    )
         except Exception:
             continue
         if depth > 0:
-            _walk(c, depth - 1, out, max_nodes, only_named, path)
+            _walk(c, depth - 1, out, max_nodes, only_named, path,
+                  want_id=want_id, stop_at=stop_at, accept=accept)
 
 
 def _control_obj_at_path(hwnd: int, path: str):
@@ -184,7 +197,8 @@ def control_at_path(hwnd: int, path: str) -> dict[str, Any] | None:
     }
 
 
-def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60, only_named: bool = True) -> dict[str, Any]:
+def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60,
+            only_named: bool = True, with_ids: bool = True) -> dict[str, Any]:
     """Compact control tree of a window (or the foreground window). No screenshot."""
     if not _UIA_OK:
         return {"error": "uiautomation not installed in this venv"}
@@ -199,7 +213,8 @@ def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60, only_n
     if not proc:
         proc = _proc_name(hwnd)
     out: list[dict[str, Any]] = []
-    _walk(root, max(0, int(depth)), out, max(1, int(max_nodes)), bool(only_named))
+    _walk(root, max(0, int(depth)), out, max(1, int(max_nodes)),
+          bool(only_named), want_id=bool(with_ids))
     snapshot = {}
     try:
         import win32gui
@@ -228,28 +243,66 @@ def ui_find(
     max_nodes: int = 400,
     exact: bool = False,
     index: int = 0,
+    *,
+    control_type: str | None = None,
+    automation_id: str | None = None,
+    enabled: bool | None = None,
+    max_hits: int = 10,
 ) -> dict[str, Any]:
-    """Find controls whose Name matches; returns candidates with centre points."""
+    """Find controls by name, optionally narrowed by type, id or enabled state.
+
+    The match happens **during** the walk and stops after ``max_hits`` hits, so a
+    lookup that used to read the whole tree now reads only what it needs. When it
+    stops early the result carries ``truncated: true`` — ``found`` is then a lower
+    bound, not a total.
+    """
     if not _UIA_OK:
         return {"error": "uiautomation not installed in this venv"}
     t0 = time.perf_counter()
     root = _control_from(hwnd)
     if root is None:
         return {"error": "could not resolve window", "hwnd": hwnd}
-    out: list[dict[str, Any]] = []
-    _walk(root, max(0, int(depth)), out, max_nodes, only_named=True)
     needle = name.casefold()
-    hits = []
-    for node in out:
-        n = node["name"].casefold()
-        if (n == needle) if exact else (needle in n):
-            node = dict(node)
-            node["cx"] = node["x"] + node["w"] // 2
-            node["cy"] = node["y"] + node["h"] // 2
-            hits.append(node)
+    type_needle = (control_type or "").casefold()
+    id_needle = (automation_id or "").casefold()
+
+    def accept(control, ctype, cname, pos):        # noqa: ARG001 - pos unused
+        folded = cname.casefold()
+        if (folded == needle) if exact else (needle in folded):
+            pass
+        else:
+            return False
+        if type_needle and type_needle not in ctype.casefold():
+            return False
+        if id_needle:
+            try:
+                if id_needle not in (control.AutomationId or "").casefold():
+                    return False
+            except Exception:                       # noqa: BLE001
+                return False
+        if enabled is not None:
+            try:
+                if bool(control.IsEnabled) != bool(enabled):
+                    return False
+            except Exception:                       # noqa: BLE001
+                return False
+        return True
+
+    limit = max(1, int(max_hits))
+    hits: list[dict[str, Any]] = []
+    # The library's own FindFirst wrapper (Control(SubName=...)) polls with a 10 s
+    # timeout and stalls even when the control exists, so the walk stays the only
+    # path here. Measured: 10.0 s for a miss, 10.0 s for a hit at depth 16.
+    _walk(root, max(0, int(depth)), hits, max_nodes, only_named=True,
+          want_id=bool(id_needle), stop_at=limit, accept=accept)
+    truncated = len(hits) >= limit
+    for node in hits:
+        node["cx"] = node["x"] + node["w"] // 2
+        node["cy"] = node["y"] + node["h"] // 2
     return {
         "ok": True,
         "found": len(hits),
+        "truncated": truncated,
         "index": index,
         "target": hits[index] if index < len(hits) else None,
         "candidates": hits[:10],
