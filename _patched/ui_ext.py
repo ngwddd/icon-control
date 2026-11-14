@@ -174,6 +174,14 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix="",
         if depth > 0:
             _walk(c, depth - 1, out, max_nodes, only_named, path,
                   want_id=want_id, stop_at=stop_at, accept=accept, budget=budget)
+        elif budget is not None:
+            # The frontier was not expanded: if it has children, controls below it
+            # were never looked at, so the scan cannot prove a target is absent.
+            try:
+                if c.GetFirstChildControl() is not None:
+                    budget["depth_cut"] = True
+            except Exception:                           # noqa: BLE001
+                budget["errors"] = budget.get("errors", 0) + 1
 
 
 def _iter_children(control, budget=None):
@@ -268,12 +276,6 @@ def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60,
     out: list[dict[str, Any]] = []
     _walk(root, max(0, int(depth)), out, max(1, int(max_nodes)),
           bool(only_named), want_id=bool(with_ids))
-    if not with_ids:
-        # Without the AutomationId a reference cannot be told apart from a
-        # rebuilt control with the same name, type and path: keep the tree for
-        # observation, but say the identity is unverified.
-        for node in out:
-            node["identity"] = False
     snapshot = {}
     try:
         import win32gui
@@ -285,7 +287,6 @@ def ui_tree(hwnd: int | None = None, depth: int = 3, max_nodes: int = 60,
         snapshot = {'snapshot_error': str(exc)}
     return {
         **snapshot,
-        "identity_verified": bool(with_ids),
         "ok": True,
         "hwnd": hwnd,
         "process": proc,
@@ -369,8 +370,11 @@ def ui_find(
     truncated_reason = ("max_hits" if hit_limit_reached
                         else "max_nodes" if node_limit_reached else None)
     scan_errors = int(budget.get("errors", 0) or 0)
-    # A complete, error-free scan is what makes found==0 mean "it is not there".
-    scan_complete = (not truncated) and scan_errors == 0
+    depth_cut = bool(budget.get("depth_cut", False))
+    # "Complete" means the whole configured area was read: no budget stop, no read
+    # failure, and no unexplored frontier. A depth-limited search that stopped at
+    # nodes which still have children proves nothing about what is underneath.
+    scan_complete = (not truncated) and scan_errors == 0 and not depth_cut
     for node in hits:
         node["cx"] = node["x"] + node["w"] // 2
         node["cy"] = node["y"] + node["h"] // 2
@@ -382,6 +386,7 @@ def ui_find(
         "visited": visited,
         "scan_complete": scan_complete,
         "scan_errors": scan_errors,
+        "depth_truncated": depth_cut,
         "index": safe_index,
         "target": hits[safe_index] if safe_index < len(hits) else None,
         "candidates": hits[:10],

@@ -38,20 +38,22 @@ def instrument():
     original_tree = ui_ext.ui_tree
     original_find = ui_ext.ui_find
     original_ocr = ocr_ext.find_text
+    original_read = getattr(ocr_ext, "ocr_read", None)
     original_walk = ui_ext._walk
 
     def ui_tree(*args, **kwargs):
         _bump("ui_tree")
         result = original_tree(*args, **kwargs)
         if isinstance(result, dict):
-            COUNTERS["nodes"] += len(result.get("elements") or [])
+            COUNTERS["nodes"] += len(result.get("nodes") or [])
         return result
 
     def ui_find(*args, **kwargs):
         _bump("ui_find")
         result = original_find(*args, **kwargs)
         if isinstance(result, dict):
-            COUNTERS["nodes"] += len(result.get("elements") or [])
+            # visited is what the walk actually read; candidates is only the hits.
+            COUNTERS["nodes"] += int(result.get("visited") or len(result.get("candidates") or []))
         return result
 
     def find_text(*args, **kwargs):
@@ -67,6 +69,13 @@ def instrument():
     ui_ext.ui_find = ui_find
     ui_ext._walk = walk
     ocr_ext.find_text = find_text
+    if original_read is not None:
+        def ocr_read(*args, **kwargs):
+            COUNTERS["ocr"] += 1
+            _bump("ocr_read")
+            return original_read(*args, **kwargs)
+
+        ocr_ext.ocr_read = ocr_read
     ui_ext._bench_wrapped = True
 
 

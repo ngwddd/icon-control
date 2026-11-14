@@ -1,3 +1,39 @@
+## [1.4.3] - 2026-11-14
+
+> 正式版。96 个工具不变。这一版做的是"观察更省、判定更准"，不是加功能。
+
+### 新增
+
+- **`ui_find` 边走边匹配**：命中够数就停；`control_type` / `automation_id` / `enabled` 条件；
+  `truncated` + `truncated_reason` + `visited` 说明结果边界。
+- **`ui_tree(with_ids=false)`**：跳过 AutomationId 读取（每个控件一次跨进程调用）。
+- **`match_template(previous=…, radius=…)`**：在上次位置附近重新定位，返回 `moved_by`；
+  分数不足、双峰歧义、搜索框与窗口无交集时**拒绝给坐标**。
+- **`execute_verified` 三态判定**：命中=存在；跑完且无读取错误=不存在；被截断/有错误/深度未展开=未知。
+
+### 修掉的缺陷
+
+- `match_template(hwnd=…)` 返回窗口相对坐标（文档承诺屏幕坐标）。
+- OCR 候选缺 `ratio` 时按满分 1.0 计。
+- `ui_find` 未命中时 `max_nodes` 失效（会走完整棵树）。
+- `index ≥ 10` 返回 `target=None`。
+- `search_region` 越界导致坐标偏移、甚至虚假命中。
+- `found=false` 仍返回可点击坐标。
+- **双击与拖拽的最终窗口校验没有真正生效**（`expected_hwnd` 被进程身份检查包住）。
+- **深度未展开的扫描会被当成"已证明不存在"**。
+- 构建 provenance 复用旧文件，导致 Wheel 里 `source_dirty=true` 与 CI 记录不一致。
+
+### 有意不做（口述要求）
+
+身份验证类限制不做：`with_ids=false` 保持纯观察加速，不加"引用不可执行"的限制，
+也不因此额外抓图。需要长期引用时，用带 AutomationId 的查询重新取目标。
+
+### 验证
+
+- 回归：**934 项 / 0 失败 / 0 错误 / 3 跳过**
+- 基准：`tools/bench/`（观测微基准、固定任务、A/B 交替）
+- 真机：资源管理器查询/预算/越界、记事本控件、Electron 自绘窗口 OCR、模板跟踪位移
+
 ## [1.4.3-rc3] - 2026-11-14
 
 > 修 RC2 复审的 1 条必修 + 3 条建议。工具数仍是 96。

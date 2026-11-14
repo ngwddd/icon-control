@@ -194,15 +194,21 @@ class MouseController(_Held):
             from computer_mcp.capabilities import require_target
             require_target(point=self.raw.position)
             _retain(self, 'button_down', point=self.raw.position)
-            if expected_target is not None:
+            # A window identity is checked on its own, not only as a side effect of
+            # a process-identity check: double_click and drag know the hwnd of the
+            # captured window but not its process record, and they must still be
+            # refused when a different window moved under the pointer.
+            if expected_target is not None or expected_hwnd is not None:
                 import win32gui, win32process
                 from computer_mcp import capabilities, permission
                 position = tuple(self.raw.position)
                 hwnd = win32gui.WindowFromPoint(position)
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                if position != expected_point or capabilities.process_record(pid) != expected_target:
-                    raise permission.PermissionDenied('Point-click target changed before button-down')
-                if expected_hwnd is not None and win32gui.GetAncestor(hwnd, 2) != expected_hwnd:
+                if expected_target is not None:
+                    if position != expected_point or capabilities.process_record(pid) != expected_target:
+                        raise permission.PermissionDenied('Point-click target changed before button-down')
+                if (expected_hwnd is not None
+                        and int(win32gui.GetAncestor(hwnd, 2) or hwnd) != int(expected_hwnd)):
                     raise permission.PermissionDenied('Point-click top-level window changed before button-down')
                 capabilities.require_target(point=position)
             self.held.add(button)
@@ -220,18 +226,23 @@ class MouseController(_Held):
         require_target(point=point)
         self.raw.position = point
 
-    def scroll(self, dx, dy, *, expected_target=None, expected_point=None):
+    def scroll(self, dx, dy, *, expected_target=None, expected_point=None,
+               expected_hwnd=None):
         check('scroll')
         from computer_mcp.capabilities import require_target
         require_target(point=self.raw.position)
-        if expected_target is not None:
+        if expected_target is not None or expected_hwnd is not None:
             import win32gui, win32process
             from computer_mcp import capabilities, permission
             point = tuple(self.raw.position)
             hwnd = win32gui.WindowFromPoint(point)
             _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            if point != expected_point or capabilities.process_record(pid) != expected_target:
-                raise permission.PermissionDenied('Scroll target changed before injection')
+            if expected_target is not None:
+                if point != expected_point or capabilities.process_record(pid) != expected_target:
+                    raise permission.PermissionDenied('Scroll target changed before injection')
+            if (expected_hwnd is not None
+                    and int(win32gui.GetAncestor(hwnd, 2) or hwnd) != int(expected_hwnd)):
+                raise permission.PermissionDenied('Scroll top-level window changed before injection')
             require_target(point=point)
         self.raw.scroll(dx, dy)
 

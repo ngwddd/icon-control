@@ -138,16 +138,18 @@ class VirtualDesktopTests(unittest.TestCase):
 
 
 class IdentityTests(unittest.TestCase):
-    def test_a_tree_without_ids_is_observation_only(self):
+    """with_ids=false stays a pure observation shortcut (no extra restriction)."""
+
+    def test_a_tree_with_paths_stays_resolvable_even_without_ids(self):
         nodes = [{"path": "0/1", "name": "Button", "type": "ButtonControl",
-                  "x": 1, "y": 1, "w": 5, "h": 5, "identity": False}]
+                  "x": 1, "y": 1, "w": 5, "h": 5}]
         with patch.object(S, "window_identity", return_value=(1, 2, 3.0, "p", (0, 0, 100, 100), 96)), \
                 patch.object(S, "screen_fingerprint", return_value=""):
             attached = S.attach(1, nodes)
-        self.assertFalse(attached["resolvable"],
-                         "references without an id must not pass a structural identity check")
+        self.assertTrue(attached["resolvable"],
+                        "dropping the id read must not turn every reference into a visual one")
 
-    def test_a_tree_with_ids_stays_resolvable(self):
+    def test_an_id_tree_is_resolvable(self):
         nodes = [{"path": "0/1", "name": "Button", "type": "ButtonControl",
                   "x": 1, "y": 1, "w": 5, "h": 5, "automation_id": "okBtn"}]
         with patch.object(S, "window_identity", return_value=(1, 2, 3.0, "p", (0, 0, 100, 100), 96)), \

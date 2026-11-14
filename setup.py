@@ -10,10 +10,13 @@ ROOT = Path(__file__).resolve().parent
 
 
 def provenance():
-    packaged = ROOT / '_patched' / '_build_info.json'
-    if packaged.is_file():
-        return json.loads(packaged.read_text(encoding='utf-8'))
+    # Always derive from the working tree when git is available: reusing a stale
+    # _patched/_build_info.json let an old "dirty" flag travel into release builds
+    # whose committed state was clean.
     if not (ROOT / '.git').exists():
+        packaged = ROOT / '_patched' / '_build_info.json'
+        if packaged.is_file():
+            return json.loads(packaged.read_text(encoding='utf-8'))
         return dict(source_commit=None, source_dirty=None)
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=ROOT, text=True).strip())
