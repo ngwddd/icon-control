@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-14T05:36:26Z",
+ "generated_at": "2026-11-14T05:40:03Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 96,
@@ -1289,8 +1289,8 @@
   },
   {
    "name": "match_template",
-   "description": "Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. No OCR, no UIA - works on games, Electron and CEF windows.",
-   "block_sha1": "d12f25d170f6fe982a147dc1598a2998b62bd6e5",
+   "description": "Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. Pass previous=[x,y] to track a target near its last known centre (search limited to radius, returns moved_by) - cheaper than re-searching the whole window. found is false when the score is below confidence OR when a second similar match exists, so a template that fits two places never yields a clickable coordinate. No OCR, no UIA - works on games, Electron and CEF windows.",
+   "block_sha1": "0a129ef2c1c4edb6c04c95522a980c12f4f51dec",
    "schema": {
     "type": "object",
     "properties": {
@@ -1315,6 +1315,22 @@
      },
      "h": {
       "type": "integer"
+     },
+     "previous": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      },
+      "description": "Last known centre [x,y] to track around"
+     },
+     "radius": {
+      "type": "integer",
+      "default": 160,
+      "description": "Search box half-size around previous"
+     },
+     "search_region": {
+      "type": "object",
+      "description": "Explicit search rect {x,y,w,h}, overrides previous"
      }
     },
     "required": [

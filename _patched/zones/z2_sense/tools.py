@@ -77,9 +77,9 @@ SPECS: list[ToolSpec] = [
         name='match_template',
         effects=('screen_read',),
         zone='Z2',
-        description='Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. No OCR, no UIA - works on games, Electron and CEF windows.',
+        description='Find a stored template on screen (grayscale template matching). Returns found/score and the ABSOLUTE screen x,y,w,h and center. Pass previous=[x,y] to track a target near its last known centre (search limited to radius, returns moved_by) - cheaper than re-searching the whole window. found is false when the score is below confidence OR when a second similar match exists, so a template that fits two places never yields a clickable coordinate. No OCR, no UIA - works on games, Electron and CEF windows.',
         read_only=True,
-        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'confidence': {'type': 'number', 'default': 0.8}, 'hwnd': {'type': 'integer'}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}}, 'required': ['name']},
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'confidence': {'type': 'number', 'default': 0.8}, 'hwnd': {'type': 'integer'}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'previous': {'type': 'array', 'items': {'type': 'integer'}, 'description': 'Last known centre [x,y] to track around'}, 'radius': {'type': 'integer', 'default': 160, 'description': 'Search box half-size around previous'}, 'search_region': {'type': 'object', 'description': 'Explicit search rect {x,y,w,h}, overrides previous'}}, 'required': ['name']},
     ),
     ToolSpec(
         name='ocr_read',

@@ -210,33 +210,142 @@ def _load_template(name: str) -> tuple[np.ndarray | None, dict]:
     return tpl, meta
 
 
+def _screen_rect(hwnd: int | None) -> dict:
+    """The full area a search may look at, as {x, y, w, h}."""
+    try:
+        import win32api
+        import win32gui
+        if hwnd:
+            left, top, right, bottom = win32gui.GetWindowRect(int(hwnd))
+            return {"x": left, "y": top, "w": right - left, "h": bottom - top}
+        width = win32api.GetSystemMetrics(0)
+        height = win32api.GetSystemMetrics(1)
+        return {"x": 0, "y": 0, "w": width, "h": height}
+    except Exception:                                   # noqa: BLE001
+        return {"x": 0, "y": 0, "w": 0, "h": 0}
+
+
+def _clip(region: dict, bounds: dict) -> dict:
+    x = max(region["x"], bounds["x"])
+    y = max(region["y"], bounds["y"])
+    right = min(region["x"] + region["w"], bounds["x"] + bounds["w"])
+    bottom = min(region["y"] + region["h"], bounds["y"] + bounds["h"])
+    return {"x": x, "y": y, "w": max(0, right - x), "h": max(0, bottom - y)}
+
+
+def _distinct_peaks(scores: np.ndarray, template_hw: tuple[int, int],
+                    threshold: float, limit: int = 4) -> list[tuple[float, int, int]]:
+    """Local maxima above threshold, suppressed so one blob cannot count twice.
+
+    Two similar strong peaks mean the template matches two places: clicking either
+    one is a guess, so the caller must refuse instead of taking the higher one.
+    """
+    work = scores.copy()
+    peaks: list[tuple[float, int, int]] = []
+    half_h = max(2, template_hw[0] // 2)
+    half_w = max(2, template_hw[1] // 2)
+    for _ in range(limit):
+        _, best, _, loc = cv2.minMaxLoc(work)
+        if float(best) < threshold:
+            break
+        peaks.append((float(best), int(loc[0]), int(loc[1])))
+        top = max(0, loc[1] - half_h)
+        bottom = min(work.shape[0], loc[1] + half_h + 1)
+        left = max(0, loc[0] - half_w)
+        right = min(work.shape[1], loc[0] + half_w + 1)
+        work[top:bottom, left:right] = -1.0
+    return peaks
+
+
 def match_template(name: str, region: Any = None, hwnd: int | None = None,
-                   confidence: float = 0.8) -> dict:
-    """在屏幕（或指定区域/窗口）里找模板，返回是否命中、置信度、屏幕绝对坐标。"""
+                   confidence: float = 0.8, *, previous: Any = None,
+                   radius: int = 160, search_region: Any = None,
+                   ambiguity_tol: float = 0.02) -> dict:
+    """Find a stored template on screen; optionally track it near a last position.
+
+    ``previous`` is the last known centre (``[x, y]`` or ``{"x":..,"y":..}``): the
+    search is then limited to a box of ``radius`` around it, which is what makes a
+    second lookup cheap. ``search_region`` overrides that box.
+
+    ``found`` is false when the best score is below ``confidence`` **or** when a
+    second, similar peak exists — a template that fits two places cannot be
+    tracked safely, and returning a coordinate would invite a wrong click.
+    """
     op = "match_template"
     try:
         tpl, meta = _load_template(name)
         if tpl is None:
             _bump(op, False)
             return {"success": False, "error": f"没有模板 {name}，先用 capture_template 存一个"}
-        reg = _norm_region(region)
+        tpl_h, tpl_w = int(tpl.shape[0]), int(tpl.shape[1])
+
+        base = _screen_rect(hwnd)
+        if previous is not None:
+            if isinstance(previous, dict):
+                px, py = float(previous["x"]), float(previous["y"])
+            else:
+                px, py = float(previous[0]), float(previous[1])
+            r = max(20, int(radius))
+            box = {"x": int(px - r), "y": int(py - r), "w": 2 * r, "h": 2 * r}
+            reg = _clip(box, base) if base["w"] else _norm_region(box)
+        else:
+            reg = _norm_region(search_region or region)
+        if reg is not None and (int(reg["w"]) <= 0 or int(reg["h"]) <= 0):
+            # A box that does not overlap the window must not silently widen into
+            # "search everything": _gray would return the whole window.
+            _bump(op, False)
+            return {"success": False, "error": "搜索区域为空（与窗口没有交集）"}
         g = _gray(reg, hwnd)
-        if g.shape[0] < tpl.shape[0] or g.shape[1] < tpl.shape[1]:
+        if g.shape[0] < tpl_h or g.shape[1] < tpl_w:
             _bump(op, False)
             return {"success": False, "error": "搜索区域比模板还小"}
-        r = cv2.matchTemplate(g, tpl, cv2.TM_CCOEFF_NORMED)
-        _, mx, _, loc = cv2.minMaxLoc(r)
-        ox = reg["x"] if reg else 0
-        oy = reg["y"] if reg else 0
-        found = float(mx) >= float(confidence)
-        _bump(op, True)
-        return {
+        # The returned coordinates must be absolute screen pixels. A window grab
+        # is cropped at the window origin, so that origin has to be added back —
+        # without it the answer was silently window-relative.
+        if reg:
+            ox, oy = int(reg["x"]), int(reg["y"])
+        elif hwnd:
+            try:
+                import win32gui
+                ox, oy = win32gui.GetWindowRect(int(hwnd))[:2]
+            except Exception:                           # noqa: BLE001
+                ox, oy = 0, 0
+        else:
+            ox, oy = 0, 0
+        scores = cv2.matchTemplate(g, tpl, cv2.TM_CCOEFF_NORMED)
+        if scores.size == 0:
+            _bump(op, False)
+            return {"success": False, "error": "搜索区域比模板还小"}
+        _, mx, _, loc = cv2.minMaxLoc(scores)
+        peaks = _distinct_peaks(scores, (tpl_h, tpl_w), float(confidence))
+        second = peaks[1][0] if len(peaks) > 1 else 0.0
+        ambiguous = len(peaks) > 1 and (float(mx) - second) <= float(ambiguity_tol)
+        found = float(mx) >= float(confidence) and not ambiguous
+        reason = None
+        if float(mx) < float(confidence):
+            reason = "below_threshold"
+        elif ambiguous:
+            reason = "ambiguous"
+        result = {
             "success": True, "action": op, "name": name, "found": found,
             "score": round(float(mx), 4), "confidence": confidence,
             "x": int(ox + loc[0]), "y": int(oy + loc[1]),
-            "w": int(tpl.shape[1]), "h": int(tpl.shape[0]),
-            "center": [int(ox + loc[0] + tpl.shape[1] / 2), int(oy + loc[1] + tpl.shape[0] / 2)],
+            "w": tpl_w, "h": tpl_h,
+            "center": [int(ox + loc[0] + tpl_w / 2), int(oy + loc[1] + tpl_h / 2)],
+            "search_rect": [int(reg["x"]), int(reg["y"]), int(reg["w"]), int(reg["h"])]
+            if reg else None,
+            "peaks": len(peaks),
+            "second_score": round(float(second), 4),
         }
+        if reason:
+            result["reason"] = reason
+        if ambiguous:
+            result["ambiguous"] = True
+        if previous is not None:
+            result["moved_by"] = [int(result["center"][0] - px),
+                                  int(result["center"][1] - py)]
+        _bump(op, bool(found))
+        return result
     except Exception as exc:
         _bump(op, False)
         return {"success": False, "error": f"{type(exc).__name__}: {exc}"}

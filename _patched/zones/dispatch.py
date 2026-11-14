@@ -540,6 +540,9 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         result = _vs.match_template(
             name=str(arguments["name"]), region=reg, hwnd=arguments.get("hwnd"),
             confidence=float(arguments.get("confidence", 0.8)),
+            previous=arguments.get("previous"),
+            radius=int(arguments.get("radius", 160)),
+            search_region=arguments.get("search_region"),
         )
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "wait_template":
