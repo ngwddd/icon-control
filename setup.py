@@ -19,8 +19,30 @@ def provenance():
             return json.loads(packaged.read_text(encoding='utf-8'))
         return dict(source_commit=None, source_dirty=None)
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    dirty = bool(subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=ROOT, text=True).strip())
-    return dict(source_commit=sha, source_dirty=dirty)
+    status = subprocess.check_output(
+        ['git', 'status', '--porcelain', '--untracked-files=all'], cwd=ROOT, text=True)
+    return dict(source_commit=sha, source_dirty=_has_source_changes(status))
+
+
+def _has_source_changes(status: str) -> bool:
+    """True only for changes that are not build output.
+
+    A CI build writes dist/ and .runtime/ before it packages, so the raw status is
+    always 'dirty' there even though the commit is exactly the tagged one. What the
+    flag should answer is 'does this wheel contain something the commit does not'.
+    """
+    ignored = ('dist/', 'build/', '.runtime/', '.verify-artifacts/', '.pytest_cache/')
+    ignored_files = ('@AutomationLog.txt',)
+    for line in status.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip().strip('"')
+        if path in ignored_files or path.startswith(ignored):
+            continue
+        if '.egg-info/' in path:
+            continue
+        return True
+    return False
 
 
 def write_info(path):
