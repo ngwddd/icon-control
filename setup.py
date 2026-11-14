@@ -19,12 +19,13 @@ def provenance():
             return json.loads(packaged.read_text(encoding='utf-8'))
         return dict(source_commit=None, source_dirty=None)
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    status = subprocess.check_output(
-        ['git', 'status', '--porcelain', '--untracked-files=all'], cwd=ROOT, text=True)
-    return dict(source_commit=sha, source_dirty=_has_source_changes(status))
+    # Only tracked changes count: build output (dist/, build/, egg-info) is written
+    # by the release workflow itself and made every CI wheel claim a dirty tree.
+    dirty = subprocess.call(['git', 'diff', '--quiet', 'HEAD'], cwd=ROOT) != 0
+    return dict(source_commit=sha, source_dirty=dirty)
 
 
-def _has_source_changes(status: str) -> bool:
+def _unused_has_source_changes(status: str) -> bool:
     """True only for changes that are not build output.
 
     A CI build writes dist/ and .runtime/ before it packages, so the raw status is
