@@ -75,7 +75,7 @@ class FindBehaviourTests(unittest.TestCase):
 
 
 class IdLazinessTests(unittest.TestCase):
-    def test_walk_skips_automation_id_when_asked(self):
+    def test_walk_skips_automation_id_for_the_bulk_but_keeps_it_on_hits(self):
         root, _, _, _ = build()
         plain = []
         U._walk(root, 4, plain, 100, only_named=True, want_id=False)
@@ -84,14 +84,37 @@ class IdLazinessTests(unittest.TestCase):
         U._walk(root, 4, with_ids, 100, only_named=True, want_id=True)
         self.assertTrue(any(node["automation_id"] for node in with_ids))
 
-    def test_ui_find_does_not_read_ids_unless_a_condition_needs_them(self):
+    def test_filtered_hits_carry_ids_so_a_reference_can_be_told_apart(self):
         root, _, _, _ = build()
         with patch.object(U, "_UIA_OK", True), \
                 patch.object(U, "_control_from", return_value=root):
-            plain = raw_find(name="OK")
-            narrowed = raw_find(name="OK", automation_id="okBtn")
-        self.assertTrue(all(node["automation_id"] == "" for node in plain["candidates"]))
-        self.assertEqual(narrowed["target"]["automation_id"], "okBtn")
+            hit = raw_find(name="OK")
+            miss = raw_find(name="NotThere")
+        self.assertEqual(hit["target"]["automation_id"], "okBtn",
+                         "a reference without an id cannot distinguish a rebuilt control")
+        self.assertEqual(miss["found"], 0)
+
+    def test_id_reads_are_proportional_to_hits_not_to_the_tree(self):
+        root, ok, cancel, address = build()
+        reads = {"n": 0}
+
+        class Counting(FakeControl):
+            @property
+            def AutomationId(self):                     # noqa: N802 - UIA name
+                reads["n"] += 1
+                return self._id
+
+            @AutomationId.setter
+            def AutomationId(self, value):              # noqa: N802
+                self._id = value
+
+        many = [Counting("Item", "ListItemControl", (0, i * 4, 10, 10)) for i in range(200)]
+        root._children = [FakeControl("List", "ListControl", (0, 0, 100, 900), many)]
+        with patch.object(U, "_UIA_OK", True), \
+                patch.object(U, "_control_from", return_value=root):
+            result = raw_find(name="Item", max_hits=3)
+        self.assertEqual(result["found"], 3)
+        self.assertLessEqual(reads["n"], 5, "only the collected hits should read an id")
 
 
 class OcrScoreTests(unittest.TestCase):

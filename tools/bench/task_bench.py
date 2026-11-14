@@ -155,6 +155,59 @@ def task_notepad_find_doc():
                 "path": doc.get("path"), "resolves_to_same_type": ok}
 
 
+def task_vision_track_move():
+    """Track a captured fragment across a real window move; verify the displacement."""
+    import time
+
+    import win32gui
+
+    from computer_mcp import vision_state as VS
+
+    window = _find_window(class_name="CabinetWClass")
+    if not window:
+        return None, "no Explorer window"
+    hwnd, _, rect = window
+    left, top, right, bottom = rect
+    VS.capture_template("bench_track", region={"x": left + 120, "y": top + 60,
+                                               "w": 160, "h": 40}, overwrite=True)
+    first = VS.match_template("bench_track", hwnd=hwnd, confidence=0.8)
+    if not first.get("found"):
+        return False, {"stage": "first", "score": first.get("score")}
+    win32gui.MoveWindow(hwnd, left + 60, top + 40, right - left, bottom - top, True)
+    time.sleep(0.7)
+    tracked = VS.match_template("bench_track", hwnd=hwnd, confidence=0.8,
+                                previous=first["center"], radius=220)
+    win32gui.MoveWindow(hwnd, left, top, right - left, bottom - top, True)
+    expected = [60, 40]
+    moved = tracked.get("moved_by") or [None, None]
+    ok = (tracked.get("found") is True
+          and abs(moved[0] - expected[0]) <= 4 and abs(moved[1] - expected[1]) <= 4)
+    return ok, {"moved_by": moved, "expected": expected, "score": tracked.get("score"),
+                "search_rect": tracked.get("search_rect")}
+
+
+def task_selfdrawn_locate():
+    """Fused locate in a self-drawn (no UIA) window: the OCR path, with a count.
+
+    WeChat is the intended target but it is not always running; an Electron window
+    exercises the same code path (empty UIA tree, OCR only) and is always here.
+    """
+    from computer_mcp.zones import sense_fallback as F
+
+    window = (_find_window(class_name="Chrome_WidgetWin_0")      # WeChat 4.x
+              or _find_window(class_name="Chrome_WidgetWin_1"))  # Electron
+    if not window:
+        return None, "no self-drawn window"
+    hwnd, title, _ = window
+    needle = "文件传输助手" if "微信" in title else "新会话"
+    result = F.find_element(needle, hwnd=hwnd)
+    candidates = result.get("candidates") or []
+    sources = sorted({item.get("source") for item in candidates})
+    return bool(candidates), {"window": title[:24], "needle": needle,
+                              "candidates": len(candidates), "sources": sources,
+                              "ocr_calls": COUNTERS["ocr"]}
+
+
 def task_notepad_find_menu():
     """Locate the File menu item by name (a stable Win32 target)."""
     from computer_mcp import ui_ext
@@ -176,6 +229,8 @@ TASKS = [
     ("explorer_find_address", task_explorer_find_address),
     ("notepad_find_doc", task_notepad_find_doc),
     ("notepad_find_menu", task_notepad_find_menu),
+    ("vision_track_move", task_vision_track_move),
+    ("selfdrawn_locate", task_selfdrawn_locate),
 ]
 
 

@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-14T05:40:03Z",
+ "generated_at": "2026-11-14T06:02:47Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 96,
@@ -2414,7 +2414,7 @@
   {
    "name": "ui_find",
    "description": "Find controls by accessible name (substring, or exact=true), optionally narrowed by control_type / automation_id / enabled. Matching happens during the walk and stops after max_hits, so a lookup usually reads far less of the tree than ui_tree does; truncated=true means found is a lower bound. Returns candidates with their centre coordinates.",
-   "block_sha1": "11e4c61fd267c0c96d4f74b7d5592b9f03c2725b",
+   "block_sha1": "617c86a33268411baa6b6a51db78ff3ab931c546",
    "schema": {
     "type": "object",
     "properties": {
@@ -2452,6 +2452,11 @@
       "type": "integer",
       "default": 10,
       "description": "Stop after this many matches; lower is faster"
+     },
+     "max_nodes": {
+      "type": "integer",
+      "default": 400,
+      "description": "Controls visited at most; a miss stops here too"
      }
     },
     "required": [

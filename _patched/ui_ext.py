@@ -89,22 +89,39 @@ def _element_id(ctype: str, name: str, pos: tuple) -> str:
 
 
 def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix="",
-          *, want_id=True, stop_at=None, accept=None):
+          *, want_id=True, stop_at=None, accept=None, budget=None):
     """Collect controls depth-first.
 
     ``accept`` filters during the walk, so a caller looking for one control does
     not pay for a full tree. ``stop_at`` stops as soon as that many controls were
-    collected. ``want_id=False`` skips the AutomationId read when the caller does
-    not need identity (it is one cross-process call per control).
+    collected.
+
+    ``budget`` is a mutable ``{"left": n}`` counter of nodes actually visited.
+    It is separate from ``len(out)`` on purpose: with a filter, ``out`` only grows
+    on matches, so a miss would otherwise walk the whole tree no matter what
+    ``max_nodes`` says. ``want_id=False`` skips the AutomationId read for nodes
+    that are not collected; collected nodes always carry it, because a reference
+    without an id cannot be told apart from a different control with the same
+    name, type and path.
     """
-    if len(out) >= max_nodes or (stop_at is not None and len(out) >= stop_at):
+    if budget is not None and budget.get("left", 0) <= 0:
+        return
+    if accept is None and len(out) >= max_nodes:
+        return
+    if stop_at is not None and len(out) >= stop_at:
         return
     try:
         children = ctrl.GetChildren()
     except Exception:
         return
     for index, c in enumerate(children):
-        if len(out) >= max_nodes or (stop_at is not None and len(out) >= stop_at):
+        if budget is not None:
+            if budget["left"] <= 0:
+                return
+            budget["left"] -= 1
+        if accept is None and len(out) >= max_nodes:
+            return
+        if stop_at is not None and len(out) >= stop_at:
             return
         # The child-index chain is what element references re-resolve against:
         # it survives a moving window, unlike the geometry-based element_id.
@@ -120,7 +137,9 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix="",
                     pass
                 else:
                     automation_id = ""
-                    if want_id:
+                    # Collected nodes (including the few filtered hits) always get
+                    # an id; only the bulk walk can skip it.
+                    if want_id or accept is not None:
                         try:
                             automation_id = (c.AutomationId or "").strip()
                         except Exception:               # noqa: BLE001
@@ -144,7 +163,7 @@ def _walk(ctrl, depth, out, max_nodes, only_named=False, prefix="",
             continue
         if depth > 0:
             _walk(c, depth - 1, out, max_nodes, only_named, path,
-                  want_id=want_id, stop_at=stop_at, accept=accept)
+                  want_id=want_id, stop_at=stop_at, accept=accept, budget=budget)
 
 
 def _control_obj_at_path(hwnd: int, path: str):
@@ -251,10 +270,15 @@ def ui_find(
 ) -> dict[str, Any]:
     """Find controls by name, optionally narrowed by type, id or enabled state.
 
-    The match happens **during** the walk and stops after ``max_hits`` hits, so a
-    lookup that used to read the whole tree now reads only what it needs. When it
-    stops early the result carries ``truncated: true`` — ``found`` is then a lower
-    bound, not a total.
+    The match happens **during** the walk. Two separate limits apply:
+    ``max_nodes`` caps how many controls are visited (so a miss still stops),
+    ``max_hits`` caps how many matches are collected. When it stops early the
+    result carries ``truncated: true`` plus ``truncated_reason`` — ``found`` is
+    then a lower bound, not a total.
+
+    ``index`` is honoured even when it is larger than ``max_hits``: the effective
+    hit limit is at least ``index + 1``, otherwise "give me the 12th match" would
+    silently return nothing.
     """
     if not _UIA_OK:
         return {"error": "uiautomation not installed in this venv"}
@@ -288,14 +312,21 @@ def ui_find(
                 return False
         return True
 
-    limit = max(1, int(max_hits))
+    safe_index = max(0, int(index))
+    limit = max(1, int(max_hits), safe_index + 1)
+    budget = {"left": max(1, int(max_nodes))}
     hits: list[dict[str, Any]] = []
     # The library's own FindFirst wrapper (Control(SubName=...)) polls with a 10 s
     # timeout and stalls even when the control exists, so the walk stays the only
     # path here. Measured: 10.0 s for a miss, 10.0 s for a hit at depth 16.
     _walk(root, max(0, int(depth)), hits, max_nodes, only_named=True,
-          want_id=bool(id_needle), stop_at=limit, accept=accept)
-    truncated = len(hits) >= limit
+          stop_at=limit, accept=accept, budget=budget)
+    visited = max(1, int(max_nodes)) - budget["left"]
+    hit_limit_reached = len(hits) >= limit
+    node_limit_reached = budget["left"] <= 0
+    truncated = hit_limit_reached or node_limit_reached
+    truncated_reason = ("max_hits" if hit_limit_reached
+                        else "max_nodes" if node_limit_reached else None)
     for node in hits:
         node["cx"] = node["x"] + node["w"] // 2
         node["cy"] = node["y"] + node["h"] // 2
@@ -303,8 +334,10 @@ def ui_find(
         "ok": True,
         "found": len(hits),
         "truncated": truncated,
-        "index": index,
-        "target": hits[index] if index < len(hits) else None,
+        "truncated_reason": truncated_reason,
+        "visited": visited,
+        "index": safe_index,
+        "target": hits[safe_index] if safe_index < len(hits) else None,
         "candidates": hits[:10],
         "ms": round((time.perf_counter() - t0) * 1000, 1),
     }

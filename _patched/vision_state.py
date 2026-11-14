@@ -280,16 +280,27 @@ def match_template(name: str, region: Any = None, hwnd: int | None = None,
         tpl_h, tpl_w = int(tpl.shape[0]), int(tpl.shape[1])
 
         base = _screen_rect(hwnd)
-        if previous is not None:
+        px = py = None
+        # search_region wins over previous (documented order); previous is only the
+        # fallback when the caller did not name an explicit box.
+        if search_region is not None:
+            reg = _norm_region(search_region)
+        elif previous is not None:
             if isinstance(previous, dict):
                 px, py = float(previous["x"]), float(previous["y"])
             else:
                 px, py = float(previous[0]), float(previous[1])
             r = max(20, int(radius))
             box = {"x": int(px - r), "y": int(py - r), "w": 2 * r, "h": 2 * r}
-            reg = _clip(box, base) if base["w"] else _norm_region(box)
+            reg = box
         else:
-            reg = _norm_region(search_region or region)
+            reg = _norm_region(region)
+        # Every box is clipped to the area we can actually see before it reaches
+        # _gray(): _gray clamps the crop indices but cannot fix the coordinates we
+        # report, so an unclipped box shifted the answer (and a box fully outside
+        # the window used to "hit" somewhere else entirely).
+        if reg is not None and base["w"] and base["h"]:
+            reg = _clip(reg, base)
         if reg is not None and (int(reg["w"]) <= 0 or int(reg["h"]) <= 0):
             # A box that does not overlap the window must not silently widen into
             # "search everything": _gray would return the whole window.
@@ -326,22 +337,31 @@ def match_template(name: str, region: Any = None, hwnd: int | None = None,
             reason = "below_threshold"
         elif ambiguous:
             reason = "ambiguous"
-        result = {
-            "success": True, "action": op, "name": name, "found": found,
-            "score": round(float(mx), 4), "confidence": confidence,
+        candidate = {
             "x": int(ox + loc[0]), "y": int(oy + loc[1]),
             "w": tpl_w, "h": tpl_h,
             "center": [int(ox + loc[0] + tpl_w / 2), int(oy + loc[1] + tpl_h / 2)],
+        }
+        result = {
+            "success": True, "action": op, "name": name, "found": found,
+            "score": round(float(mx), 4), "confidence": confidence,
+            "w": tpl_w, "h": tpl_h,
             "search_rect": [int(reg["x"]), int(reg["y"]), int(reg["w"]), int(reg["h"])]
             if reg else None,
             "peaks": len(peaks),
             "second_score": round(float(second), 4),
         }
+        if found:
+            result.update(candidate)
+        else:
+            # A refused lock must not hand back a clickable-looking coordinate:
+            # the best pixel match goes into a diagnostic field instead.
+            result["candidate"] = candidate
         if reason:
             result["reason"] = reason
         if ambiguous:
             result["ambiguous"] = True
-        if previous is not None:
+        if found and px is not None and py is not None:
             result["moved_by"] = [int(result["center"][0] - px),
                                   int(result["center"][1] - py)]
         _bump(op, bool(found))

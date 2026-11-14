@@ -650,6 +650,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             name=str(arguments["name"]),
             hwnd=arguments.get("hwnd"),
             depth=int(arguments.get("depth", 8)),
+            max_nodes=int(arguments.get("max_nodes", 400)),
             exact=bool(arguments.get("exact", False)),
             index=int(arguments.get("index", 0)),
             control_type=arguments.get("control_type"),
