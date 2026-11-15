@@ -1,3 +1,44 @@
+## [1.4.4-rc2] - 2026-11-16
+
+> 修 RC1 独立审计的 7 条。全部是"上一版自己引入或没透到调用方"的问题。
+
+### 错误终于能到调用方（①）
+
+RC1 的越界提示只在函数里，经 MCP 层会被统一折成 `Tool execution failed`。
+现在参数类拒绝走 `ArgumentError`（`code` / `hint` / 数据），MCP 层原样返回：
+
+```json
+{"success": false, "code": "out_of_screen",
+ "error": "click point (1316, 1504) is outside the screen (0..2559, 0..1439); …",
+ "hint": "先让目标窗口完整落在屏幕上…或改用 frame_id",
+ "data": {"point": [1316, 1504], "screen": {...}}}
+```
+
+其它异常仍按脱敏处理（可能夹带用户输入）。
+
+### `click_text` 不再猜（②⑤⑥）
+
+- **按下前核验窗口归属**：`WindowFromPoint` 的顶层窗口必须等于传入的 `hwnd`，
+  否则 `target_occluded`，不注入；命中时通过 `MouseController.click(expected_hwnd/expected_point)` 走同一条校验。
+- **等价候选判歧义**：两个完全相同的文本（ratio/slack/文本都相同）→ `ambiguous_target`，
+  不再按 Y 坐标猜哪个是按钮；要选就用 `index` 明确指定。
+- **无效索引拒绝**：`index` 必须是 `0 <= index < 候选数`，负数返回 `invalid_index`。
+- **屏幕外候选不参与自动选择**：优先在可见候选里挑；全都不可见才返回 `offscreen_target`。
+
+### `focus_window` 说真话（③④）
+
+- 兜底改用 `win32process.GetWindowThreadProcessId`（RC1 调的是 `win32gui`，最后一层永远失败）。
+- `success` 现在等于"确实拿到了前台"；没拿到返回 `status=focus_denied` + `error` + `next_action`。
+
+### `wait_for(kind="template")` 能等到（⑦）
+
+`wait_template` 返回 `matched`，`wait_for` 却读 `found`，导致模板等待**必然超时**。现在两者都认。
+
+### 验证
+
+- 回归 **960 项 / 0 失败 / 0 错误 / 3 跳过**（rc1 是 946）
+- 新增 14 项：错误透传与脱敏、歧义/负索引/屏幕外候选、窗口归属、焦点语义与线程接口、模板等待
+
 ## [1.4.4-rc1] - 2026-11-16
 
 > 来源：一次真实的 GitHub 设备授权操作（用助手在 Edge 里点完整套授权流程）。

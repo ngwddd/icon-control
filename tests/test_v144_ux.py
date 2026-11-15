@@ -83,7 +83,7 @@ class ClickTextTests(AuthorityCase, unittest.TestCase):
             result = O.click_text("Authorize github", mouse=mouse)
         self.assertFalse(result["ok"])
         self.assertEqual(result["code"], "offscreen_target")
-        self.assertIn("maximize", result["error"])
+        self.assertIn("最大化", result["hint"] + result["error"])
         mouse.click.assert_not_called()
 
 

@@ -424,44 +424,109 @@ def find_text(
     }
 
 
+def _describe_candidate(item: dict) -> dict:
+    return {"text": item["text"], "x": item["cx"], "y": item["cy"],
+            "ratio": item.get("ratio"), "slack": item.get("slack"),
+            "onscreen": item.get("onscreen")}
+
+
+def _same_text(a: dict, b: dict) -> bool:
+    return (a.get("ratio") == b.get("ratio")
+            and a.get("slack") == b.get("slack")
+            and _norm(a.get("text", "")) == _norm(b.get("text", "")))
+
+
 def click_text(
     query: str,
     region: dict[str, int] | None = None,
-    index: int = 0,
+    index: int | None = None,
     mouse=None,
     case_sensitive: bool = False,
     settle_ms: int = 250,
     hwnd: int | None = None,
 ) -> dict[str, Any]:
+    """Click a piece of text, refusing rather than guessing when it is ambiguous.
+
+    ``index=None`` means "pick the best one"; an explicit index must exist. If the
+    two best matches are the same text at different places, the call is refused
+    with ``ambiguous_target`` - picking the lower one is a guess, and a wrong click
+    is worse than a refused one.
+    """
     if mouse is None:
         return {"error": "mouse controller not provided"}
     res = find_text(query, region=region, case_sensitive=case_sensitive, hwnd=hwnd)
     if not res.get("ok"):
         return res
     matches = res.get("matches") or []
-    if index >= len(matches):
-        return {"error": f"text {query!r} not found", "found": res.get("found"), "matches": matches}
-    target = matches[index]
+    if not matches:
+        return {"ok": False, "code": "text_not_found",
+                "error": f"text {query!r} not found", "found": res.get("found"),
+                "candidates": []}
+    if index is not None:
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(matches):
+            return {"ok": False, "code": "invalid_index",
+                    "error": f"index {index!r} is out of range (0..{len(matches) - 1})",
+                    "hint": "index 必须是非负整数且小于候选数；省略 index 表示自动选择",
+                    "candidates": [_describe_candidate(item) for item in matches[:5]]}
+        chosen = index
+    else:
+        operable = [position for position, item in enumerate(matches)
+                    if item.get("onscreen", True)]
+        if not operable:
+            first = matches[0]
+            box = res.get("screen") or screen_bounds()
+            return {"ok": False, "code": "offscreen_target",
+                    "error": (f"every match for {query!r} sits off screen; first at "
+                              f"({first['cx']}, {first['cy']}), screen is "
+                              f"({box['x']}..{box['x'] + box['w'] - 1}, "
+                              f"{box['y']}..{box['y'] + box['h'] - 1})"),
+                    "hint": "先最大化或滚动窗口，让目标真的出现在屏幕上",
+                    "screen": box,
+                    "candidates": [_describe_candidate(item) for item in matches[:5]]}
+        chosen = operable[0]
+        if len(operable) > 1:
+            first, second = matches[operable[0]], matches[operable[1]]
+            if _same_text(first, second):
+                return {"ok": False, "code": "ambiguous_target",
+                        "error": (f"{len(operable)} identical matches for {query!r} "
+                                  f"(e.g. ({first['cx']}, {first['cy']}) and "
+                                  f"({second['cx']}, {second['cy']})); refusing to guess"),
+                        "hint": "用 index 明确指定要点的那个候选，或先滚动/裁区域让只剩一个",
+                        "candidates": [_describe_candidate(item) for item in matches[:5]]}
+    target = matches[chosen]
     box = res.get("screen") or screen_bounds()
     if not point_on_screen(target["cx"], target["cy"], box):
-        return {
-            "ok": False,
-            "code": "offscreen_target",
-            "error": (f"text {target['text']!r} sits at ({target['cx']}, {target['cy']}), "
-                      f"outside the screen ({box['x']}..{box['x'] + box['w'] - 1}, "
-                      f"{box['y']}..{box['y'] + box['h'] - 1}); maximize or scroll the "
-                      f"window so it is actually visible before clicking"),
-            "query": query,
-            "screen": box,
-            "candidates": matches[:5],
-            "chosen_index": index,
-        }
+        return {"ok": False, "code": "offscreen_target",
+                "error": (f"text {target['text']!r} sits at ({target['cx']}, {target['cy']}), "
+                          f"outside the screen"),
+                "hint": "先最大化或滚动窗口再点",
+                "screen": box,
+                "candidates": [_describe_candidate(item) for item in matches[:5]]}
+    if hwnd:
+        # The point being on screen says nothing about which window owns it now.
+        try:
+            import win32gui
+            under = win32gui.GetAncestor(win32gui.WindowFromPoint((target["cx"], target["cy"])), 2)
+            if int(under or 0) != int(hwnd):
+                return {"ok": False, "code": "target_occluded",
+                        "error": (f"the point ({target['cx']}, {target['cy']}) now belongs to "
+                                  f"window {int(under or 0)}, not {int(hwnd)}; refusing to click"),
+                        "hint": "把目标窗口提到前台（focus_window）或重新截图确认后再点",
+                        "candidates": [_describe_candidate(item) for item in matches[:5]]}
+        except Exception:                           # noqa: BLE001
+            pass
     t0 = time.perf_counter()
     mouse.position = (target["cx"], target["cy"])
     _execution.sleep(0.08)
     from pynput.mouse import Button
-
-    mouse.click(Button.left, 1)
+    try:
+        if hwnd:
+            mouse.click(Button.left, 1, expected_point=(target["cx"], target["cy"]),
+                        expected_hwnd=int(hwnd))
+        else:
+            mouse.click(Button.left, 1)
+    except TypeError:
+        mouse.click(Button.left, 1)
     _execution.sleep(max(0, settle_ms) / 1000.0)
     return {
         "ok": True,
@@ -469,14 +534,9 @@ def click_text(
         "x": target["cx"],
         "y": target["cy"],
         "ratio": target.get("ratio"),
-        "chosen_index": index,
+        "chosen_index": chosen,
         # Several matches are common (a heading and its button); the caller has to
         # be able to see what else qualified, and what it actually hit.
-        "candidates": [
-            {"text": item["text"], "x": item["cx"], "y": item["cy"],
-             "ratio": item.get("ratio"), "slack": item.get("slack"),
-             "onscreen": item.get("onscreen")}
-            for item in matches[:5]
-        ],
+        "candidates": [_describe_candidate(item) for item in matches[:5]],
         "ms": round((time.perf_counter() - t0) * 1000, 1),
     }

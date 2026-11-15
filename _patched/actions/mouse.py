@@ -15,16 +15,20 @@ def _require_on_screen(x, y, action: str) -> None:
     can report text at pixels that do not exist on any monitor. A bare ValueError
     leaves the caller guessing; this names the point and the box it missed.
     """
+    from computer_mcp.core.argument_error import ArgumentError
     from computer_mcp.ocr_ext import point_on_screen, screen_bounds
 
     box = screen_bounds()
     if point_on_screen(x, y, box):
         return
-    raise ValueError(
+    raise ArgumentError(
         f"{action} point ({int(x)}, {int(y)}) is outside the screen "
         f"({box['x']}..{box['x'] + box['w'] - 1}, {box['y']}..{box['y'] + box['h'] - 1}); "
         f"the target window is partly off screen - maximize it, move it back, or "
-        f"pass frame_id with image coordinates so the tool converts them")
+        f"pass frame_id with image coordinates so the tool converts them",
+        code="out_of_screen",
+        hint="先让目标窗口完整落在屏幕上（最大化或移回来），或改用 click(frame_id=..., x=..., y=...) 传图片坐标",
+        point=[int(x), int(y)], screen=box)
 
 
 def click(button: str = "left", controller: Controller | None = None, *, x: float | None = None, y: float | None = None, expected_hwnd: int | None = None, frame_id: str | None = None) -> dict[str, Any]:
@@ -62,7 +66,10 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
     target = None
     if x is not None:
         if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (x, y)):
-            raise ValueError('click coordinates must be finite numbers')
+            from computer_mcp.core.argument_error import ArgumentError
+            raise ArgumentError('click coordinates must be finite numbers',
+                                code="invalid_argument",
+                                hint="x/y 必须是有限数字；走 frame_id 时用图片像素坐标")
         _require_on_screen(x, y, 'click')
         import win32gui, win32process
         from computer_mcp import capabilities

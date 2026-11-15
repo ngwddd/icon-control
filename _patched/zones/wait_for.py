@@ -149,7 +149,9 @@ def run(kind: str = "change", query=None, element_id=None,
                 hit = vs.wait_template(name=str(query), timeout_ms=int(interval * 1000))
             except Exception:                            # noqa: BLE001
                 hit = None
-            if hit and hit.get("found"):
+            # vision_state.wait_template reports "matched"; match_template reports
+            # "found". Reading only one of them made every template wait time out.
+            if hit and (hit.get("matched") or hit.get("found")):
                 return _done(True, {"detail": f"template {query!r} found", "match": hit})
             time.sleep(interval)
         return _done(False, {"detail": f"template {query!r} not found"})

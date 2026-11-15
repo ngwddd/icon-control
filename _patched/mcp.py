@@ -132,6 +132,11 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
         return format_response(result, computer_state, screenshot_data=screenshot_data)
     
     except Exception as e:
+        from computer_mcp.core.argument_error import ArgumentError as _ArgumentError
+        if isinstance(e, _ArgumentError):
+            # Our own refusals carry no user content: they can be returned whole.
+            return [TextContent(type="text",
+                                text=json.dumps(e.payload(name), ensure_ascii=False))]
         from computer_mcp import permission as _perm_mod
         if isinstance(e, getattr(_perm_mod, "PermissionDenied", ())):
             # A refusal the caller can act on: keep the reason instead of folding it

@@ -649,6 +649,32 @@ if IS_WINDOWS:
                 "offscreen_px": max(0, area - visible_area),
                 "screen": screen}
 
+    def _thread_of(hwnd: int) -> int:
+        """The GUI thread that owns a window.
+
+        PyWin32 exposes this as win32process.GetWindowThreadProcessId, *not* on
+        win32gui - calling the wrong module made the last focus fallback fail on
+        every attempt.
+        """
+        import win32process
+        thread_id, _ = win32process.GetWindowThreadProcessId(hwnd)
+        return int(thread_id)
+
+    def _attach_and_focus(target: int, foreground: int) -> bool:
+        import ctypes
+        import win32gui
+
+        this_thread = int(ctypes.windll.kernel32.GetCurrentThreadId())
+        other_thread = _thread_of(foreground)
+        if not other_thread:
+            return False
+        ctypes.windll.user32.AttachThreadInput(this_thread, other_thread, True)
+        try:
+            win32gui.SetForegroundWindow(target)
+        finally:
+            ctypes.windll.user32.AttachThreadInput(this_thread, other_thread, False)
+        return int(win32gui.GetForegroundWindow()) == int(target)
+
     def focus_window(hwnd: int, restore: bool = True) -> dict[str, Any]:
         """Bring a window to the foreground and prove it happened.
 
@@ -695,17 +721,14 @@ if IS_WINDOWS:
 
             if win32gui.GetForegroundWindow() != target:
                 # Attach to the foreground thread: the usual workaround for the
-                # foreground lock.
+                # foreground lock. Kept in helpers so the branch is testable without
+                # faking ctypes internals.
                 foreground = win32gui.GetForegroundWindow()
                 try:
-                    fg_thread, _ = win32gui.GetWindowThreadProcessId(foreground)
-                    this_thread = ctypes.windll.kernel32.GetCurrentThreadId()
-                    ctypes.windll.user32.AttachThreadInput(this_thread, fg_thread, True)
-                    try:
-                        win32gui.SetForegroundWindow(target)
-                    finally:
-                        ctypes.windll.user32.AttachThreadInput(this_thread, fg_thread, False)
-                    attempts.append("attach_thread_input")
+                    if _attach_and_focus(target, foreground):
+                        attempts.append("attach_thread_input")
+                    else:
+                        attempts.append("attach_thread_input_failed")
                 except Exception:                        # noqa: BLE001
                     attempts.append("attach_thread_input_failed")
 
@@ -716,13 +739,20 @@ if IS_WINDOWS:
             clip = _screen_clip({"x": rect[0], "y": rect[1],
                                  "width": rect[2] - rect[0], "height": rect[3] - rect[1]})
             focused = int(after_hwnd) == target
-            result = {"success": True, "action": "focus_window", "hwnd": target,
+            # success must mean "the goal was reached", not "the function ran":
+            # reporting success for an unchanged foreground is how an agent ends up
+            # clicking into the previous window.
+            result = {"success": focused, "ok": focused,
+                      "status": "focused" if focused else "focus_denied",
+                      "action": "focus_window", "hwnd": target,
                       "focused": focused,
                       "foreground_before": before, "foreground_after": after,
                       "attempts": attempts,
                       "clipped_by_screen": clip["clipped"],
                       "visible_rect": clip["visible"]}
             if not focused:
+                result["error"] = (f"window {target} did not become the foreground "
+                                   f"window; it is still {after.get('hwnd')}")
                 result["next_action"] = (
                     "Windows refuses cross-process focus changes while another app "
                     "owns the foreground: minimise the window on top (or send it "
