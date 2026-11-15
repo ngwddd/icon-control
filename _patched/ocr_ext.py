@@ -191,7 +191,12 @@ def _grab_screen(region: dict[str, int] | None):
                 "height": int(region.get("h", 600)),
             }
         else:
-            mon = sct.monitors[1]
+            # monitors[1] is the primary screen only; a template on a secondary
+            # display would never be found unless the caller named a region.
+            box = screen_bounds()
+            mon = {"left": box["x"], "top": box["y"],
+                   "width": box["w"], "height": box["h"]} if box["w"] and box["h"] \
+                else sct.monitors[1]
         from computer_mcp.permission import require
         require('screenshot')
         shot = sct.grab(mon)
@@ -337,6 +342,21 @@ def _lcs_len(a: str, b: str) -> int:
     return best
 
 
+def _checked_region(region):
+    """A half-specified region silently widened the search to the whole screen."""
+    if not region:
+        return None
+    if isinstance(region, dict):
+        missing = [key for key in ("x", "y", "w", "h") if key not in region]
+        if missing:
+            from computer_mcp.core.argument_error import ArgumentError
+            raise ArgumentError(
+                f"region is missing {', '.join(missing)}; give all of x/y/w/h or none",
+                code="invalid_argument",
+                hint="区域要么四个都给，要么都不给（不验证会静默扩大搜索范围）")
+    return region
+
+
 def find_text(
     query: str,
     region: dict[str, int] | None = None,
@@ -351,6 +371,13 @@ def find_text(
 ) -> dict[str, Any]:
     if not (query or "").strip():
         return {"error": "query is required"}
+    try:
+        region = _checked_region(region)
+    except Exception as exc:                        # noqa: BLE001 - ArgumentError
+        from computer_mcp.core.argument_error import ArgumentError
+        if isinstance(exc, ArgumentError):
+            return dict(exc.payload("find_text"), ok=False)
+        raise
     data = ocr_read(region=region, max_lines=max_lines, hwnd=hwnd,
                     upscale=upscale, boost=boost)
     if not data.get("ok"):
@@ -430,10 +457,14 @@ def _describe_candidate(item: dict) -> dict:
             "onscreen": item.get("onscreen")}
 
 
-def _same_text(a: dict, b: dict) -> bool:
+def _same_text(a: dict, b: dict, case_sensitive: bool = False) -> bool:
+    def canon(value: str) -> str:
+        text = _norm(value)
+        return text if case_sensitive else text.casefold()
+
     return (a.get("ratio") == b.get("ratio")
             and a.get("slack") == b.get("slack")
-            and _norm(a.get("text", "")) == _norm(b.get("text", "")))
+            and canon(a.get("text", "")) == canon(b.get("text", "")))
 
 
 def click_text(
@@ -454,6 +485,13 @@ def click_text(
     """
     if mouse is None:
         return {"error": "mouse controller not provided"}
+    try:
+        region = _checked_region(region)
+    except Exception as exc:                        # noqa: BLE001 - ArgumentError
+        from computer_mcp.core.argument_error import ArgumentError
+        if isinstance(exc, ArgumentError):
+            return dict(exc.payload("click_text"), ok=False)
+        raise
     res = find_text(query, region=region, case_sensitive=case_sensitive, hwnd=hwnd)
     if not res.get("ok"):
         return res
@@ -486,7 +524,7 @@ def click_text(
         chosen = operable[0]
         if len(operable) > 1:
             first, second = matches[operable[0]], matches[operable[1]]
-            if _same_text(first, second):
+            if _same_text(first, second, case_sensitive):
                 return {"ok": False, "code": "ambiguous_target",
                         "error": (f"{len(operable)} identical matches for {query!r} "
                                   f"(e.g. ({first['cx']}, {first['cy']}) and "
@@ -513,8 +551,14 @@ def click_text(
                                   f"window {int(under or 0)}, not {int(hwnd)}; refusing to click"),
                         "hint": "把目标窗口提到前台（focus_window）或重新截图确认后再点",
                         "candidates": [_describe_candidate(item) for item in matches[:5]]}
-        except Exception:                           # noqa: BLE001
-            pass
+        except Exception as exc:                    # noqa: BLE001
+            # Failing to read the window under the point is not a licence to click
+            # unbound; report it and let the caller retry after a fresh capture.
+            return {"ok": False, "code": "target_unverified",
+                    "error": f"could not verify which window owns "
+                             f"({target['cx']}, {target['cy']}): {exc}",
+                    "hint": "重新截图确认目标窗口仍在前台，再重试",
+                    "candidates": [_describe_candidate(item) for item in matches[:5]]}
     t0 = time.perf_counter()
     mouse.position = (target["cx"], target["cy"])
     _execution.sleep(0.08)

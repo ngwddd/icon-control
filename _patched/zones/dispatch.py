@@ -591,6 +591,8 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             name=str(arguments["name"]), mouse=mouse_controller,
             button=str(arguments.get("button", "left")),
             confidence=float(arguments.get("confidence", 0.8)),
+            region={k: arguments[k] for k in ("x", "y", "w", "h")}
+            if all(k in arguments for k in ("x", "y", "w", "h")) else None,
             hwnd=arguments.get("hwnd"),
             settle_ms=int(arguments.get("settle_ms", 150)),
             offset=arguments.get("offset"),
@@ -807,7 +809,9 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             result = ocr_ext.click_text(
                 query=str(arguments["query"]),
                 region=region,
-                index=int(arguments.get("index", 0)),
+                # None means "pick the best one"; passing 0 would force the first
+                # match and make the ambiguity refusal unreachable from the tool.
+                index=arguments.get("index"),
                 mouse=mouse_controller,
                 settle_ms=int(arguments.get("settle_ms", 250)),
                 hwnd=arguments.get("hwnd"),

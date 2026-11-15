@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-15T20:21:41Z",
+ "generated_at": "2026-11-15T21:48:43Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 97,
@@ -2400,8 +2400,8 @@
   },
   {
    "name": "ui_click",
-   "description": "Move the real cursor to a control found by name and click it. No coordinate guessing.",
-   "block_sha1": "ca99ab121f7ec6978854b0157186b0bca03734fe",
+   "description": "Move the real cursor to a control and click it. Target it by name, by ref (from ui_tree/screenshot) or by element_id; the press is bound to the window it was resolved from. button supports left/right/middle.",
+   "block_sha1": "aaf272e036c2b897e31412d8fbdf6a48286bd99a",
    "schema": {
     "type": "object",
     "properties": {
@@ -2431,6 +2431,10 @@
      "settle_ms": {
       "type": "integer",
       "default": 250
+     },
+     "element_id": {
+      "type": "string",
+      "description": "Stable element id (survives reordering better than a name)"
      }
     },
     "required": [

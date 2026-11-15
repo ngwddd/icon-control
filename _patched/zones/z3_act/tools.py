@@ -246,9 +246,9 @@ SPECS: list[ToolSpec] = [
         name='ui_click',
         effects=('input',),
         zone='Z3',
-        description='Move the real cursor to a control found by name and click it. No coordinate guessing.',
+        description='Move the real cursor to a control and click it. Target it by name, by ref (from ui_tree/screenshot) or by element_id; the press is bound to the window it was resolved from. button supports left/right/middle.',
         read_only=False,
-        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'hwnd': {'type': 'integer'}, 'exact': {'type': 'boolean', 'default': False}, 'index': {'type': 'integer', 'default': 0}, 'button': {'type': 'string', 'enum': ['left', 'right', 'middle'], 'default': 'left'}, 'settle_ms': {'type': 'integer', 'default': 250}}, 'required': ['name']},
+        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'hwnd': {'type': 'integer'}, 'exact': {'type': 'boolean', 'default': False}, 'index': {'type': 'integer', 'default': 0}, 'button': {'type': 'string', 'enum': ['left', 'right', 'middle'], 'default': 'left'}, 'settle_ms': {'type': 'integer', 'default': 250}, 'ref': {'type': 'string', 'description': 'Element reference from ui_tree or a screenshot'}, 'element_id': {'type': 'string', 'description': 'Stable element id (survives reordering better than a name)'}}, 'required': []},
     ),
     ToolSpec(
         name='ui_invoke',

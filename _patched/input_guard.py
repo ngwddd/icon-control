@@ -198,6 +198,16 @@ class MouseController(_Held):
             # a process-identity check: double_click and drag know the hwnd of the
             # captured window but not its process record, and they must still be
             # refused when a different window moved under the pointer.
+            if expected_point is not None:
+                # "Click exactly here" is a constraint of its own: a pointer that
+                # drifted inside the same window would otherwise pass every
+                # process and window check while hitting another control.
+                from computer_mcp import permission
+                position = tuple(self.raw.position)
+                if tuple(expected_point) != position:
+                    raise permission.PermissionDenied(
+                        f'Pointer moved away from the expected point {tuple(expected_point)}; '
+                        f'it is now at {position}')
             if expected_target is not None or expected_hwnd is not None:
                 import win32gui, win32process
                 from computer_mcp import capabilities, permission
@@ -205,7 +215,7 @@ class MouseController(_Held):
                 hwnd = win32gui.WindowFromPoint(position)
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 if expected_target is not None:
-                    if position != expected_point or capabilities.process_record(pid) != expected_target:
+                    if capabilities.process_record(pid) != expected_target:
                         raise permission.PermissionDenied('Point-click target changed before button-down')
                 if (expected_hwnd is not None
                         and int(win32gui.GetAncestor(hwnd, 2) or hwnd) != int(expected_hwnd)):

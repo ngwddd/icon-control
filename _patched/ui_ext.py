@@ -456,9 +456,19 @@ def ui_click(
     t0 = time.perf_counter()
     mouse.position = (target["cx"], target["cy"])
     _execution.sleep(0.06)
-    mouse.click(
-        {"left": mouse_button_left(), "right": None, "middle": None}.get(button) or mouse_button_left()
-    )
+    from pynput.mouse import Button as _Button
+    # right/middle mapped to None fell back to the left button: a right-click that
+    # silently left-clicks opens nothing and changes the page instead.
+    pressed = {"left": _Button.left, "right": _Button.right,
+               "middle": _Button.middle}.get(str(button).lower(), _Button.left)
+    try:
+        if hwnd:
+            mouse.click(pressed, 1, expected_point=(target["cx"], target["cy"]),
+                        expected_hwnd=int(hwnd))
+        else:
+            mouse.click(pressed, 1)
+    except TypeError:
+        mouse.click(pressed, 1)
     _execution.sleep(max(0, settle_ms) / 1000.0)
     return {
         "ok": True,

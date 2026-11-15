@@ -388,19 +388,30 @@ def wait_template(name: str, timeout_ms: int = 5000, poll_ms: int = 120,
     t0 = time.time()
     last = 0.0
     tries = 0
+    inconclusive = None
     while (time.time() - t0) * 1000 < timeout_ms:
         tries += 1
         r = match_template(name, region=region, hwnd=hwnd, confidence=confidence)
         if r.get("success"):
             last = r.get("score", 0.0)
+            if r.get("reason") == "ambiguous":
+                # Two equally good matches prove nothing about presence; treating
+                # them as "gone" is exactly the wrong answer for appear=False.
+                inconclusive = r
+                _execution.sleep(max(30, poll_ms) / 1000.0)
+                continue
             if bool(r.get("found")) == bool(appear):
                 _bump(op, True)
                 return {"success": True, "action": op, "matched": True,
+                        "verdict": "present" if appear else "absent",
                         "elapsed_ms": int((time.time() - t0) * 1000), "tries": tries,
                         "score": last, "target_appear": appear, "where": r}
         _execution.sleep(max(30, poll_ms) / 1000.0)
     _bump(op, False)
-    return {"success": True, "action": op, "matched": False,
+    verdict = "inconclusive" if inconclusive is not None else (
+        "absent" if not appear else "not_found")
+    return {"success": True, "action": op, "matched": False, "verdict": verdict,
+            "where": inconclusive,
             "elapsed_ms": int((time.time() - t0) * 1000), "tries": tries,
             "score": last, "target_appear": appear}
 
@@ -426,9 +437,23 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
         _btn = {"left": MB.left, "right": MB.right, "middle": MB.middle}.get(button, MB.left)
     mouse.position = (int(cx), int(cy))
     _execution.sleep(0.04)
-    mouse.press(_btn)
-    _execution.sleep(0.06)
-    mouse.release(_btn)
+    # A template hit is only as good as the window that owns the pixel: bind the
+    # press the same way the UIA paths do, or an occluding window receives it.
+    clicked = False
+    try:
+        if hwnd:
+            mouse.press(_btn, expected_point=(int(cx), int(cy)), expected_hwnd=int(hwnd))
+        else:
+            mouse.press(_btn)
+        clicked = True
+    except TypeError:
+        mouse.press(_btn)
+        clicked = True
+    try:
+        _execution.sleep(0.06)
+    finally:
+        if clicked:
+            mouse.release(_btn)
     if settle_ms:
         _execution.sleep(settle_ms / 1000.0)
     _bump(op, True)
