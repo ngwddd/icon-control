@@ -1,3 +1,38 @@
+## [1.4.4-rc1] - 2026-11-16
+
+> 来源：一次真实的 GitHub 设备授权操作（用助手在 Edge 里点完整套授权流程）。
+> 全部改动都对应那次踩到的具体报错，不新增概念。
+
+### 坐标与错误
+
+- **越界点直接说清楚**：`click` / `double_click` / `drag` 在屏幕外的点会报
+  `click point (1316, 1504) is outside the screen (0..2559, 0..1439); … 用 frame_id 传图片坐标`，
+  不再是一句空的 `ValueError`。
+- **OCR 坐标带屏幕归属**：`find_text` / `ocr_read` 的每条命中新增 `onscreen`，
+  返回体带 `screen`（虚拟桌面矩形）。窗口挂到屏幕外时，能立刻看出"图里有、屏幕点不到"。
+- **控制权拒绝保留原因**：`PermissionDenied` 不再被折叠成 `Tool execution failed`，
+  而是返回 `code=permission_denied` + 原始原因 + `hint`（先 `control_claim`）。
+
+### 文字定位
+
+- **`click_text` 返回候选**：`candidates`（前 5 个，含 ratio/slack/onscreen）+ `chosen_index` + `ratio`。
+- **标题不再压过按钮**：排序加入 `slack`（行内比 query 多出来的字符数），
+  「Authorize GitHub CLI」与「Authorize github」同分时，后者优先——这次误点标题就是这个原因。
+- **屏幕外的目标拒绝点击**：返回 `code=offscreen_target` 并提示先最大化/滚动。
+
+### 窗口
+
+- **新增 `focus_window(hwnd)`**（第 97 个工具）：还原 → BringWindowToTop →
+  SetForegroundWindow → AttachThreadInput 兜底 → **回读** `GetForegroundWindow`。
+  返回 `focused` / `foreground_before` / `foreground_after` / `attempts`；
+  被前台锁挡住时给 `next_action`（先最小化挡住的那个窗口）。
+- **`screenshot_window` 标注裁剪**：`clipped_by_screen` / `visible_rect` / `offscreen_px`。
+
+### 验证
+
+- 回归：**946 项 / 0 失败 / 0 错误 / 3 跳过**（v1.4.3 是 934，新增 12）
+- 真机：见 `docs/v1.4/RELEASE-v1.4.4rc1.md`
+
 ## [1.4.3] - 2026-11-14
 
 > 正式版。96 个工具不变。这一版做的是"观察更省、判定更准"，不是加功能。

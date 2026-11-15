@@ -8,6 +8,25 @@ from computer_mcp.input_guard import Button, MouseController as Controller
 from computer_mcp.core.utils import button_from_string
 
 
+def _require_on_screen(x, y, action: str) -> None:
+    """Refuse a point the mouse cannot reach, and say where the screen actually is.
+
+    A window that hangs past the edge of the screen still produces a bitmap, so OCR
+    can report text at pixels that do not exist on any monitor. A bare ValueError
+    leaves the caller guessing; this names the point and the box it missed.
+    """
+    from computer_mcp.ocr_ext import point_on_screen, screen_bounds
+
+    box = screen_bounds()
+    if point_on_screen(x, y, box):
+        return
+    raise ValueError(
+        f"{action} point ({int(x)}, {int(y)}) is outside the screen "
+        f"({box['x']}..{box['x'] + box['w'] - 1}, {box['y']}..{box['y'] + box['h'] - 1}); "
+        f"the target window is partly off screen - maximize it, move it back, or "
+        f"pass frame_id with image coordinates so the tool converts them")
+
+
 def click(button: str = "left", controller: Controller | None = None, *, x: float | None = None, y: float | None = None, expected_hwnd: int | None = None, frame_id: str | None = None) -> dict[str, Any]:
     """Perform a mouse click.
 
@@ -44,6 +63,7 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
     if x is not None:
         if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (x, y)):
             raise ValueError('click coordinates must be finite numbers')
+        _require_on_screen(x, y, 'click')
         import win32gui, win32process
         from computer_mcp import capabilities
         point = (int(x), int(y))
@@ -103,6 +123,7 @@ def double_click(button: str = "left", controller: Controller | None = None, *,
     btn = button_from_string(button)
     expected = None
     if x is not None:
+        _require_on_screen(x, y, 'double_click')
         controller.position = (int(x), int(y))
         if frame_id is not None:
             capture_core.assert_frame_target(frame_id, int(x), int(y))
@@ -196,6 +217,9 @@ def drag(start: dict[str, int], end: dict[str, int], button: str = "left",
         capture_core.assert_frame_target(frame_id, start["x"], start["y"])
         capture_core.assert_frame_target(frame_id, end["x"], end["y"])
         bound = capture_core.frame_target(frame_id)
+    else:
+        _require_on_screen(start["x"], start["y"], 'drag start')
+        _require_on_screen(end["x"], end["y"], 'drag end')
 
     # Move to start, press button, move to end, release button. The button is
     # released even when a check or a move fails half-way.

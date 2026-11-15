@@ -614,12 +614,123 @@ if IS_WINDOWS:
                 dict(x=bounds["x"], y=bounds["y"], w=bounds["width"], h=bounds["height"]),
                 image.width, image.height, image.width, image.height, 1.0,
                 hwnd=hwnd, target_hwnd=hwnd)
+            clip = _screen_clip(bounds)
             return {"success": True, "action": "screenshot_window", "hwnd": hwnd,
                     "frame_id": frame_id, "bounds": bounds,
+                    "clipped_by_screen": clip["clipped"],
+                    "visible_rect": clip["visible"],
+                    "offscreen_px": clip["offscreen_px"],
                     "format": "base64_png", "data": base64.b64encode(buffer.getvalue()).decode('ascii'),
                     "width": image.width, "height": image.height}
         except Exception as exc:
             return {"success": False, "error": f"Failed to screenshot window: {exc}"}
+
+    def _screen_clip(bounds: dict[str, Any]) -> dict[str, Any]:
+        """How much of a window rectangle is actually on a monitor.
+
+        PrintWindow returns pixels for a window that hangs off the screen too, so a
+        window screenshot can show a button the mouse can never reach. Reporting the
+        overlap lets the caller maximise or move the window instead of guessing why a
+        click at those coordinates does nothing.
+        """
+        from computer_mcp.ocr_ext import screen_bounds
+
+        screen = screen_bounds()
+        left = max(int(bounds["x"]), screen["x"])
+        top = max(int(bounds["y"]), screen["y"])
+        right = min(int(bounds["x"]) + int(bounds["width"]), screen["x"] + screen["w"])
+        bottom = min(int(bounds["y"]) + int(bounds["height"]), screen["y"] + screen["h"])
+        visible = {"x": left, "y": top,
+                   "w": max(0, right - left), "h": max(0, bottom - top)}
+        area = int(bounds["width"]) * int(bounds["height"])
+        visible_area = visible["w"] * visible["h"]
+        return {"clipped": visible_area < area,
+                "visible": visible,
+                "offscreen_px": max(0, area - visible_area),
+                "screen": screen}
+
+    def focus_window(hwnd: int, restore: bool = True) -> dict[str, Any]:
+        """Bring a window to the foreground and prove it happened.
+
+        BringWindowToTop alone is not enough on Windows: the shell only lets the
+        current foreground process change focus, so the call silently does nothing
+        when another app owns it. This tries the documented fallbacks and then reads
+        GetForegroundWindow back - a caller that skips the readback ends up clicking
+        into the old window.
+        """
+        try:
+            import ctypes
+            import time as _time
+            import win32con
+            import win32gui
+
+            target = int(hwnd)
+            if not win32gui.IsWindow(target):
+                return {"success": False, "action": "focus_window",
+                        "error": "target window no longer exists", "hwnd": target}
+
+            def _describe(handle):
+                if not handle:
+                    return {"hwnd": 0, "title": ""}
+                try:
+                    return {"hwnd": int(handle), "title": win32gui.GetWindowText(handle)}
+                except Exception:                       # noqa: BLE001
+                    return {"hwnd": int(handle), "title": ""}
+
+            before = _describe(win32gui.GetForegroundWindow())
+            attempts = []
+
+            if win32gui.IsIconic(target) and restore:
+                win32gui.ShowWindow(target, win32con.SW_RESTORE)
+                attempts.append("restore")
+                _time.sleep(0.15)
+
+            win32gui.BringWindowToTop(target)
+            attempts.append("bring_to_top")
+            try:
+                win32gui.SetForegroundWindow(target)
+                attempts.append("set_foreground")
+            except Exception:                            # noqa: BLE001
+                attempts.append("set_foreground_failed")
+
+            if win32gui.GetForegroundWindow() != target:
+                # Attach to the foreground thread: the usual workaround for the
+                # foreground lock.
+                foreground = win32gui.GetForegroundWindow()
+                try:
+                    fg_thread, _ = win32gui.GetWindowThreadProcessId(foreground)
+                    this_thread = ctypes.windll.kernel32.GetCurrentThreadId()
+                    ctypes.windll.user32.AttachThreadInput(this_thread, fg_thread, True)
+                    try:
+                        win32gui.SetForegroundWindow(target)
+                    finally:
+                        ctypes.windll.user32.AttachThreadInput(this_thread, fg_thread, False)
+                    attempts.append("attach_thread_input")
+                except Exception:                        # noqa: BLE001
+                    attempts.append("attach_thread_input_failed")
+
+            _time.sleep(0.12)
+            after_hwnd = win32gui.GetForegroundWindow()
+            after = _describe(after_hwnd)
+            rect = win32gui.GetWindowRect(target)
+            clip = _screen_clip({"x": rect[0], "y": rect[1],
+                                 "width": rect[2] - rect[0], "height": rect[3] - rect[1]})
+            focused = int(after_hwnd) == target
+            result = {"success": True, "action": "focus_window", "hwnd": target,
+                      "focused": focused,
+                      "foreground_before": before, "foreground_after": after,
+                      "attempts": attempts,
+                      "clipped_by_screen": clip["clipped"],
+                      "visible_rect": clip["visible"]}
+            if not focused:
+                result["next_action"] = (
+                    "Windows refuses cross-process focus changes while another app "
+                    "owns the foreground: minimise the window on top (or send it "
+                    "SW_MINIMIZE) and retry, or click inside the target once.")
+            return result
+        except Exception as exc:                         # noqa: BLE001
+            return {"success": False, "action": "focus_window",
+                    "error": f"{type(exc).__name__}: {exc}", "hwnd": hwnd}
 
     def list_virtual_desktops() -> dict[str, Any]:
         """List all virtual desktops with their IDs and names."""

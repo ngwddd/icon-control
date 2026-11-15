@@ -331,6 +331,11 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
     # Window actions
     elif name == "list_windows":
         result = window_actions.list_windows()
+    elif name == "focus_window":
+        result = window_actions.focus_window(
+            hwnd=int(arguments["hwnd"]),
+            restore=bool(arguments.get("restore", True)),
+        )
     elif name == "switch_to_window":
         result = window_actions.switch_to_window(
             hwnd=arguments.get("hwnd"),
@@ -386,7 +391,10 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
             result = {"success": screenshot_result.get("success"), "action": "screenshot_window",
                       "hwnd": arguments["hwnd"],
                       "frame_id": screenshot_result.get("frame_id"),
-                      "bounds": screenshot_result.get("bounds")}
+                      "bounds": screenshot_result.get("bounds"),
+                      "clipped_by_screen": screenshot_result.get("clipped_by_screen"),
+                      "visible_rect": screenshot_result.get("visible_rect"),
+                      "offscreen_px": screenshot_result.get("offscreen_px")}
         else:
             result = screenshot_result
     

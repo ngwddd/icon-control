@@ -132,6 +132,17 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
         return format_response(result, computer_state, screenshot_data=screenshot_data)
     
     except Exception as e:
+        from computer_mcp import permission as _perm_mod
+        if isinstance(e, getattr(_perm_mod, "PermissionDenied", ())):
+            # A refusal the caller can act on: keep the reason instead of folding it
+            # into "Tool execution failed". The reason already names the control
+            # state, so the hint can stay short.
+            return [TextContent(type="text", text=json.dumps({
+                "success": False, "blocked": True, "code": "permission_denied",
+                "error": str(e) or "permission denied", "tool": name,
+                "hint": ("控制权不在 AI，或当前状态不允许输入：先调用 control_claim，"
+                         "再重试这个动作；不要重试同一个点击"),
+            }, ensure_ascii=False))]
         # Exception messages can interpolate typed text, paths or credentials.
         error_msg = {"success": False, "error": "Tool execution failed",
                      "error_type": type(e).__name__, "tool": name}

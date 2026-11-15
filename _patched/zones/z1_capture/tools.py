@@ -54,9 +54,21 @@ SPECS: list[ToolSpec] = [
         name='screenshot_window',
         effects=('screen_read',),
         zone='Z1',
-        description='Capture screenshot of a specific window',
+        description='Capture screenshot of a specific window (PrintWindow: works while covered). Returns clipped_by_screen / visible_rect / offscreen_px because a window hanging off the screen still produces a bitmap - text visible in the image may sit at pixels the mouse cannot reach.',
         read_only=True,
         schema={'type': 'object', 'properties': {'hwnd': {'type': 'integer', 'description': 'Window handle'}}, 'required': ['hwnd']},
+    ),
+    ToolSpec(
+        name='focus_window',
+        effects=('window',),
+        zone='Z1',
+        description='Bring a window to the foreground and prove it: restores if minimised, tries BringWindowToTop / SetForegroundWindow / AttachThreadInput, then reads GetForegroundWindow back. focused=false means Windows refused the change (another app owns the foreground) - minimise that window and retry.',
+        read_only=False,
+        schema={'type': 'object', 'properties': {
+            'hwnd': {'type': 'integer', 'description': 'Window handle'},
+            'restore': {'type': 'boolean', 'default': True,
+                        'description': 'Restore the window first when minimised'},
+        }, 'required': ['hwnd']},
     ),
     ToolSpec(
         name='snapshot',

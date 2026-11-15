@@ -99,6 +99,36 @@ def _print_window(hwnd: int):
         return None, 0, 0
 
 
+def screen_bounds() -> dict[str, int]:
+    """The virtual desktop rectangle, in physical pixels.
+
+    A window can sit partly (or entirely) outside it: PrintWindow still returns a
+    bitmap, so OCR happily reports text at coordinates the mouse can never reach.
+    Callers need this box to say "that point is off screen" instead of guessing.
+    """
+    try:
+        import win32api
+        x = int(win32api.GetSystemMetrics(76))      # SM_XVIRTUALSCREEN
+        y = int(win32api.GetSystemMetrics(77))      # SM_YVIRTUALSCREEN
+        w = int(win32api.GetSystemMetrics(78))      # SM_CXVIRTUALSCREEN
+        h = int(win32api.GetSystemMetrics(79))      # SM_CYVIRTUALSCREEN
+        if w > 0 and h > 0:
+            return {"x": x, "y": y, "w": w, "h": h}
+        return {"x": 0, "y": 0,
+                "w": int(win32api.GetSystemMetrics(0)),
+                "h": int(win32api.GetSystemMetrics(1))}
+    except Exception:                                   # noqa: BLE001
+        return {"x": 0, "y": 0, "w": 0, "h": 0}
+
+
+def point_on_screen(x, y, bounds: dict | None = None) -> bool:
+    box = bounds or screen_bounds()
+    if not box["w"] or not box["h"]:
+        return True                                     # unknown: do not block
+    return (box["x"] <= x < box["x"] + box["w"]
+            and box["y"] <= y < box["y"] + box["h"])
+
+
 def _grab(hwnd=None, region=None):
     """Return (image, origin_x, origin_y).
 
@@ -254,6 +284,10 @@ def ocr_read(region: dict[str, int] | None = None, max_lines: int = 80,
                 "h": int(max(hs) / _scale),
             }
         )
+    box = screen_bounds()
+    for ln in lines:
+        ln["onscreen"] = point_on_screen(ln["x"] + ln["w"] // 2,
+                                         ln["y"] + ln["h"] // 2, box)
     if region:
         def _inside(ln):
             cx = ln["x"] + ln["w"] // 2
@@ -267,6 +301,7 @@ def ocr_read(region: dict[str, int] | None = None, max_lines: int = 80,
         "ok": True,
         "count": len(lines),
         "lines": lines,
+        "screen": box,
         "text_angle": _angle_of(result),
         "ms": round((time.perf_counter() - t0) * 1000, 1),
     }
@@ -321,6 +356,7 @@ def find_text(
     if not data.get("ok"):
         return data
 
+    box = data.get("screen") or screen_bounds()
     needle_raw = query if case_sensitive else query.casefold()
     needle = _norm(needle_raw)
     need_lcs = max(2, int(round(len(needle) * min_lcs_share)))
@@ -353,17 +389,27 @@ def find_text(
                 ratio = max(best, 0.0)
 
         if ratio is not None:
+            cx = ln["x"] + ln["w"] // 2
+            cy = ln["y"] + ln["h"] // 2
             hits.append(
                 {
                     **ln,
-                    "cx": ln["x"] + ln["w"] // 2,
-                    "cy": ln["y"] + ln["h"] // 2,
+                    "cx": cx,
+                    "cy": cy,
+                    # Computed here as well: ocr_read marks its own lines, but a hit
+                    # is what a caller may click, so it has to carry the flag.
+                    "onscreen": bool(ln.get("onscreen", point_on_screen(cx, cy, box))),
                     "ratio": round(ratio, 3),
                     "lcs": lcs,
+                    # How much text the line carries beyond the query. "Authorize
+                    # GitHub CLI" also contains "Authorize GitHub", so ratio alone
+                    # cannot tell the heading from the button; the tighter line is
+                    # the better match.
+                    "slack": max(0, len(hay) - len(needle)),
                 }
             )
 
-    hits.sort(key=lambda h: (-h["ratio"], -h["lcs"]))
+    hits.sort(key=lambda h: (-h["ratio"], h["slack"], -h["cy"]))
     return {
         "ok": True,
         "query": query,
@@ -372,6 +418,8 @@ def find_text(
         "scanned_lines": data["count"],
         "normalized_query": needle,
         "need_lcs": need_lcs,
+        "screen": data.get("screen"),
+        "onscreen": sum(1 for hit in hits if hit.get("onscreen")),
         "ms": data["ms"],
     }
 
@@ -394,6 +442,20 @@ def click_text(
     if index >= len(matches):
         return {"error": f"text {query!r} not found", "found": res.get("found"), "matches": matches}
     target = matches[index]
+    box = res.get("screen") or screen_bounds()
+    if not point_on_screen(target["cx"], target["cy"], box):
+        return {
+            "ok": False,
+            "code": "offscreen_target",
+            "error": (f"text {target['text']!r} sits at ({target['cx']}, {target['cy']}), "
+                      f"outside the screen ({box['x']}..{box['x'] + box['w'] - 1}, "
+                      f"{box['y']}..{box['y'] + box['h'] - 1}); maximize or scroll the "
+                      f"window so it is actually visible before clicking"),
+            "query": query,
+            "screen": box,
+            "candidates": matches[:5],
+            "chosen_index": index,
+        }
     t0 = time.perf_counter()
     mouse.position = (target["cx"], target["cy"])
     _execution.sleep(0.08)
@@ -406,5 +468,15 @@ def click_text(
         "clicked_text": target["text"],
         "x": target["cx"],
         "y": target["cy"],
+        "ratio": target.get("ratio"),
+        "chosen_index": index,
+        # Several matches are common (a heading and its button); the caller has to
+        # be able to see what else qualified, and what it actually hit.
+        "candidates": [
+            {"text": item["text"], "x": item["cx"], "y": item["cy"],
+             "ratio": item.get("ratio"), "slack": item.get("slack"),
+             "onscreen": item.get("onscreen")}
+            for item in matches[:5]
+        ],
         "ms": round((time.perf_counter() - t0) * 1000, 1),
     }

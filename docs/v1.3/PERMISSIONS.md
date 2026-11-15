@@ -35,6 +35,7 @@ ALLOW/DENY 对旧名、别名、内部子动作同样生效；未知工具拒绝
 | find_element | Z2 | screen_read | 是 |
 | find_elements_ranked | Z2 | screen_read | 是 |
 | find_text | Z2 | screen_read | 是 |
+| focus_window | Z1 | window | 是 |
 | frame_diff | Z2 | screen_read | 是 |
 | frame_mark | Z2 | config_write | 是 |
 | get_window_info | Z2 | screen_read | 是 |

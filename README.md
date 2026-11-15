@@ -2,11 +2,20 @@
 
 Windows 桌面控制 MCP：让 AI 通过截图、OCR、UI Automation、鼠标键盘和宏操作桌面，并在执行时检查授权、目标应用与用户接管状态。
 
-**v1.4.3（headless）：连上即用，不再需要人工授权** · **96 个 MCP 工具** · **MIT**
+**v1.4.4（headless）：连上即用，不再需要人工授权** · **97 个 MCP 工具** · **MIT**
 
 > v1.4.0 起默认走本地执行策略，授权窗口/托盘/热键不再启动；需要旧的人工授权流程时设 `ICON_CONTROL_POLICY=human`。设计与安全边界见 [docs/v1.4/HEADLESS.md](docs/v1.4/HEADLESS.md)。
 
 [下载正式版](https://github.com/ngwddd/icon-control/releases/latest) · [更新日志](CHANGELOG.md) · [无授权模式说明](docs/v1.4/HEADLESS.md) · [v1.4.1 发布说明](docs/v1.4/RELEASE-v1.4.1.md)
+
+## v1.4.4 更新
+
+- **坐标越界有话说**：`click`/`double_click`/`drag` 在屏幕外的点会报出具体坐标和屏幕范围，并提示改用 `frame_id`。
+- **OCR 坐标带归属**：`find_text` 的每条命中带 `onscreen`，返回体带 `screen`（虚拟桌面矩形）；窗口挂到屏幕外时能立刻发现。
+- **`click_text` 返回候选**：`candidates` + `chosen_index` + `ratio`；排序加入 `slack`，标题不再压过按钮；屏幕外目标直接拒绝（`offscreen_target`）。
+- **新增 `focus_window`**：还原 → 置顶 → 抢前台 → **回读确认**，被前台锁挡住时告诉你下一步该做什么。
+- **`screenshot_window` 标注裁剪**：`clipped_by_screen` / `visible_rect` / `offscreen_px`。
+- **控制权拒绝保留原因**：`permission_denied` + 原始原因 + `hint`（先 `control_claim`）。
 
 ## v1.4.3 更新
 
@@ -14,7 +23,6 @@ Windows 桌面控制 MCP：让 AI 通过截图、OCR、UI Automation、鼠标键
 - **跳过身份读取**：`ui_tree(with_ids=false)` 省掉每个控件一次 `AutomationId` 跨进程调用。
 - **局部模板重定位**：`match_template(previous=[x,y], radius=160)` 在上次位置附近找，返回 `moved_by`；分数不足或两处相似时**拒绝给坐标**。
 - **三态验证**：`execute_verified(expect={"kind":"absent"})` 只在"跑完且无读取错误"时报 `verified_absent`，被预算或深度截断时报 `executed_unverified`。
-- **修掉的缺陷**：窗口位图的模板坐标曾经是相对坐标；双击/拖拽的最终窗口校验没生效；越界搜索框会给出偏移坐标；`index ≥ 10` 取不到目标。
 
 ## 主要能力
 
@@ -40,15 +48,15 @@ Windows 桌面控制 MCP：让 AI 通过截图、OCR、UI Automation、鼠标键
 先取得与发布版本对应的安装脚本及依赖约束，再下载 wheel：
 
 ```powershell
-git clone --branch v1.4.3 --depth 1 https://github.com/ngwddd/icon-control.git
+git clone --branch v1.4.4 --depth 1 https://github.com/ngwddd/icon-control.git
 cd icon-control
 
 New-Item -ItemType Directory -Path dist -Force | Out-Null
-Invoke-WebRequest -Uri "https://github.com/ngwddd/icon-control/releases/latest/download/icon_control-1.4.3-py3-none-any.whl" -OutFile ".\dist\icon_control-1.4.3-py3-none-any.whl"
+Invoke-WebRequest -Uri "https://github.com/ngwddd/icon-control/releases/latest/download/icon_control-1.4.4-py3-none-any.whl" -OutFile ".\dist\icon_control-1.4.4-py3-none-any.whl"
 
 # 需要已安装 Python 3.12 及 Windows Python Launcher。
 $python312 = py -3.12 -c "import sys; print(sys.executable)"
-powershell -File tools\install.ps1 -Python $python312 -Wheel .\dist\icon_control-1.4.3-py3-none-any.whl -RegisterUi
+powershell -File tools\install.ps1 -Python $python312 -Wheel .\dist\icon_control-1.4.4-py3-none-any.whl -RegisterUi
 ```
 
 默认安装目录为 `%LOCALAPPDATA%\IconControl`。安装器使用独立环境，通过 `current` 目录联接切换版本；软件升级不会沿用旧授权。

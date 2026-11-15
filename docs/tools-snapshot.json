@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-11-14T06:50:13Z",
+ "generated_at": "2026-11-15T20:21:41Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
- "tool_count": 96,
- "dispatch_count": 96,
+ "tool_count": 97,
+ "dispatch_count": 97,
  "tools": [
   {
    "name": "act_until",
@@ -939,6 +939,28 @@
    }
   },
   {
+   "name": "focus_window",
+   "description": "Bring a window to the foreground and prove it: restores if minimised, tries BringWindowToTop / SetForegroundWindow / AttachThreadInput, then reads GetForegroundWindow back. focused=false means Windows refused the change (another app owns the foreground) - minimise that window and retry.",
+   "block_sha1": "87b108f98762d2a6344ba999a9db7b0dbc2298a9",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "hwnd": {
+      "type": "integer",
+      "description": "Window handle"
+     },
+     "restore": {
+      "type": "boolean",
+      "default": true,
+      "description": "Restore the window first when minimised"
+     }
+    },
+    "required": [
+     "hwnd"
+    ]
+   }
+  },
+  {
    "name": "frame_diff",
    "description": "Compare two buffered frames by index in an optional region: mean abs diff and changed flag.",
    "block_sha1": "60a045f1a97737072a2a3b0ec6f1582cfbe52d62",
@@ -1800,8 +1822,8 @@
   },
   {
    "name": "screenshot_window",
-   "description": "Capture screenshot of a specific window",
-   "block_sha1": "53e1d27201deedad16fbc369ebf7e31ba71cd6eb",
+   "description": "Capture screenshot of a specific window (PrintWindow: works while covered). Returns clipped_by_screen / visible_rect / offscreen_px because a window hanging off the screen still produces a bitmap - text visible in the image may sit at pixels the mouse cannot reach.",
+   "block_sha1": "d75ee921135fc5a2259108252b7b03893e597412",
    "schema": {
     "type": "object",
     "properties": {
@@ -2821,6 +2843,7 @@
   "find_element",
   "find_elements_ranked",
   "find_text",
+  "focus_window",
   "frame_diff",
   "frame_mark",
   "get_window_info",

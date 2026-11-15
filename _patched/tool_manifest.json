@@ -30,6 +30,7 @@
   "find_element",
   "find_elements_ranked",
   "find_text",
+  "focus_window",
   "frame_diff",
   "frame_mark",
   "get_window_info",

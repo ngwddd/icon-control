@@ -363,6 +363,18 @@
     "parameter_effects": []
   },
   {
+    "name": "focus_window",
+    "zone": "Z1",
+    "effects": [
+      "window"
+    ],
+    "requires_authority": true,
+    "read_actions": [],
+    "action_default": null,
+    "read_when_absent": [],
+    "parameter_effects": []
+  },
+  {
     "name": "frame_diff",
     "zone": "Z2",
     "effects": [
