@@ -806,16 +806,23 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
                 hwnd=arguments.get("hwnd"),
             )
         else:
+            partial = [k for k in ("x", "y", "w", "h") if k in arguments]
+            if partial and len(partial) < 4:
+                from computer_mcp.core.argument_error import ArgumentError
+                raise ArgumentError(
+                    f"region needs all of x/y/w/h (got {', '.join(partial)})",
+                    code="invalid_argument",
+                    hint="区域要么四个都给，要么都不给；缺参数会静默扩大搜索范围")
             result = ocr_ext.click_text(
-                query=str(arguments["query"]),
-                region=region,
-                # None means "pick the best one"; passing 0 would force the first
-                # match and make the ambiguity refusal unreachable from the tool.
-                index=arguments.get("index"),
-                mouse=mouse_controller,
-                settle_ms=int(arguments.get("settle_ms", 250)),
-                hwnd=arguments.get("hwnd"),
-            )
+                    query=str(arguments["query"]),
+                    region=region,
+                    # None means "pick the best one"; passing 0 would force the first
+                    # match and make the ambiguity refusal unreachable from the tool.
+                    index=arguments.get("index"),
+                    mouse=mouse_controller,
+                    settle_ms=int(arguments.get("settle_ms", 250)),
+                    hwnd=arguments.get("hwnd"),
+                )
         screenshot_data = {"error": "intentionally skipped"}
 
     else:
