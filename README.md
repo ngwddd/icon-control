@@ -2,13 +2,13 @@
 
 Windows 桌面控制 MCP：让 AI 通过截图、OCR、UI Automation、鼠标键盘和宏操作桌面，并在执行时检查授权、目标应用与用户接管状态。
 
-**v1.4.5 RC1（1.4.5rc1）：可靠交互候选版，待用户验证** · **97 个 MCP 工具** · **MIT**
+**v1.4.5 RC2（1.4.5rc2）：审计整改与自动化验证候选版** · **97 个 MCP 工具** · **MIT**
 
 > v1.4.0 起默认走本地执行策略，授权窗口/托盘/热键不再启动；需要旧的人工授权流程时设 `ICON_CONTROL_POLICY=human`。设计与安全边界见 [docs/v1.4/HEADLESS.md](docs/v1.4/HEADLESS.md)。
 
-[下载正式版](https://github.com/ngwddd/icon-control/releases/latest) · [更新日志](CHANGELOG.md) · [无授权模式说明](docs/v1.4/HEADLESS.md) · [RC1 修改与验证状态](docs/v1.4/RELEASE-v1.4.5rc1.md)
+[下载正式版](https://github.com/ngwddd/icon-control/releases/latest) · [更新日志](CHANGELOG.md) · [无授权模式说明](docs/v1.4/HEADLESS.md) · [RC2 修改与验证状态](docs/v1.4/RELEASE-v1.4.5rc2.md)
 
-## v1.4.5 RC1 更新
+## v1.4.5 RC2 更新
 
 - UIA/OCR/模板点击共用受约束执行路径，异常不重发无约束点击。
 - 默认 UIA 窗口先绑定再查找；OCR index 省略和显式 0 保持不同语义。

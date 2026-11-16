@@ -52,7 +52,16 @@ if (-not $Wheel) {
 if (-not $Wheel -or -not (Test-Path -LiteralPath $Wheel)) { throw 'Build a wheel first or pass -Wheel' }
 if ($ExpectedSha256) {
     if ($ExpectedSha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'ExpectedSha256 must contain exactly 64 hexadecimal characters' }
-    $actualSha256 = (Get-FileHash -LiteralPath $Wheel -Algorithm SHA256).Hash
+    # Use .NET directly: legacy Windows PowerShell launched by a pwsh host may
+    # not expose Get-FileHash through its inherited module discovery paths.
+    $hashStream = [IO.File]::OpenRead([IO.Path]::GetFullPath($Wheel))
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        $actualSha256 = [BitConverter]::ToString($hasher.ComputeHash($hashStream)).Replace('-', '')
+    } finally {
+        $hasher.Dispose()
+        $hashStream.Dispose()
+    }
     if (-not $actualSha256.Equals($ExpectedSha256, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Wheel SHA256 mismatch; installation refused'
     }

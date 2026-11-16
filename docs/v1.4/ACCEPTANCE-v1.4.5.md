@@ -1,6 +1,10 @@
 # Owner validation — v1.4.5 RC1
 
-Status: not executed by the implementation agent.
+RC1 status: implementation only. For RC2 the owner authorized the implementation
+agent to run tests, builds and CI. The current automated validation contract and
+evidence locations are in RELEASE-v1.4.5rc2.md; use the exact commit's workflow
+artifacts for results. Items below define the wider acceptance matrix and are
+not all implied by automated CI.
 
 Use an isolated Windows test environment and synthetic application data. Install
 the RC from its actual GitHub commit before invoking the checks below.

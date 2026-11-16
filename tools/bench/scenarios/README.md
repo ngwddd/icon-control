@@ -51,3 +51,13 @@ Repeat with DPI 125/150/200/250%, secondary displays, focus switches, pointer
 takeover, cancellation, duplicate OCR, UIA timeout, stale frames and concurrent
 clients. Fault injection and competitor adapters are supplied by the operator.
 Twenty clean repetitions do not establish a zero real-world error rate.
+
+## RC2 report semantics
+
+Report format 2 keeps successful-task and failed-task durations separate.
+Legacy latency_p50_ms/latency_p95_ms fields now cover independently verified
+successful samples only. Failures still count against success rate.
+success_tool_latency and failure_tool_latency measure the adapter command;
+success_verifier_latency and failure_verifier_latency measure the independent
+verifier. Total latency includes both and excludes setup/reset. Old samples
+without component timings remain null for those fields.
