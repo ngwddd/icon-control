@@ -2,6 +2,7 @@ name: Release
 on:
   push:
     tags: ['v*']
+    branches: ['release/v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -37,6 +38,10 @@ jobs:
       - name: Bind release tag to exact source version
         shell: pwsh
         run: |
+          if ($env:GITHUB_REF_TYPE -eq 'branch' -and $env:GITHUB_REF_NAME.StartsWith('release/')) {
+            $env:RELEASE_TAG = $env:GITHUB_REF_NAME.Substring(8)
+            "RELEASE_TAG=$env:RELEASE_TAG" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
           if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
             if ($env:GITHUB_REF_NAME -ne 'main') { throw 'Manual publication must use main' }
             if ($env:REQUESTED_SHA -ne $env:GITHUB_SHA) { throw 'Requested source commit changed' }
