@@ -66,6 +66,19 @@ raw_click_text = getattr(O.click_text, "__wrapped__", O.click_text)
 
 
 class ClickTextRefusalTests(unittest.TestCase):
+    def setUp(self):
+        # These tests cover OCR candidate selection. Native execution is covered
+        # separately by pointer-contract tests and the real-HWND fault probe.
+        from computer_mcp import pointer_contract as P
+        self.binding = P.WindowBinding(42, {'pid': 123}, (0, 0, 2560, 1440))
+        for item in (patch.object(P, 'bind_window', return_value=self.binding),
+                     patch('win32gui.WindowFromPoint', return_value=42),
+                     patch('win32gui.GetAncestor', return_value=42)):
+            item.start()
+            self.addCleanup(item.stop)
+        item = patch.object(P, 'click_at', return_value={'outcome': 'executed_unverified'})
+        self.executor = item.start()
+        self.addCleanup(item.stop)
 
     def test_identical_candidates_are_ambiguous_not_guessed(self):
         mouse = Mock()
@@ -83,7 +96,7 @@ class ClickTextRefusalTests(unittest.TestCase):
             result = raw_click_text("Confirm", mouse=mouse, index=1)
         self.assertTrue(result["ok"])
         self.assertEqual(result["chosen_index"], 1)
-        self.assertEqual(mouse.position, (500, 415))
+        self.assertEqual(self.executor.call_args.args[1], (500, 415))
 
     def test_a_negative_index_is_rejected(self):
         mouse = Mock()
@@ -101,7 +114,7 @@ class ClickTextRefusalTests(unittest.TestCase):
             result = raw_click_text("Confirm", mouse=mouse)
         self.assertTrue(result["ok"])
         self.assertEqual(result["chosen_index"], 1)
-        self.assertEqual(mouse.position, (500, 415))
+        self.assertEqual(self.executor.call_args.args[1], (500, 415))
 
     def test_every_candidate_off_screen_is_refused(self):
         mouse = Mock()
@@ -131,8 +144,8 @@ class ClickTextRefusalTests(unittest.TestCase):
                 patch("win32gui.GetAncestor", return_value=42):
             result = raw_click_text("Confirm", mouse=mouse, hwnd=42)
         self.assertTrue(result["ok"])
-        self.assertEqual(mouse.click.call_args.kwargs.get("expected_hwnd"), 42)
-        self.assertEqual(mouse.click.call_args.kwargs.get("expected_point"), (500, 415))
+        self.assertIs(self.executor.call_args.kwargs["binding"], self.binding)
+        self.assertEqual(self.executor.call_args.args[1], (500, 415))
 
 
 class FocusSemanticsTests(AuthorityCase, unittest.TestCase):

@@ -2,11 +2,34 @@
 
 Windows 桌面控制 MCP：让 AI 通过截图、OCR、UI Automation、鼠标键盘和宏操作桌面，并在执行时检查授权、目标应用与用户接管状态。
 
-**v1.4.4（headless）：连上即用，不再需要人工授权** · **97 个 MCP 工具** · **MIT**
+**v1.4.5 Stable：可靠桌面交互与发布一致性加强** · **97 个 MCP 工具** · **MIT**
 
 > v1.4.0 起默认走本地执行策略，授权窗口/托盘/热键不再启动；需要旧的人工授权流程时设 `ICON_CONTROL_POLICY=human`。设计与安全边界见 [docs/v1.4/HEADLESS.md](docs/v1.4/HEADLESS.md)。
 
-[下载正式版](https://github.com/ngwddd/icon-control/releases/latest) · [更新日志](CHANGELOG.md) · [无授权模式说明](docs/v1.4/HEADLESS.md) · [v1.4.1 发布说明](docs/v1.4/RELEASE-v1.4.1.md)
+[下载正式版](https://github.com/ngwddd/icon-control/releases/latest) · [更新日志](CHANGELOG.md) · [无授权模式说明](docs/v1.4/HEADLESS.md) · [v1.4.5 发布说明](docs/v1.4/RELEASE-v1.4.5.md)
+
+## v1.4.5 更新
+
+- 发布 Tag、源码版本、运行包版本和构建来源必须一致；正式标签禁止预发布包。
+- 鼠标按钮使用严格枚举，非法值在发送输入前返回 invalid_argument。
+
+- UIA/OCR/模板点击共用受约束执行路径，异常不重发无约束点击。
+- 默认 UIA 窗口先绑定再查找；OCR index 省略和显式 0 保持不同语义。
+- 模板消失等待超时返回 timeout/inconclusive，不报告 absent。
+- 新增兼容字段 outcome，区分已执行未验证、拒绝、失败、取消和已验证结果。
+- 提供本地客户端配置生成、可选安装哈希校验及同机任务基准框架。
+
+本候选版只交付代码，未运行测试、构建或真机验收。下方正式版下载仍指向 Stable。
+RC 从候选分支源码构建，包版本为 1.4.5rc1。验证步骤见
+[验收交接](docs/v1.4/ACCEPTANCE-v1.4.5.md)，基准适配方式见
+[任务框架](tools/bench/scenarios/README.md)。
+
+已安装版本的解释器可运行下列命令，输出可复制到客户端的 stdio JSON；不写授权或急停状态：
+
+```powershell
+icon-control config
+icon-control config --policy human
+```
 
 ## v1.4.4 更新
 
@@ -48,15 +71,15 @@ Windows 桌面控制 MCP：让 AI 通过截图、OCR、UI Automation、鼠标键
 先取得与发布版本对应的安装脚本及依赖约束，再下载 wheel：
 
 ```powershell
-git clone --branch v1.4.4 --depth 1 https://github.com/ngwddd/icon-control.git
+git clone --branch v1.4.5 --depth 1 https://github.com/ngwddd/icon-control.git
 cd icon-control
 
 New-Item -ItemType Directory -Path dist -Force | Out-Null
-Invoke-WebRequest -Uri "https://github.com/ngwddd/icon-control/releases/latest/download/icon_control-1.4.4-py3-none-any.whl" -OutFile ".\dist\icon_control-1.4.4-py3-none-any.whl"
+Invoke-WebRequest -Uri "https://github.com/ngwddd/icon-control/releases/download/v1.4.5/icon_control-1.4.5-py3-none-any.whl" -OutFile ".\dist\icon_control-1.4.5-py3-none-any.whl"
 
 # 需要已安装 Python 3.12 及 Windows Python Launcher。
 $python312 = py -3.12 -c "import sys; print(sys.executable)"
-powershell -File tools\install.ps1 -Python $python312 -Wheel .\dist\icon_control-1.4.4-py3-none-any.whl -RegisterUi
+powershell -File tools\install.ps1 -Python $python312 -Wheel .\dist\icon_control-1.4.5-py3-none-any.whl -RegisterUi
 ```
 
 默认安装目录为 `%LOCALAPPDATA%\IconControl`。安装器使用独立环境，通过 `current` 目录联接切换版本；软件升级不会沿用旧授权。
@@ -110,6 +133,8 @@ powershell -File tools\install.ps1 -Rollback
 不同客户端应使用独立凭据，通过 `client-add --client-name <名称>` 创建。该命令返回本机凭据文件路径，不授予桌面权限。旧 `/sse` 接口不再提供。
 
 ## 授权与用户接管
+
+以下授权窗口、托盘、热键和人工范围说明适用于 ICON_CONTROL_POLICY=human；默认 local 策略行为见 [Headless 说明](docs/v1.4/HEADLESS.md)。
 
 热键 **Ctrl+Alt+Shift+F9** 或托盘图标打开原生授权窗口。DSH 胶囊保留为原生授权入口，不能替代用户在原生界面的批准。
 
@@ -185,7 +210,7 @@ powershell -File tools\install.ps1 -Rollback
 
 - [更新日志](CHANGELOG.md)：版本修改记录。
 - [桌面操作技能](skill/desktop-operator/SKILL.md)：观察、执行、页面确认与收尾约定。
-- [32 项桌面验收任务](docs/v1.3/DESKTOP-BENCHMARKS.md)：真实 Windows 场景的验收清单。
+- [v1.4.5 验收交接](docs/v1.4/ACCEPTANCE-v1.4.5.md)：候选版验证范围和待执行项目。
 - [桌面反馈交接](docs/v1.3/DESKTOP-FEEDBACK-HANDOFF.md)：v1.3.8 修改范围及验证归属。
 - [第三方声明](THIRD_PARTY_NOTICES.md) 与 [许可证](LICENSE)。
 
@@ -209,3 +234,4 @@ docs/                     发布说明、设计和验收资料
 ```
 
 Icon Control 使用 `computer-mcp` 的 MIT 源码，并以完整 Python 包交付；不再通过覆盖宿主 `site-packages` 安装。依赖及归属见第三方声明。
+

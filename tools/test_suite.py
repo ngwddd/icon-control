@@ -8,6 +8,7 @@ import subprocess
 import os
 import time
 import shutil
+import faulthandler
 
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'tests'))
@@ -22,8 +23,11 @@ def source_dirty():
 tested_commit=os.environ.get('ICON_CONTROL_TEST_SOURCE_SHA') or source_head()
 dirty_at_start=source_dirty() or source_head()!=tested_commit
 with (directory/'tests.log').open('w',encoding='utf-8') as stream:
+    # Leave actionable stacks if a native/async regression blocks the suite.
+    faulthandler.dump_traceback_later(60, repeat=True, file=stream)
     suite=unittest.defaultTestLoader.discover(str(root/'tests'),pattern=args.pattern)
     result=unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
+    faulthandler.cancel_dump_traceback_later()
 report=dict(source_commit=tested_commit,
             source_dirty=dirty_at_start or source_dirty() or source_head()!=tested_commit,
             scope='full_suite' if args.pattern=='test_*.py' else 'selected_tests',

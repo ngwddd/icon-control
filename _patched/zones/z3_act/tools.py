@@ -44,7 +44,7 @@ SPECS: list[ToolSpec] = [
         zone='Z3',
         description='Find a template and click its centre. No coordinate guessing. Optional offset [dx,dy] nudges the click point.',
         read_only=False,
-        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'confidence': {'type': 'number', 'default': 0.8}, 'button': {'type': 'string', 'enum': ['left', 'right', 'middle'], 'default': 'left'}, 'offset': {'type': 'array', 'items': {'type': 'integer'}}, 'settle_ms': {'type': 'integer', 'default': 150}, 'hwnd': {'type': 'integer'}}, 'required': ['name']},
+        schema={'type': 'object', 'additionalProperties': False, 'dependentRequired': {k: [other for other in ('x', 'y', 'w', 'h') if other != k] for k in ('x', 'y', 'w', 'h')}, 'properties': {'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer', 'minimum': 1}, 'h': {'type': 'integer', 'minimum': 1}, 'name': {'type': 'string'}, 'confidence': {'type': 'number', 'default': 0.8}, 'button': {'type': 'string', 'enum': ['left', 'right', 'middle'], 'default': 'left'}, 'offset': {'type': 'array', 'items': {'type': 'integer'}}, 'settle_ms': {'type': 'integer', 'default': 150}, 'hwnd': {'type': 'integer'}}, 'required': ['name']},
     ),
     ToolSpec(
         name='click_text',
@@ -52,7 +52,7 @@ SPECS: list[ToolSpec] = [
         zone='Z3',
         description='Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (WeChat, Electron, custom-rendered UIs).',
         read_only=False,
-        schema={'type': 'object', 'properties': {'query': {'type': 'string'}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'index': {'type': 'integer', 'default': 0}, 'settle_ms': {'type': 'integer', 'default': 250}, 'hwnd': {'type': 'integer', 'description': 'Raise this window first, then OCR its rectangle'}}, 'required': ['query']},
+        schema={'type': 'object', 'properties': {'query': {'type': 'string'}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer'}, 'h': {'type': 'integer'}, 'index': {'type': 'integer', 'minimum': 0, 'description': 'Omit for automatic candidate selection; explicit 0 selects the first candidate. Do not synthesize a default.'}, 'settle_ms': {'type': 'integer', 'default': 250}, 'hwnd': {'type': 'integer', 'description': 'Bind OCR and the final click to this window'}}, 'required': ['query']},
     ),
     ToolSpec(
         name='close_window',
@@ -325,3 +325,4 @@ for _spec in SPECS:
                                              'description': 'Fresh ui_tree/find_element snapshot reference'}
         _spec.schema.pop('required', None)
         _spec.schema['anyOf'] = [{'required': ['name']}, {'required': ['ref']}]
+

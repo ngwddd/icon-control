@@ -75,12 +75,23 @@ def initialize(bridge_port=None, register_ui=False):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('command',choices=['stdio','http','bridge','init','check','client-add'],nargs='?',default='stdio')
+    parser.add_argument('command',choices=['stdio','http','bridge','init','check','client-add','config'],nargs='?',default='stdio')
     parser.add_argument('--host',default='127.0.0.1');parser.add_argument('--port',type=int,default=8000)
     parser.add_argument('--bridge-port',type=int)
     parser.add_argument('--register-ui',action='store_true')
     parser.add_argument('--client-name')
+    parser.add_argument('--policy', choices=['local', 'human'], default=None,
+                        help='Policy to include in generated MCP client configuration')
     args=parser.parse_args()
+    if args.command=='config':
+        # No credential provisioning, grants or stop-state changes.
+        from computer_mcp import policy
+        client = dict(command=str(Path(sys.executable).absolute()),
+                      args=['-m', 'computer_mcp.launcher', 'stdio'],
+                      env=dict(ICON_CONTROL_HOME=str(security.data_home()),
+                               ICON_CONTROL_POLICY=args.policy or policy.mode()))
+        print(json.dumps({'mcpServers': {'icon-control': client}}, ensure_ascii=False, indent=2))
+        return 0
     if args.command=='init':print(json.dumps(initialize(args.bridge_port,args.register_ui)));return 0
     if args.command=='client-add':
         print(json.dumps(add_http_client(args.client_name)));return 0
@@ -110,3 +121,4 @@ def main():
     return 0
 
 if __name__=='__main__':raise SystemExit(main())
+

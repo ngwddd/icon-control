@@ -492,6 +492,11 @@ def click_text(
         if isinstance(exc, ArgumentError):
             return dict(exc.payload("click_text"), ok=False)
         raise
+    from computer_mcp.pointer_contract import bind_window, click_at
+    # Clicks default to the foreground window captured BEFORE OCR. Read-only
+    # find_text may still search the desktop; clicking never rebinds stale pixels.
+    binding = bind_window(hwnd)
+    hwnd = binding.hwnd
     res = find_text(query, region=region, case_sensitive=case_sensitive, hwnd=hwnd)
     if not res.get("ok"):
         return res
@@ -560,20 +565,14 @@ def click_text(
                     "hint": "重新截图确认目标窗口仍在前台，再重试",
                     "candidates": [_describe_candidate(item) for item in matches[:5]]}
     t0 = time.perf_counter()
-    mouse.position = (target["cx"], target["cy"])
-    _execution.sleep(0.08)
     from pynput.mouse import Button
-    try:
-        if hwnd:
-            mouse.click(Button.left, 1, expected_point=(target["cx"], target["cy"]),
-                        expected_hwnd=int(hwnd))
-        else:
-            mouse.click(Button.left, 1)
-    except TypeError:
-        mouse.click(Button.left, 1)
-    _execution.sleep(max(0, settle_ms) / 1000.0)
+    outcome = click_at(mouse, (target["cx"], target["cy"]), Button.left,
+                       binding=binding, move_delay=0.08, settle_ms=settle_ms)
+    if outcome.get("ok") is False:
+        return outcome
     return {
         "ok": True,
+        **outcome,
         "clicked_text": target["text"],
         "x": target["cx"],
         "y": target["cy"],
@@ -584,3 +583,4 @@ def click_text(
         "candidates": [_describe_candidate(item) for item in matches[:5]],
         "ms": round((time.perf_counter() - t0) * 1000, 1),
     }
+

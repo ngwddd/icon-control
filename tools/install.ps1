@@ -2,6 +2,7 @@ param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'IconControl'),
     [string]$Python = 'python',
     [string]$Wheel = '',
+    [string]$ExpectedSha256 = '',
     [string]$Constraints = (Join-Path $PSScriptRoot '..\constraints-windows-py312.txt'),
     [int]$BridgePort = 0,
     [switch]$RegisterUi,
@@ -49,13 +50,29 @@ if (-not $Wheel) {
     $Wheel = (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..\dist') -Filter '*.whl' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 }
 if (-not $Wheel -or -not (Test-Path -LiteralPath $Wheel)) { throw 'Build a wheel first or pass -Wheel' }
+if ($ExpectedSha256) {
+    if ($ExpectedSha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'ExpectedSha256 must contain exactly 64 hexadecimal characters' }
+    # Use .NET directly: legacy Windows PowerShell launched by a pwsh host may
+    # not expose Get-FileHash through its inherited module discovery paths.
+    $hashStream = [IO.File]::OpenRead([IO.Path]::GetFullPath($Wheel))
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        $actualSha256 = [BitConverter]::ToString($hasher.ComputeHash($hashStream)).Replace('-', '')
+    } finally {
+        $hasher.Dispose()
+        $hashStream.Dispose()
+    }
+    if (-not $actualSha256.Equals($ExpectedSha256, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Wheel SHA256 mismatch; installation refused'
+    }
+}
+if (-not (Test-Path -LiteralPath $Constraints)) { throw 'Validated dependency constraints missing' }
 $versions = Assert-Managed (Join-Path $root 'versions')
 New-Item -ItemType Directory -Path $versions -Force | Out-Null
 $staging = Assert-Managed (Join-Path $versions ('candidate-' + $stamp))
 & $Python -m venv $staging
 if ($LASTEXITCODE -ne 0) { throw 'Creating isolated environment failed' }
 $interpreter = Join-Path $staging 'Scripts\python.exe'
-if (-not (Test-Path -LiteralPath $Constraints)) { throw 'Validated dependency constraints missing' }
 & $interpreter -m pip install -c $Constraints $Wheel
 if ($LASTEXITCODE -ne 0) { throw 'Installation failed; current version preserved' }
 & $interpreter -c "import computer_mcp,tkinter,sys; from pathlib import Path; from computer_mcp.tool_manifest import validate_registry; validate_registry(); tkinter.Tcl().eval('info patchlevel'); assert Path(sys.executable).with_name('pythonw.exe').is_file()"
@@ -97,3 +114,4 @@ Write-Output ('Installed candidate: ' + $current)
 Write-Output 'Use current\Scripts\python.exe -m computer_mcp.launcher stdio in your MCP client.'
 Write-Output 'For a custom InstallRoot, also set ICON_CONTROL_HOME to the same directory.'
 Write-Output 'v1.4.0 runs headless: no approval window, no tray, no hotkey. Set ICON_CONTROL_POLICY=human to restore the approval flow.'
+

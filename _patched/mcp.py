@@ -20,6 +20,7 @@ from computer_mcp import tool_registry
 from computer_mcp import dataset
 from computer_mcp.zones.dispatch import dispatch as _dispatch
 from computer_mcp.core.response import format_response
+from computer_mcp.result_outcome import normalize
 from computer_mcp.core.state import ComputerState
 # DSH patch: cheap capture / change-detection helpers (see core/screenshot.py)
 from computer_mcp.core import screenshot as capture_core
@@ -111,13 +112,15 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
             _gate_denial = _perm_gate.check_tool(name, arguments)
             if _gate_denial is not None:
                 return format_response(_gate_denial, computer_state,
-                                       screenshot_data={"error": "blocked by permission gate"})
+                                       screenshot_data={"error": "blocked by permission gate"},
+                                       tool=name, arguments=arguments)
         except Exception as _gate_exc:      # 闸门自身出错时 fail closed
             _code, _message = classify_gate_exception(_gate_exc)
             return format_response(
                 {"success": False, "blocked": True, "code": _code,
                  "error": _message, "tool": name},
-                computer_state, screenshot_data={"error": "blocked by permission gate"})
+                computer_state, screenshot_data={"error": "blocked by permission gate"},
+                tool=name, arguments=arguments)
 
         
         _out = _dispatch(name, arguments, computer_state=computer_state,
@@ -129,14 +132,15 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
         if result is None:
             result = {"error": "Action returned None"}
         
-        return format_response(result, computer_state, screenshot_data=screenshot_data)
+        return format_response(result, computer_state, screenshot_data=screenshot_data,
+                               tool=name, arguments=arguments)
     
     except Exception as e:
         from computer_mcp.core.argument_error import ArgumentError as _ArgumentError
         if isinstance(e, _ArgumentError):
             # Our own refusals carry no user content: they can be returned whole.
             return [TextContent(type="text",
-                                text=json.dumps(e.payload(name), ensure_ascii=False))]
+                                text=json.dumps(normalize(e.payload(name), name, arguments), ensure_ascii=False))]
         from computer_mcp import permission as _perm_mod
         if isinstance(e, getattr(_perm_mod, "PermissionDenied", ())):
             # A refusal the caller can act on: keep the reason instead of folding it
@@ -144,12 +148,14 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
             # state, so the hint can stay short.
             return [TextContent(type="text", text=json.dumps({
                 "success": False, "blocked": True, "code": "permission_denied",
+                "outcome": "refused", "action_executed": None,
                 "error": str(e) or "permission denied", "tool": name,
                 "hint": ("控制权不在 AI，或当前状态不允许输入：先调用 control_claim，"
                          "再重试这个动作；不要重试同一个点击"),
             }, ensure_ascii=False))]
         # Exception messages can interpolate typed text, paths or credentials.
         error_msg = {"success": False, "error": "Tool execution failed",
+                     "outcome": "failed", "action_executed": None,
                      "error_type": type(e).__name__, "tool": name}
         return [TextContent(type="text", text=json.dumps(error_msg))]
 
@@ -175,4 +181,5 @@ async def run_http(host: str = "127.0.0.1", port: int = 8000):
     """Authenticated MCP Streamable HTTP. Legacy fake SSE endpoint is removed."""
     from computer_mcp.transport import run_http as sdk_http
     await sdk_http(server, host, port)
+
 
