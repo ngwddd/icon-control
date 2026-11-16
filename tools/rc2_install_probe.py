@@ -29,6 +29,7 @@ def main():
     runtime = ROOT / '.runtime'
     runtime.mkdir(exist_ok=True)
     baseline, candidate = args.baseline_wheel.resolve(), args.candidate_wheel.resolve()
+    expected_version = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
     report = dict(kind='isolated_install_upgrade_rollback', baseline=baseline.name,
                   candidate=candidate.name, candidate_sha256=hashlib.sha256(candidate.read_bytes()).hexdigest(),
                   source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip())
@@ -60,7 +61,7 @@ def main():
                 raise AssertionError('Fixture emergency stop did not latch')
             report['upgrade_install'] = install(candidate)
             upgraded = report['upgraded_state'] = state()
-            if upgraded['version'] != '1.4.5rc2' or upgraded['granted'] or not upgraded['stop']:
+            if upgraded['version'] != expected_version or upgraded['granted'] or not upgraded['stop']:
                 raise AssertionError('Upgrade changed pending stop or installed the wrong version')
             config = report['generated_config'] = json.loads(run([python, '-I', '-m', 'computer_mcp.launcher', 'config'], env))
             if config['mcpServers']['icon-control']['env']['ICON_CONTROL_HOME'] != str(home):

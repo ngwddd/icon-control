@@ -172,7 +172,7 @@ class ReleaseGateTests(AuthorityCase, unittest.TestCase):
         from contextlib import redirect_stdout
         buffer = io.StringIO()
         argv = ['release_gate.py', '--expected-commit', commit or self.commit]
-        with patch.object(gate, 'ROOT', home), patch.object(sys, 'argv', argv):
+        with patch.object(gate, 'ROOT', home), patch.object(sys, 'argv', argv), patch.dict('os.environ', GITHUB_REF_TYPE='branch'):
             with redirect_stdout(buffer):
                 code = gate.main()
         return code, buffer.getvalue()

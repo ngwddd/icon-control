@@ -426,6 +426,8 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
                    settle_ms: int = 150, offset: Any = None) -> dict:
     """找到模板位置并点它的中心（offset 可给 [dx,dy] 微调）。"""
     op = "click_template"
+    from computer_mcp.core.utils import button_from_string
+    _btn = button_from_string(button)
     if isinstance(region, dict):
         complete = ('x' in region and 'y' in region
                     and ('w' in region or 'width' in region)
@@ -448,11 +450,6 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
     if mouse is None:
         from computer_mcp.input_guard import MouseController
         mouse = MouseController()
-    from pynput.mouse import Button
-    _btn = {"left": Button.left, "right": Button.right, "middle": Button.middle}.get(button)
-    if _btn is None:
-        return {"success": False, "outcome": "refused", "code": "invalid_argument",
-                "action_executed": False, "error": "Invalid mouse button"}
     outcome = click_at(mouse, (cx, cy), _btn, binding=binding,
                        move_delay=0.04, hold_ms=60, settle_ms=settle_ms)
     if outcome.get("ok") is False:

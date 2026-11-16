@@ -436,6 +436,8 @@ def ui_click(
 
     P0-3：给了 element_id 就按 id 定位（优先），不再靠名字匹配。
     """
+    from computer_mcp.core.utils import button_from_string
+    pressed = button_from_string(button)
     from computer_mcp.pointer_contract import bind_window, click_at
     if ref:
         from computer_mcp.snapshots import resolve
@@ -461,11 +463,6 @@ def ui_click(
             return {'ok': False, 'code': 'target_occluded', 'action_executed': False,
                     'error': 'Target window is obscured; observe it again'}
     t0 = time.perf_counter()
-    from pynput.mouse import Button as _Button
-    # right/middle mapped to None fell back to the left button: a right-click that
-    # silently left-clicks opens nothing and changes the page instead.
-    pressed = {"left": _Button.left, "right": _Button.right,
-               "middle": _Button.middle}.get(str(button).lower(), _Button.left)
     outcome = click_at(mouse, (target["cx"], target["cy"]), pressed,
                        binding=binding, move_delay=0.06, settle_ms=settle_ms)
     if outcome.get("ok") is False:
@@ -633,6 +630,14 @@ def run_batch(
       {"action":"ui_click","name":"发送","hwnd":123}
     """
     from computer_mcp.core import screenshot as capture_core
+    from computer_mcp.core.utils import button_from_string
+
+    # Validate the complete input plan before even an earlier move can run.
+    for raw in steps[: max(1, int(max_steps))]:
+        planned = dict(raw or {})
+        if str(planned.get("action", "")).strip().lower() in (
+                "click", "double_click", "right_click", "ui_click"):
+            button_from_string(planned.get("button", "left"))
 
     t_all = time.perf_counter()
     log: list[dict[str, Any]] = []
@@ -742,6 +747,7 @@ def run_batch(
                     hwnd=step.get("hwnd"),
                     exact=bool(step.get("exact", False)),
                     index=int(step.get("index", 0)),
+                    button=step.get("button", "left"),
                     mouse=mouse,
                     settle_ms=int(step.get("settle_ms", 250)),
                 )
@@ -794,9 +800,12 @@ def run_batch(
 
 def _click(mouse, step, count=1, right=False):
     from pynput.mouse import Button
+    from computer_mcp.core.utils import button_from_string
+    btn = button_from_string(step.get("button", "right" if right else "left"))
+    if right:
+        btn = Button.right
 
     if "x" in step and "y" in step:
         mouse.position = (int(step["x"]), int(step["y"]))
-    btn = Button.right if (right or str(step.get("button", "")).lower() == "right") else Button.left
     mouse.click(btn, int(count))
 

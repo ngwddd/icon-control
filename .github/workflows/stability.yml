@@ -26,7 +26,7 @@ jobs:
       - name: Verify installed wheel provenance
         shell: pwsh
         run: |
-          python -c "import json,os; from pathlib import Path; import computer_mcp; p=Path(computer_mcp.__file__).with_name('_build_info.json'); b=json.loads(p.read_text()); assert b['source_commit']==os.environ['GITHUB_SHA'], b; assert b['source_dirty'] is False, b; assert computer_mcp.__version__=='1.4.5rc2'; print(json.dumps(b))"
+          python -c "import json,os; from pathlib import Path; import computer_mcp; p=Path(computer_mcp.__file__).with_name('_build_info.json'); b=json.loads(p.read_text()); assert b['source_commit']==os.environ['GITHUB_SHA'], b; assert b['source_dirty'] is False, b; assert computer_mcp.__version__==Path('VERSION').read_text().strip(); print(json.dumps(b))"
           if ($LASTEXITCODE -ne 0) { throw 'Wheel provenance mismatch' }
       - run: python tools/snapshot_tools.py --check
       - run: python tools/verify.py --pattern "test_*.py"

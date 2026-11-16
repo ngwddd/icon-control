@@ -191,8 +191,8 @@ class Runner:
                     raise ValueError('Scroll is limited to 100 wheel steps per instruction')
                 self.ms.scroll(dx,dy)
             elif kind == "click":
-                self.ms.click(getattr(__import__("pynput.mouse", fromlist=["Button"]).Button,
-                                      op.get("button", "left")))
+                from computer_mcp.core.utils import button_from_string
+                self.ms.click(button_from_string(op.get("button", "left")))
             elif kind == "walk_or_turn":
                 self._walk_or_turn(op)
             elif kind == "sleep":

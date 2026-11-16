@@ -44,6 +44,7 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
     Returns:
         Dictionary with action result
     """
+    btn = button_from_string(button)
     if controller is None:
         controller = Controller()
     
@@ -90,7 +91,6 @@ def click(button: str = "left", controller: Controller | None = None, *, x: floa
         if capabilities.process_record(current_pid) != target or tuple(controller.position) != point:
             raise ValueError('Target changed while positioning the pointer')
         capabilities.require_target(point=point)
-    btn = button_from_string(button)
     if target is None:
         controller.click(btn)
     else:

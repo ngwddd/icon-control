@@ -563,6 +563,9 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
     check('run_script')
 
     kind = (action or {}).get("kind", "")
+    if kind == "click":
+        from computer_mcp.core.utils import button_from_string
+        btn = button_from_string(action.get("button", "left"))
     try:
         if kind == "click":
             # 软选择器优先：按文字/模板找，找不到才退回比例坐标（三级降级）
@@ -583,8 +586,6 @@ def do_action(action: dict, rect: tuple[int, int, int, int], hwnd: int = 0) -> d
                 pt = _resolve_point(rect, action.get("rel_frac") or [0.5, 0.5])
                 method = "rel"
             ms = MS()
-            btn = {"left": Button.left, "right": Button.right}.get(
-                str(action.get("button", "left")), Button.left)
             clicks = int(action.get("clicks", 1))
             settle = float(action.get("settle_ms", 120)) / 1000.0
             retries = int(action.get("retries", 1))

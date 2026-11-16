@@ -67,16 +67,14 @@ def key_from_string(key_str: str):
 
 
 def button_from_string(button_str: str) -> Button:
-    """Convert string button name to pynput Button."""
-    button_str = button_str.lower().strip()
-    if button_str in ["left", "1"]:
-        return Button.left
-    elif button_str in ["right", "2"]:
-        return Button.right
-    elif button_str in ["middle", "3"]:
-        return Button.middle
-    else:
-        return Button.left
+    """Resolve a named button; invalid input must never become a left click."""
+    from computer_mcp.core.argument_error import ArgumentError
+    if isinstance(button_str, str):
+        button = {"left": Button.left, "right": Button.right,
+                  "middle": Button.middle}.get(button_str.strip().lower())
+        if button is not None:
+            return button
+    raise ArgumentError('button must be left, right or middle', code='invalid_argument')
 
 
 def key_to_string(key) -> str:

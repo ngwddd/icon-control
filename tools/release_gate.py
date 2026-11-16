@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import os
 import sys
 from pathlib import Path
 
@@ -51,6 +52,26 @@ def check_version(errors: list[str]) -> str | None:
         if value != version:
             errors.append(f'{label} version {value!r} != VERSION {version!r}')
     return version
+
+
+def check_tag(errors: list[str], version: str | None, tag: str | None,
+              stable: bool = False) -> None:
+    """Bind release identity to the version, not just three matching sources."""
+    if tag is not None:
+        if not re.fullmatch(r'v\d+\.\d+\.\d+(?:rc\d+)?', tag):
+            errors.append('Invalid release tag: expected vX.Y.Z or vX.Y.ZrcN')
+        elif tag[1:] != version:
+            errors.append(f'Release tag {tag!r} does not match package version {version!r}')
+        # A stable-looking tag cannot wrap any pre-release package.
+        if re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+            stable = True
+    if stable:
+        if tag is None:
+            errors.append('A stable release requires an explicit release tag')
+        if not version or not re.fullmatch(r'\d+\.\d+\.\d+', version):
+            errors.append('Stable release cannot contain a prerelease/dev/local package')
+        if tag and not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+            errors.append('Stable release cannot use a prerelease tag')
 
 
 def check_tests(errors: list[str], expected_commit: str) -> None:
@@ -99,18 +120,30 @@ def check_protocol(errors: list[str], version: str | None) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-commit", default=None)
+    parser.add_argument("--expected-tag", default=None)
+    parser.add_argument("--stable", action="store_true")
+    parser.add_argument("--version-only", action="store_true",
+                        help="Check release identity before any build or publish step")
     args = parser.parse_args()
     commit = args.expected_commit or ""
     errors: list[str] = []
     version = check_version(errors)
-    check_tests(errors, commit)
-    check_protocol(errors, version)
+    tag = args.expected_tag
+    if tag is None and os.environ.get('GITHUB_REF_TYPE') == 'tag':
+        tag = os.environ.get('GITHUB_REF_NAME')
+    check_tag(errors, version, tag, args.stable)
+    if not args.version_only:
+        check_tests(errors, commit)
+        check_protocol(errors, version)
     if errors:
         for line in errors:
             print(f"BLOCKED: {line}")
         print(f"{len(errors)} blocker(s); the release may not be promoted.")
         return 1
-    print(f"PASS: {version} is ready to be promoted (commit {commit[:8] or 'unbound'}).")
+    if args.version_only:
+        print(f"PASS: release identity {tag or version} matches source version {version}.")
+    else:
+        print(f"PASS: {version} automated release evidence is valid (commit {commit[:8] or 'unbound'}).")
     return 0
 
 
