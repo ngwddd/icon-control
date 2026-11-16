@@ -1292,4 +1292,7 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
 
     if _is_input:
         _ctl.quiet()
+    from computer_mcp.result_outcome import normalize
+    result = normalize(result, name, arguments)
     return {"result": result, "screenshot_data": screenshot_data}
+

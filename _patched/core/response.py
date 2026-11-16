@@ -26,6 +26,8 @@ def format_response(
     Returns:
         List containing ImageContent (if screenshot enabled) and TextContent
     """
+    from computer_mcp.result_outcome import normalize
+    result = normalize(result)
     result_state = state.get_state(include_screenshot=screenshot_data is None)
     
     # Use provided screenshot or extract from state
@@ -81,4 +83,5 @@ def format_response(
     response.append(TextContent(type="text", text=json.dumps(result)))
     
     return response
+
 

@@ -385,34 +385,39 @@ def wait_template(name: str, timeout_ms: int = 5000, poll_ms: int = 120,
                   region: Any = None, hwnd: int | None = None) -> dict:
     """等模板出现（appear=True）或消失（appear=False）。事件驱动，比模型轮询省。"""
     op = "wait_template"
-    t0 = time.time()
+    t0 = time.monotonic()
     last = 0.0
     tries = 0
-    inconclusive = None
-    while (time.time() - t0) * 1000 < timeout_ms:
+    last_observation = None
+    while (time.monotonic() - t0) * 1000 < timeout_ms:
         tries += 1
         r = match_template(name, region=region, hwnd=hwnd, confidence=confidence)
+        last_observation = r
         if r.get("success"):
             last = r.get("score", 0.0)
             if r.get("reason") == "ambiguous":
                 # Two equally good matches prove nothing about presence; treating
                 # them as "gone" is exactly the wrong answer for appear=False.
-                inconclusive = r
                 _execution.sleep(max(30, poll_ms) / 1000.0)
                 continue
             if bool(r.get("found")) == bool(appear):
                 _bump(op, True)
                 return {"success": True, "action": op, "matched": True,
+                        "outcome": "verified_success", "verified": True,
+                        "verification_method": "template_observation",
                         "verdict": "present" if appear else "absent",
-                        "elapsed_ms": int((time.time() - t0) * 1000), "tries": tries,
+                        "elapsed_ms": int((time.monotonic() - t0) * 1000), "tries": tries,
                         "score": last, "target_appear": appear, "where": r}
         _execution.sleep(max(30, poll_ms) / 1000.0)
     _bump(op, False)
-    verdict = "inconclusive" if inconclusive is not None else (
-        "absent" if not appear else "not_found")
-    return {"success": True, "action": op, "matched": False, "verdict": verdict,
-            "where": inconclusive,
-            "elapsed_ms": int((time.time() - t0) * 1000), "tries": tries,
+    inconclusive_now = (last_observation is None or not last_observation.get("success")
+                        or last_observation.get("reason") == "ambiguous")
+    return {"success": True, "action": op, "matched": False,
+            "verdict": "inconclusive" if inconclusive_now else "timeout",
+            "outcome": "failed", "verified": False, "code": "condition_timeout",
+            "last_found": (bool(last_observation.get("found")) if not inconclusive_now else None),
+            "where": last_observation,
+            "elapsed_ms": int((time.monotonic() - t0) * 1000), "tries": tries,
             "score": last, "target_appear": appear}
 
 
@@ -421,6 +426,8 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
                    settle_ms: int = 150, offset: Any = None) -> dict:
     """找到模板位置并点它的中心（offset 可给 [dx,dy] 微调）。"""
     op = "click_template"
+    from computer_mcp.pointer_contract import bind_window, click_at
+    binding = bind_window(hwnd) if hwnd else None
     r = match_template(name, region=region, hwnd=hwnd, confidence=confidence)
     if not r.get("success") or not r.get("found"):
         _bump(op, False)
@@ -429,36 +436,21 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
     if offset:
         cx += int(offset[0]); cy += int(offset[1])
     if mouse is None:
-        from computer_mcp.input_guard import Button as MB, MouseController as MC
-        mouse = MC()
-        _btn = MB.left
-    else:
-        from pynput.mouse import Button as MB
-        _btn = {"left": MB.left, "right": MB.right, "middle": MB.middle}.get(button, MB.left)
-    mouse.position = (int(cx), int(cy))
-    _execution.sleep(0.04)
-    # A template hit is only as good as the window that owns the pixel: bind the
-    # press the same way the UIA paths do, or an occluding window receives it.
-    clicked = False
-    try:
-        if hwnd:
-            mouse.press(_btn, expected_point=(int(cx), int(cy)), expected_hwnd=int(hwnd))
-        else:
-            mouse.press(_btn)
-        clicked = True
-    except TypeError:
-        mouse.press(_btn)
-        clicked = True
-    try:
-        _execution.sleep(0.06)
-    finally:
-        if clicked:
-            mouse.release(_btn)
-    if settle_ms:
-        _execution.sleep(settle_ms / 1000.0)
+        from computer_mcp.input_guard import MouseController
+        mouse = MouseController()
+    from pynput.mouse import Button
+    _btn = {"left": Button.left, "right": Button.right, "middle": Button.middle}.get(button)
+    if _btn is None:
+        return {"success": False, "outcome": "refused", "code": "invalid_argument",
+                "action_executed": False, "error": "Invalid mouse button"}
+    outcome = click_at(mouse, (cx, cy), _btn, binding=binding,
+                       move_delay=0.04, hold_ms=60, settle_ms=settle_ms)
+    if outcome.get("ok") is False:
+        _bump(op, False)
+        return outcome
     _bump(op, True)
-    return {"success": True, "action": op, "name": name, "clicked": [int(cx), int(cy)],
-            "score": r.get("score")}
+    return {"success": True, "action": op, "name": name,
+            "clicked": [int(cx), int(cy)], "score": r.get("score"), **outcome}
 
 
 def list_templates() -> dict:
@@ -627,3 +619,4 @@ def hover_probe(x: int, y: int, region: Any = None, hwnd: int | None = None,
     except Exception as exc:
         _bump(op, False)
         return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
+

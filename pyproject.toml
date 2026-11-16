@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "icon-control"
-version = "1.4.4"
+version = "1.4.5rc1"
 description = "Windows desktop MCP with authenticated, cancellable execution"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -40,3 +40,4 @@ packages = ["computer_mcp", "computer_mcp.actions", "computer_mcp.core",
 
 [tool.setuptools.package-data]
 computer_mcp = ["tool_manifest.json", "_build_info.json"]
+

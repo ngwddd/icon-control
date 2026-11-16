@@ -436,15 +436,21 @@ def ui_click(
 
     P0-3：给了 element_id 就按 id 定位（优先），不再靠名字匹配。
     """
+    from computer_mcp.pointer_contract import bind_window, click_at
     if ref:
         from computer_mcp.snapshots import resolve
         target = resolve(ref, hwnd)
         hwnd = target['hwnd']
+        binding = bind_window(hwnd)
         res = {}
-    elif element_id:
-        target, res = find_by_element_id(str(element_id), hwnd=hwnd)
     else:
-        target, res = _resolve(hwnd, name, exact, index)
+        # Freeze the foreground window before UIA resolves a name or element id.
+        binding = bind_window(hwnd)
+        hwnd = binding.hwnd
+        if element_id:
+            target, res = find_by_element_id(str(element_id), hwnd=hwnd)
+        else:
+            target, res = _resolve(hwnd, name, exact, index)
     if target is None:
         return res
     if mouse is None:
@@ -452,26 +458,21 @@ def ui_click(
     if hwnd:
         from computer_mcp.winutil import point_owner
         if point_owner(target['cx'], target['cy']) != hwnd:
-            return {'ok': False, 'error': 'Target window is obscured; observe it again'}
+            return {'ok': False, 'code': 'target_occluded', 'action_executed': False,
+                    'error': 'Target window is obscured; observe it again'}
     t0 = time.perf_counter()
-    mouse.position = (target["cx"], target["cy"])
-    _execution.sleep(0.06)
     from pynput.mouse import Button as _Button
     # right/middle mapped to None fell back to the left button: a right-click that
     # silently left-clicks opens nothing and changes the page instead.
     pressed = {"left": _Button.left, "right": _Button.right,
                "middle": _Button.middle}.get(str(button).lower(), _Button.left)
-    try:
-        if hwnd:
-            mouse.click(pressed, 1, expected_point=(target["cx"], target["cy"]),
-                        expected_hwnd=int(hwnd))
-        else:
-            mouse.click(pressed, 1)
-    except TypeError:
-        mouse.click(pressed, 1)
-    _execution.sleep(max(0, settle_ms) / 1000.0)
+    outcome = click_at(mouse, (target["cx"], target["cy"]), pressed,
+                       binding=binding, move_delay=0.06, settle_ms=settle_ms)
+    if outcome.get("ok") is False:
+        return outcome
     return {
         "ok": True,
+        **outcome,
         "clicked": {"name": target["name"], "type": target["type"], "x": target["cx"], "y": target["cy"]},
         "ms": round((time.perf_counter() - t0) * 1000, 1),
     }
@@ -798,3 +799,4 @@ def _click(mouse, step, count=1, right=False):
         mouse.position = (int(step["x"]), int(step["y"]))
     btn = Button.right if (right or str(step.get("button", "")).lower() == "right") else Button.left
     mouse.click(btn, int(count))
+

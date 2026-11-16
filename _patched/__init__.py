@@ -3,7 +3,7 @@
 This module provides a stateless API for computer control.
 """
 
-__version__ = "1.4.4"
+__version__ = "1.4.5rc1"
 
 from computer_mcp.input_guard import KeyboardController, MouseController
 
@@ -424,3 +424,4 @@ def set_config(**kwargs) -> dict:
 # Every legacy entry point delegates to the same execution policy.
 from computer_mcp.execution import install_boundaries as _install_boundaries
 _install_boundaries()
+

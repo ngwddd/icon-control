@@ -128,7 +128,8 @@ def boundary(tool):
                         wrapper = MouseController if function.__module__.endswith('.mouse') else KeyboardController
                         if not isinstance(value, wrapper):
                             bound.arguments[name] = wrapper(value)
-                return function(*bound.args, **bound.kwargs)
+                from computer_mcp.result_outcome import normalize
+                return normalize(function(*bound.args, **bound.kwargs), tool, policy_args)
         guarded._icon_guarded = True
         return guarded
     return decorate
@@ -184,3 +185,4 @@ def install_boundaries():
     for path, names in tables.items():
         module = importlib.import_module('computer_mcp.' + path)
         guard_module(module, names)
+

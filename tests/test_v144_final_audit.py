@@ -54,44 +54,43 @@ raw_ui_click = getattr(U.ui_click, "__wrapped__", U.ui_click)
 
 
 class InjectedClickBindingTests(unittest.TestCase):
+    """Recognition delegates to the shared constrained executor (v1.4.5)."""
+
+    def setUp(self):
+        from computer_mcp import pointer_contract as P
+        self.binding = P.WindowBinding(42, {'pid': 123}, (0, 0, 800, 600))
+        for item in (patch.object(P, 'bind_window', return_value=self.binding),
+                     patch.object(P, 'click_at', return_value={'outcome': 'executed_unverified'})):
+            value = item.start()
+            self.addCleanup(item.stop)
+            self.executor = value
 
     def test_click_template_binds_the_press_to_the_window(self):
-        mouse = Mock()
-        match = {"success": True, "found": True, "center": [500, 400], "score": 0.99}
-        with patch.object(VS, "match_template", return_value=match):
-            result = raw_click_template("btn", mouse=mouse, hwnd=42)
-        self.assertTrue(result["success"])
-        self.assertEqual(mouse.press.call_args.kwargs.get("expected_hwnd"), 42)
-        self.assertEqual(mouse.press.call_args.kwargs.get("expected_point"), (500, 400))
-        mouse.release.assert_called_once()
+        match = {'success': True, 'found': True, 'center': [500, 400], 'score': .99}
+        with patch.object(VS, 'match_template', return_value=match):
+            result = raw_click_template('btn', mouse=Mock(), hwnd=42)
+        self.assertTrue(result['success'])
+        self.assertIs(self.executor.call_args.kwargs['binding'], self.binding)
+        self.assertEqual(self.executor.call_args.args[1], (500, 400))
+        self.assertEqual(self.executor.call_args.kwargs['hold_ms'], 60)
 
     def test_ui_click_right_presses_the_right_button(self):
-        from pynput.mouse import Button
-
-        mouse = Mock()
-        target = {"name": "Row", "type": "ListItemControl", "cx": 100, "cy": 200}
-        with patch.object(U, "_resolve", return_value=(target, {})), \
-                patch("computer_mcp.winutil.point_owner", return_value=42):
-            raw_ui_click("Row", hwnd=42, button="right", mouse=mouse)
-        self.assertEqual(mouse.click.call_args.args[0], Button.right)
+        self.assert_button('right')
 
     def test_ui_click_middle_presses_the_middle_button(self):
-        from pynput.mouse import Button
+        self.assert_button('middle')
 
-        mouse = Mock()
-        target = {"name": "Row", "type": "ListItemControl", "cx": 100, "cy": 200}
-        with patch.object(U, "_resolve", return_value=(target, {})), \
-                patch("computer_mcp.winutil.point_owner", return_value=42):
-            raw_ui_click("Row", hwnd=42, button="middle", mouse=mouse)
-        self.assertEqual(mouse.click.call_args.args[0], Button.middle)
+    def assert_button(self, button):
+        from pynput.mouse import Button
+        target = {'name': 'Row', 'type': 'ListItemControl', 'cx': 100, 'cy': 200}
+        with patch.object(U, '_resolve', return_value=(target, {})), \
+                patch('computer_mcp.winutil.point_owner', return_value=42):
+            raw_ui_click('Row', hwnd=42, button=button, mouse=Mock())
+        self.assertEqual(self.executor.call_args.args[2], getattr(Button, button))
 
     def test_ui_click_binds_the_press_to_the_window(self):
-        mouse = Mock()
-        target = {"name": "Row", "type": "ListItemControl", "cx": 100, "cy": 200}
-        with patch.object(U, "_resolve", return_value=(target, {})), \
-                patch("computer_mcp.winutil.point_owner", return_value=42):
-            raw_ui_click("Row", hwnd=42, mouse=mouse)
-        self.assertEqual(mouse.click.call_args.kwargs.get("expected_hwnd"), 42)
+        self.assert_button('left')
+        self.assertIs(self.executor.call_args.kwargs['binding'], self.binding)
 
 
 class PointerDriftTests(unittest.TestCase):
@@ -152,7 +151,8 @@ class OcrRegionTests(AuthorityCase, unittest.TestCase):
         data = {"ok": True, "found": 1, "screen": SCREEN, "matches": [
             dict(text="Confirm", cx=400, cy=300, w=80, h=24, ratio=1.0, slack=0, onscreen=True)]}
         raw = getattr(O.click_text, "__wrapped__", O.click_text)
-        with patch.object(O, "find_text", return_value=data), \
+        with patch("computer_mcp.pointer_contract.bind_window"), \
+                patch.object(O, "find_text", return_value=data), \
                 patch("win32gui.WindowFromPoint", side_effect=RuntimeError("boom")):
             result = raw("Confirm", mouse=mouse, hwnd=42)
         self.assertFalse(result["ok"])
@@ -188,3 +188,4 @@ class VirtualDesktopSearchTests(AuthorityCase, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

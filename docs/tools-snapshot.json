@@ -316,7 +316,7 @@
   {
    "name": "click_text",
    "description": "Find a string with OCR and click it, in ONE call. The reliable way to click inside apps whose controls UIA cannot see (WeChat, Electron, custom-rendered UIs).",
-   "block_sha1": "79c7a71e88e9497964880e2a2d0754339e3827a9",
+   "block_sha1": "29548dc4729153aa5050a35ee3b4ece1d63b2ae8",
    "schema": {
     "type": "object",
     "properties": {
@@ -337,7 +337,8 @@
      },
      "index": {
       "type": "integer",
-      "default": 0
+      "minimum": 0,
+      "description": "Omit for automatic candidate selection; explicit 0 selects the first candidate. Do not synthesize a default."
      },
      "settle_ms": {
       "type": "integer",
@@ -345,7 +346,7 @@
      },
      "hwnd": {
       "type": "integer",
-      "description": "Raise this window first, then OCR its rectangle"
+      "description": "Bind OCR and the final click to this window"
      }
     },
     "required": [
@@ -566,7 +567,7 @@
      },
      "threshold": {
       "type": "number",
-      "default": 8.0
+      "default": 8
      },
      "x": {
       "type": "integer"
@@ -881,7 +882,7 @@
      },
      "min_confidence": {
       "type": "number",
-      "default": 0.0
+      "default": 0
      },
      "include_state": {
       "type": "boolean",
@@ -1091,7 +1092,7 @@
      },
      "threshold": {
       "type": "number",
-      "default": 3.0
+      "default": 3
      },
      "away_x": {
       "type": "integer"
@@ -2643,7 +2644,7 @@
      },
      "threshold": {
       "type": "number",
-      "default": 8.0
+      "default": 8
      },
      "timeout_ms": {
       "type": "integer",
