@@ -6,6 +6,7 @@ env:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,7 +20,11 @@ jobs:
           $wheel = (Get-ChildItem dist -Filter *.whl | Select-Object -First 1).FullName
           python -m pip install -c constraints-windows-py312.txt $wheel
           if ($LASTEXITCODE -ne 0) { throw 'Package installation failed' }
+      - run: python -m pip check
+      - run: python tools/snapshot_tools.py --check
       - run: python tools/verify.py --pattern "test_*.py"
+      - name: Native HWND faults and fixture click
+        run: python tools/rc2_window_probe.py --inject --output .runtime/native-window-report.json
       - name: Official MCP SDK interoperability
         shell: pwsh
         run: |
@@ -37,6 +42,7 @@ jobs:
             .runtime/test-results.json
             .runtime/tests.log
             .runtime/protocol/protocol-smoke.json
+            .runtime/native-window-report.json
       - uses: actions/upload-artifact@v4
         with:
           name: icon-control-candidate

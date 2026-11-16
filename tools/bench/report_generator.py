@@ -28,6 +28,16 @@ def wilson(successes, n):
     return [max(0, center-half), min(1, center+half)]
 
 
+def timing(samples, field='latency_ms'):
+    values = [s[field] for s in samples
+              if isinstance(s.get(field), (int, float)) and not isinstance(s[field], bool)
+              and math.isfinite(s[field]) and s[field] >= 0]
+    return dict(samples=len(values),
+                p50_ms=statistics.median(values) if values else None,
+                p95_ms=percentile(values, .95),
+                max_ms=max(values) if values else None)
+
+
 def summarize(rows):
     groups = defaultdict(list)
     for row in rows:
@@ -41,9 +51,10 @@ def summarize(rows):
     report = []
     for key, samples in sorted(groups.items()):
         supported = [s for s in samples if s['status'] != 'unsupported']
-        passed = sum(s['status'] == 'success' for s in supported)
-        times = [s['latency_ms'] for s in supported if isinstance(s.get('latency_ms'), (int, float))
-                 and math.isfinite(s['latency_ms']) and s['latency_ms'] >= 0]
+        successful = [s for s in supported if s['status'] == 'success' and s.get('task_success') is True]
+        failed = [s for s in supported if s not in successful]
+        passed = len(successful)
+        success_timing = timing(successful)
         metrics = {}
         for name in sorted({k for s in supported for k in s.get('metrics', {})}):
             values = [s['metrics'][name] for s in supported if s.get('metrics', {}).get(name) is not None]
@@ -55,14 +66,21 @@ def summarize(rows):
                            failed=len(supported)-passed,
                            success_rate=passed/len(supported) if supported else None,
                            success_rate_95ci=wilson(passed, len(supported)),
-                           latency_samples=len(times),
-                           latency_p50_ms=statistics.median(times) if times else None,
-                           latency_p95_ms=percentile(times, .95),
-                           latency_max_ms=max(times) if times else None,
+                           latency_samples=success_timing['samples'],
+                           latency_p50_ms=success_timing['p50_ms'],
+                           latency_p95_ms=success_timing['p95_ms'],
+                           latency_max_ms=success_timing['max_ms'],
+                           success_latency=success_timing,
+                           failure_latency=timing(failed),
+                           success_tool_latency=timing(successful, 'tool_latency_ms'),
+                           failure_tool_latency=timing(failed, 'tool_latency_ms'),
+                           success_verifier_latency=timing(successful, 'verifier_latency_ms'),
+                           failure_verifier_latency=timing(failed, 'verifier_latency_ms'),
                            metrics=metrics))
-    return dict(format=1, results=report,
+    return dict(format=2, results=report,
                 note='Adapter counters are reported telemetry, not independently verified metrics. '
-                     'Missing counters remain null. Latency includes the independent verifier, excludes setup/reset. '
+                     'Missing counters remain null. Legacy latency fields cover successful verified tasks only. '
+                     'Total latency includes the verifier, excludes setup/reset; adapter and verifier times are separate. '
                      'Unsupported tasks remain visible; no aggregate competitor ranking is produced.')
 
 

@@ -44,7 +44,7 @@ SPECS: list[ToolSpec] = [
         zone='Z3',
         description='Find a template and click its centre. No coordinate guessing. Optional offset [dx,dy] nudges the click point.',
         read_only=False,
-        schema={'type': 'object', 'properties': {'name': {'type': 'string'}, 'confidence': {'type': 'number', 'default': 0.8}, 'button': {'type': 'string', 'enum': ['left', 'right', 'middle'], 'default': 'left'}, 'offset': {'type': 'array', 'items': {'type': 'integer'}}, 'settle_ms': {'type': 'integer', 'default': 150}, 'hwnd': {'type': 'integer'}}, 'required': ['name']},
+        schema={'type': 'object', 'additionalProperties': False, 'dependentRequired': {k: [other for other in ('x', 'y', 'w', 'h') if other != k] for k in ('x', 'y', 'w', 'h')}, 'properties': {'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'w': {'type': 'integer', 'minimum': 1}, 'h': {'type': 'integer', 'minimum': 1}, 'name': {'type': 'string'}, 'confidence': {'type': 'number', 'default': 0.8}, 'button': {'type': 'string', 'enum': ['left', 'right', 'middle'], 'default': 'left'}, 'offset': {'type': 'array', 'items': {'type': 'integer'}}, 'settle_ms': {'type': 'integer', 'default': 150}, 'hwnd': {'type': 'integer'}}, 'required': ['name']},
     ),
     ToolSpec(
         name='click_text',

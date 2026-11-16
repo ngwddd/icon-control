@@ -112,13 +112,15 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
             _gate_denial = _perm_gate.check_tool(name, arguments)
             if _gate_denial is not None:
                 return format_response(_gate_denial, computer_state,
-                                       screenshot_data={"error": "blocked by permission gate"})
+                                       screenshot_data={"error": "blocked by permission gate"},
+                                       tool=name, arguments=arguments)
         except Exception as _gate_exc:      # 闸门自身出错时 fail closed
             _code, _message = classify_gate_exception(_gate_exc)
             return format_response(
                 {"success": False, "blocked": True, "code": _code,
                  "error": _message, "tool": name},
-                computer_state, screenshot_data={"error": "blocked by permission gate"})
+                computer_state, screenshot_data={"error": "blocked by permission gate"},
+                tool=name, arguments=arguments)
 
         
         _out = _dispatch(name, arguments, computer_state=computer_state,
@@ -130,7 +132,8 @@ async def _call_tool_impl(name: str, arguments: dict[str, Any]) -> list[Union[Te
         if result is None:
             result = {"error": "Action returned None"}
         
-        return format_response(result, computer_state, screenshot_data=screenshot_data)
+        return format_response(result, computer_state, screenshot_data=screenshot_data,
+                               tool=name, arguments=arguments)
     
     except Exception as e:
         from computer_mcp.core.argument_error import ArgumentError as _ArgumentError

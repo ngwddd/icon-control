@@ -426,8 +426,18 @@ def click_template(name: str, mouse: Any = None, button: str = "left",
                    settle_ms: int = 150, offset: Any = None) -> dict:
     """找到模板位置并点它的中心（offset 可给 [dx,dy] 微调）。"""
     op = "click_template"
+    if isinstance(region, dict):
+        complete = ('x' in region and 'y' in region
+                    and ('w' in region or 'width' in region)
+                    and ('h' in region or 'height' in region))
+        if not complete:
+            from computer_mcp.core.argument_error import ArgumentError
+            raise ArgumentError('Template region requires all of x/y/w/h or none',
+                                code='invalid_argument')
     from computer_mcp.pointer_contract import bind_window, click_at
-    binding = bind_window(hwnd) if hwnd else None
+    # Resolve the default window before capture, never from a later hit point.
+    binding = bind_window(hwnd)
+    hwnd = binding.hwnd
     r = match_template(name, region=region, hwnd=hwnd, confidence=confidence)
     if not r.get("success") or not r.get("found"):
         _bump(op, False)

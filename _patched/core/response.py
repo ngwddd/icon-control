@@ -14,7 +14,8 @@ if TYPE_CHECKING:
 def format_response(
     result: dict[str, Any],
     state: "ComputerState",
-    screenshot_data: Optional[dict[str, Any]] = None
+    screenshot_data: Optional[dict[str, Any]] = None,
+    *, tool: str | None = None, arguments: dict | None = None
 ) -> list[Union[TextContent, ImageContent]]:
     """Format a tool response with optional screenshot as ImageContent.
     
@@ -27,7 +28,7 @@ def format_response(
         List containing ImageContent (if screenshot enabled) and TextContent
     """
     from computer_mcp.result_outcome import normalize
-    result = normalize(result)
+    result = normalize(result, tool, arguments)
     result_state = state.get_state(include_screenshot=screenshot_data is None)
     
     # Use provided screenshot or extract from state

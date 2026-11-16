@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-15T21:48:43Z",
+ "generated_at": "2026-11-16T19:13:40Z",
  "source": "tools/snapshot_tools.py (registry -> docs/tools-snapshot.json)",
  "mcp_py_lines": 0,
  "tool_count": 97,
@@ -274,10 +274,47 @@
   {
    "name": "click_template",
    "description": "Find a template and click its centre. No coordinate guessing. Optional offset [dx,dy] nudges the click point.",
-   "block_sha1": "41c8284e328a5b59250cc6ad2e3f7e10bfea1344",
+   "block_sha1": "d0bc0e56dc637fa63864c80cb497a87d0c5680b9",
    "schema": {
     "type": "object",
+    "additionalProperties": false,
+    "dependentRequired": {
+     "x": [
+      "y",
+      "w",
+      "h"
+     ],
+     "y": [
+      "x",
+      "w",
+      "h"
+     ],
+     "w": [
+      "x",
+      "y",
+      "h"
+     ],
+     "h": [
+      "x",
+      "y",
+      "w"
+     ]
+    },
     "properties": {
+     "x": {
+      "type": "integer"
+     },
+     "y": {
+      "type": "integer"
+     },
+     "w": {
+      "type": "integer",
+      "minimum": 1
+     },
+     "h": {
+      "type": "integer",
+      "minimum": 1
+     },
      "name": {
       "type": "string"
      },
@@ -567,7 +604,7 @@
      },
      "threshold": {
       "type": "number",
-      "default": 8
+      "default": 8.0
      },
      "x": {
       "type": "integer"
@@ -882,7 +919,7 @@
      },
      "min_confidence": {
       "type": "number",
-      "default": 0
+      "default": 0.0
      },
      "include_state": {
       "type": "boolean",
@@ -1092,7 +1129,7 @@
      },
      "threshold": {
       "type": "number",
-      "default": 3
+      "default": 3.0
      },
      "away_x": {
       "type": "integer"
@@ -2644,7 +2681,7 @@
      },
      "threshold": {
       "type": "number",
-      "default": 8
+      "default": 8.0
      },
      "timeout_ms": {
       "type": "integer",

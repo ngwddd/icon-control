@@ -104,7 +104,8 @@ def boundary(tool):
         def guarded(*args, **kwargs):
             bound = inspect.signature(function).bind(*args, **kwargs)
             policy_args = next((bound.arguments[n] for n in ('args','arguments','kwargs')
-                                if isinstance(bound.arguments.get(n),dict)), None)
+                                if isinstance(bound.arguments.get(n),dict)),
+                               dict(bound.arguments))
             if tool == 'run_script' and 'ops' in bound.arguments:
                 policy_args = {'ops': bound.arguments['ops']}
             if tool == 'batch' and 'steps' in bound.arguments:

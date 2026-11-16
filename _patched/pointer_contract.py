@@ -75,7 +75,10 @@ execution, clean up only held inputs, and require observation before any retry.
         from computer_mcp.input_guard import MouseController
         if not isinstance(mouse, MouseController):
             mouse = MouseController(mouse)
-        binding = binding or bind_window(point=point)
+        if binding is None:
+            return dict(ok=False, success=False, outcome='refused',
+                        code='target_unverified', action_executed=False,
+                        error='A window binding captured before observation is required')
         constraints = dict(expected_point=point, expected_hwnd=binding.hwnd,
                            expected_target=binding.process)
         try:

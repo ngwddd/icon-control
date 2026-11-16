@@ -493,7 +493,10 @@ def click_text(
             return dict(exc.payload("click_text"), ok=False)
         raise
     from computer_mcp.pointer_contract import bind_window, click_at
-    binding = bind_window(hwnd) if hwnd else None
+    # Clicks default to the foreground window captured BEFORE OCR. Read-only
+    # find_text may still search the desktop; clicking never rebinds stale pixels.
+    binding = bind_window(hwnd)
+    hwnd = binding.hwnd
     res = find_text(query, region=region, case_sensitive=case_sensitive, hwnd=hwnd)
     if not res.get("ok"):
         return res

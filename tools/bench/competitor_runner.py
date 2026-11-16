@@ -71,6 +71,7 @@ def run_one(config, project, task_id, repeat, run_id, machine):
                version=project_meta['version'], commit_sha=project_meta['commit_sha'],
                model_id=config.get('model_id'), status='unsupported',
                task_success=False, verified_result=None, latency_ms=None,
+               tool_latency_ms=None, verifier_latency_ms=None,
                metrics={name: None for name in COUNTERS})
     if not adapter:
         row['failure_reason'] = 'adapter_not_configured'
@@ -93,9 +94,11 @@ def run_one(config, project, task_id, repeat, run_id, machine):
             return row
         began = time.perf_counter()
         run = row['evidence']['adapter'] = command(adapter, context, timeout)
+        row['tool_latency_ms'] = run['elapsed_ms']
         row['metrics'] = counters(run.get('payload'))
         # Even failed/partial execution is observed, but never counted as a pass.
         verify = row['evidence']['verifier'] = command(task['verify'], context, timeout)
+        row['verifier_latency_ms'] = verify['elapsed_ms']
         row['latency_ms'] = (time.perf_counter()-began)*1000
         payload = verify.get('payload')
         verified = (verify['ok'] and isinstance(payload, dict)

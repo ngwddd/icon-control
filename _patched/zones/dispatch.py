@@ -587,6 +587,12 @@ def _dispatch_impl(name: str, arguments: dict, *, computer_state, mouse_controll
         screenshot_data = {"error": "intentionally skipped"}
     elif name == "click_template":
         from computer_mcp import vision_state as _vs
+        keys = ("x", "y", "w", "h")
+        present = [key for key in keys if key in arguments]
+        if present and len(present) != len(keys):
+            from computer_mcp.core.argument_error import ArgumentError
+            raise ArgumentError('Template region requires all of x/y/w/h or none',
+                                code='invalid_argument')
         result = _vs.click_template(
             name=str(arguments["name"]), mouse=mouse_controller,
             button=str(arguments.get("button", "left")),
