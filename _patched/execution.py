@@ -104,8 +104,7 @@ def boundary(tool):
         def guarded(*args, **kwargs):
             bound = inspect.signature(function).bind(*args, **kwargs)
             policy_args = next((bound.arguments[n] for n in ('args','arguments','kwargs')
-                                if isinstance(bound.arguments.get(n),dict)),
-                               dict(bound.arguments))
+                                if isinstance(bound.arguments.get(n),dict)), None)
             if tool == 'run_script' and 'ops' in bound.arguments:
                 policy_args = {'ops': bound.arguments['ops']}
             if tool == 'batch' and 'steps' in bound.arguments:
@@ -130,7 +129,10 @@ def boundary(tool):
                         if not isinstance(value, wrapper):
                             bound.arguments[name] = wrapper(value)
                 from computer_mcp.result_outcome import normalize
-                return normalize(function(*bound.args, **bound.kwargs), tool, policy_args)
+                result_args = policy_args if policy_args is not None else {
+                    key: value for key, value in bound.arguments.items()
+                    if key not in ('controller', 'mouse', 'keyboard', 'mouse_controller', 'keyboard_controller')}
+                return normalize(function(*bound.args, **bound.kwargs), tool, result_args)
         guarded._icon_guarded = True
         return guarded
     return decorate

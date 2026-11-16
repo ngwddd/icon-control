@@ -68,7 +68,10 @@ class SnapshotTests(unittest.TestCase):
 
     def test_obscured_click_produces_no_input(self):
         ref=self.ref();mouse=Mock()
-        with patch.object(E,'check'),patch('computer_mcp.winutil.point_owner',return_value=12):
+        from computer_mcp.pointer_contract import WindowBinding
+        with patch.object(E,'check'),patch('computer_mcp.winutil.point_owner',return_value=12), \
+                patch('computer_mcp.pointer_contract.bind_window',
+                      return_value=WindowBinding(11, {'pid': 21}, (0, 0, 300, 200))):
             result=U.ui_click('',hwnd=11,mouse=mouse,ref=ref)
         self.assertFalse(result['ok']);mouse.click.assert_not_called()
 

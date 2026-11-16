@@ -9,6 +9,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -24,8 +26,10 @@ jobs:
       - run: python tools/snapshot_tools.py --check
       - run: python tools/verify.py --pattern "test_*.py"
       - name: Native HWND faults and fixture click
+        if: ${{ !cancelled() }}
         run: python tools/rc2_window_probe.py --inject --output .runtime/native-window-report.json
       - name: Official MCP SDK interoperability
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $env:ICON_CONTROL_HOME = Join-Path $pwd '.runtime/protocol'
@@ -34,6 +38,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Protocol fixture initialization failed' }
           python tools/protocol_smoke.py --home $env:ICON_CONTROL_HOME
           if ($LASTEXITCODE -ne 0) { throw 'Official SDK round trip failed' }
+      - name: Install upgrade and rollback with pending stop
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          git worktree add --detach .runtime/baseline 30cbae7feee4f965812260eda663484384ec363b
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline checkout failed' }
+          python -m build --wheel --outdir .runtime/baseline-dist .runtime/baseline
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline wheel build failed' }
+          $baseline = (Get-ChildItem .runtime/baseline-dist -Filter *.whl | Select-Object -First 1).FullName
+          $candidate = (Get-ChildItem dist -Filter *.whl | Select-Object -First 1).FullName
+          python tools/rc2_install_probe.py --baseline-wheel $baseline --candidate-wheel $candidate --output .runtime/install-report.json
+          if ($LASTEXITCODE -ne 0) { throw 'Installer integration failed' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -43,6 +59,7 @@ jobs:
             .runtime/tests.log
             .runtime/protocol/protocol-smoke.json
             .runtime/native-window-report.json
+            .runtime/install-report.json
       - uses: actions/upload-artifact@v4
         with:
           name: icon-control-candidate

@@ -28,7 +28,8 @@ def format_response(
         List containing ImageContent (if screenshot enabled) and TextContent
     """
     from computer_mcp.result_outcome import normalize
-    result = normalize(result, tool, arguments)
+    # Preserve the formatter's established in-place consumption of _images.
+    result.update(normalize(result, tool, arguments))
     result_state = state.get_state(include_screenshot=screenshot_data is None)
     
     # Use provided screenshot or extract from state
